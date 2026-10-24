@@ -7736,6 +7736,74 @@ goView = async function(v){
   else if(v==="cf-config") VIEWS.cfConfig();
 };
 
+// ── Funciones globales CF (disponibles en todas las vistas) ──
+window.cfReenviarCorreo=async(id)=>{
+  const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+  if(!p){toast("Postulante no encontrado","error");return;}
+  if(p.estado!=="aprobado"){toast("Solo se puede reenviar a postulantes aprobadas","warn");return;}
+  const cfg=getCFConfig(p.evento_id);
+  const ev=(D.eventos||[]).find(e=>e.id===p.evento_id);
+  const token=p.buy_token;
+  if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
+  const link=`${CF_APP_URL}?cf_buy=${token}`;
+  try{
+    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
+      <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+        <div style="background:#fff;border-radius:14px;padding:32px">
+          <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
+          <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
+          <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
+          <div style="text-align:center;margin:24px 0">
+            <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+          </div>
+          <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
+        </div>
+      </div>`);
+    toast(`📧 Correo reenviado a ${p.email}`,"ok");
+    await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
+  }catch(e){
+    toast(`Error al enviar correo: ${e.message}`,"error");
+  }
+};
+
+window.cfCambiarEmail=async(id)=>{
+  const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+  if(!p){toast("Postulante no encontrado","error");return;}
+  // Mostrar modal inline en vez de prompt nativo
+  const existing = document.getElementById("cf-email-modal");
+  if(existing) existing.remove();
+  const modal = document.createElement("div");
+  modal.id = "cf-email-modal";
+  modal.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center";
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:14px;padding:28px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-weight:600;font-size:15px;margin-bottom:4px">${p.nombre} ${p.apellido}</div>
+      <div style="font-size:12px;color:var(--ink-4);margin-bottom:16px">Editar correo electrónico</div>
+      <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:6px">Correo actual</label>
+      <div style="font-size:13px;font-family:monospace;background:var(--line-2);padding:8px 12px;border-radius:8px;margin-bottom:14px;color:var(--ink-4)">${p.email}</div>
+      <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:6px">Nuevo correo</label>
+      <input id="cf-email-input" type="email" value="${p.email}" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);font-size:13px;background:var(--surface);color:var(--ink);box-sizing:border-box">
+      <div style="display:flex;gap:8px;margin-top:18px">
+        <button onclick="document.getElementById('cf-email-modal').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px">Cancelar</button>
+        <button id="cf-email-save" style="flex:1;padding:10px;border-radius:8px;border:none;background:#EC4899;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Guardar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  document.getElementById("cf-email-input").focus();
+  document.getElementById("cf-email-input").select();
+  document.getElementById("cf-email-save").onclick = async()=>{
+    const nuevoEmail = document.getElementById("cf-email-input").value.trim().toLowerCase();
+    if(!nuevoEmail||nuevoEmail===p.email){modal.remove();return;}
+    if(!nuevoEmail.includes("@")||!nuevoEmail.includes(".")){toast("Correo inválido","error");return;}
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{email:nuevoEmail});
+    p.email=nuevoEmail;
+    modal.remove();
+    toast(`✅ Email actualizado a ${nuevoEmail}`,"ok");
+    await log("cf_cambiar_email","cf_postulantes",id,`Email actualizado a ${nuevoEmail}`);
+    VIEWS.cfPlanilla();
+  };
+};
+
 // ── Vista: Bandeja de postulantes ──
 VIEWS.cfPostulantes = async()=>{
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
@@ -7829,54 +7897,6 @@ VIEWS.cfPostulantes = async()=>{
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="rechazado";}
     toast("Rechazada","warn"); cfRenderBandeja(currentCfEvId,"pendiente");
     await log("cf_rechazar","cf_postulantes",id,`Rechazada postulante. Motivo: ${motivo}`);
-  };
-
-  window.cfReenviarCorreo=async(id)=>{
-    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
-    if(!p){toast("Postulante no encontrado","error");return;}
-    if(p.estado!=="aprobado"){toast("Solo se puede reenviar a postulantes aprobadas","warn");return;}
-    const cfg=getCFConfig(p.evento_id);
-    const ev=D.eventos.find(e=>e.id===p.evento_id);
-    const token=p.buy_token;
-    if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
-    const link=`${CF_APP_URL}?cf_buy=${token}`;
-    try{
-      await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
-        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-          <div style="background:#fff;border-radius:14px;padding:32px">
-            <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
-            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
-            <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
-            <div style="text-align:center;margin:24px 0">
-              <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
-            </div>
-            <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
-          </div>
-        </div>`);
-      toast(`📧 Correo reenviado a ${p.email}`,"ok");
-      await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
-    }catch(e){
-      toast(`Error al enviar correo: ${e.message}`,"error");
-    }
-  };
-
-  window.cfCambiarEmail=async(id)=>{
-    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
-    if(!p){toast("Postulante no encontrado","error");return;}
-    const nuevoEmail=prompt(`Correo actual: ${p.email}\n\nIngresa el nuevo correo:`,p.email);
-    if(!nuevoEmail||nuevoEmail===p.email)return;
-    // Validar formato básico
-    if(!nuevoEmail.includes("@")||!nuevoEmail.includes(".")){toast("Correo inválido","error");return;}
-    await sbPatch("cf_postulantes",`id=eq.${id}`,{email:nuevoEmail.trim().toLowerCase()});
-    p.email=nuevoEmail.trim().toLowerCase();
-    toast(`✅ Email actualizado a ${p.email}`,"ok");
-    await log("cf_cambiar_email","cf_postulantes",id,`Email actualizado a ${nuevoEmail}`);
-    // Si está aprobada, ofrecer reenviar
-    if(p.estado==="aprobado"&&confirm(`¿Deseas reenviar el correo de aprobación al nuevo email ${p.email}?`)){
-      await cfReenviarCorreo(id);
-    }
-    // Refrescar la vista
-    VIEWS.cfPlanilla();
   };
 
   window.cfAprobarMasivo=async(evId)=>{
