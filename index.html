@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>CREW — The Project</title>
+<title>Guestly</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Inter","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 :root{
@@ -200,22 +200,22 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-logo"><h1>CREW</h1><p>PLATFORM</p></div>
+    <div class="login-logo"><h1>Guestly</h1><p>PLATFORM</p></div>
     <input class="l-input" id="li-email" placeholder="Email" type="email" autocomplete="username">
     <input class="l-input" id="li-pass" placeholder="Contraseña" type="password" onkeydown="if(event.key==='Enter')doLogin()">
     <div id="li-err" class="err-msg hidden">Email o contraseña incorrectos.</div>
     <button class="l-btn" onclick="doLogin()">Ingresar</button>
     <div class="l-hints">
       <div style="color:#666;margin-bottom:4px">Cuentas demo:</div>
-      <div>👑 <b>admin@crew.cl</b> / admin123 — Dueño Software</div>
-      <div>🎪 <b>owner@theproject.cl</b> / crew123 — Dueño Productora</div>
-      <div>🎯 <b>coord@theproject.cl</b> / crew123 — Coordinador</div>
-      <div>🚪 <b>jefepuerta@theproject.cl</b> / crew123 — Jefe Acreditación</div>
-      <div>👁 <b>puerta@theproject.cl</b> / crew123 — Validador Puerta</div>
-      <div>💎 <b>vip@theproject.cl</b> / crew123 — Validador VIP</div>
-      <div>💰 <b>caja@theproject.cl</b> / crew123 — Caja</div>
-      <div>🎯 <b>jefe@theproject.cl</b> / crew123 — Jefe Embajadores</div>
-      <div>⭐ <b>emb@theproject.cl</b> / crew123 — Embajador</div>
+      <div>👑 <b>admin@guestly.cl</b> / admin123 — Dueño Software</div>
+      <div>🎪 <b>owner@theproject.cl</b> / guestly123 — Dueño Productora</div>
+      <div>🎯 <b>coord@theproject.cl</b> / guestly123 — Coordinador</div>
+      <div>🚪 <b>jefepuerta@theproject.cl</b> / guestly123 — Jefe Acreditación</div>
+      <div>👁 <b>puerta@theproject.cl</b> / guestly123 — Validador Puerta</div>
+      <div>💎 <b>vip@theproject.cl</b> / guestly123 — Validador VIP</div>
+      <div>💰 <b>caja@theproject.cl</b> / guestly123 — Caja</div>
+      <div>🎯 <b>jefe@theproject.cl</b> / guestly123 — Jefe Embajadores</div>
+      <div>⭐ <b>emb@theproject.cl</b> / guestly123 — Embajador</div>
     </div>
   </div>
 </div>
@@ -227,7 +227,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div style="display:flex;align-items:center;gap:6px;justify-content:space-between">
         <div style="display:flex;align-items:center;gap:6px;min-width:0;flex:1">
           <div class="rt-dot" title="Tiempo real" style="width:8px;height:8px;border-radius:50%;background:#aaa"></div>
-          <div id="sb-prod-name" class="sb-prod-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">CREW</div>
+          <div id="sb-prod-name" class="sb-prod-name" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Guestly</div>
         </div>
         <span data-bell-slot></span>
       </div>
@@ -253,7 +253,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <div id="mob-app" class="hidden">
   <div class="mob-topbar">
     <div>
-      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="mob-prod-name">CREW</div>
+      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="mob-prod-name">Guestly</div>
       <div id="mob-role-label" style="font-size:10px;color:#aaa"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -274,7 +274,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <div id="emb-app" class="hidden">
   <div class="mob-topbar">
     <div>
-      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="emb-prod-name">CREW</div>
+      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="emb-prod-name">Guestly</div>
       <div style="font-size:10px;color:#aaa">EMBAJADOR</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -294,7 +294,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <div id="jefe-app" class="hidden">
   <div class="mob-topbar">
     <div>
-      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="jefe-prod-name">CREW</div>
+      <div style="font-size:15px;font-weight:700;letter-spacing:2px" id="jefe-prod-name">Guestly</div>
       <div style="font-size:10px;color:#aaa">JEFE EMBAJADORES</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
@@ -477,7 +477,7 @@ function getPulsera(e, ev){
 }
 
 const ROLE_META = {
-  superadmin: {label:"All Access CREW",  badge:"purple", icon:""},
+  superadmin: {label:"All Access Guestly",  badge:"purple", icon:""},
   owner:      {label:"Dueño Productora",badge:"blue",   icon:""},
   coordinator:{label:"Coordinador",     badge:"teal",   icon:""},
   door_chief: {label:"Jefe Acreditación",badge:"orange",icon:""},
@@ -665,7 +665,7 @@ function chequearDuplicado(mesa, nombre, rut, instagram){
 // ═══════════════════════════════════
 const RESEND_KEY = ""; // key lives in Supabase Edge Function env
 const FROM_EMAIL = "onboarding@resend.dev";
-const APP_URL    = "https://soft-madeleine-12a688.netlify.app";
+const APP_URL    = "https://guestly.cl";
 
 async function sendEmail(to, subject, html){
   try{
@@ -695,18 +695,18 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
           <p style="font-size:11px;color:#aaa;letter-spacing:2px;margin-top:4px">PLATFORM</p>
         </div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Hola, ${nombre} 👋</h2>
-        <p style="color:#555;font-size:14px;line-height:1.6">Tu cuenta en CREW Platform ha sido creada. Usa estas credenciales para ingresar:</p>
+        <p style="color:#555;font-size:14px;line-height:1.6">Tu cuenta en Guestly ha sido creada. Usa estas credenciales para ingresar:</p>
         <div style="background:#f9f9f9;border-radius:10px;padding:16px;margin:16px 0;border:1px solid #e8e8e8">
           <div style="margin-bottom:8px"><span style="font-size:12px;color:#999">Email:</span><br><strong style="font-size:15px">${email}</strong></div>
           <div><span style="font-size:12px;color:#999">Contraseña:</span><br><strong style="font-size:15px">${pass}</strong></div>
         </div>
         ${extra}
         <div style="text-align:center;margin-top:20px">
-          <a href="${APP_URL}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px">Ingresar a CREW →</a>
+          <a href="${APP_URL}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:500;font-size:14px">Ingresar a Guestly →</a>
         </div>
         <p style="font-size:11px;color:#aaa;text-align:center;margin-top:20px">Por seguridad, cambia tu contraseña al ingresar.</p>
       </div>
@@ -716,7 +716,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
         </div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">¡Tu mesa está reservada! 🎉</h2>
         <p style="color:#555;font-size:14px;line-height:1.6">Hola <strong>${nombre}</strong>, tu mesa ha sido asignada para el evento:</p>
@@ -747,7 +747,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">✅</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">¡Perfiles aprobados!</h2>
@@ -766,7 +766,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">⚠️</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">Revisa tu mesa</h2>
@@ -785,7 +785,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">🎉</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">¡Mesa confirmada y cerrada!</h2>
@@ -801,10 +801,10 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
         </div>
-        <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Bienvenido/a a CREW Platform 🚀</h2>
-        <p style="color:#555;font-size:14px;line-height:1.6">Hola <strong>${nombre}</strong>, tu productora <strong>${productora}</strong> ha sido creada en CREW Platform.</p>
+        <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Bienvenido/a a Guestly 🚀</h2>
+        <p style="color:#555;font-size:14px;line-height:1.6">Hola <strong>${nombre}</strong>, tu productora <strong>${productora}</strong> ha sido creada en Guestly.</p>
         <div style="background:#f9f9f9;border-radius:10px;padding:16px;margin:16px 0;border:1px solid #e8e8e8">
           <div style="margin-bottom:8px"><span style="font-size:12px;color:#999">Email:</span><br><strong>${email}</strong></div>
           <div><span style="font-size:12px;color:#999">Contraseña:</span><br><strong>${pass}</strong></div>
@@ -823,21 +823,21 @@ async function seedDemo(){
     await sbPost("productoras",[prod]);
 
     // Superadmin (sin productora)
-    const superU={id:"u_super",name:"Admin CREW",email:"admin@crew.cl",pass:"admin123",role:"superadmin",puntos:0,equipo_id:null,productora_id:null,evento_ids:[]};
+    const superU={id:"u_super",name:"Admin Guestly",email:"admin@guestly.cl",pass:"admin123",role:"superadmin",puntos:0,equipo_id:null,productora_id:null,evento_ids:[]};
     await sbPost("users",[superU]);
 
     // Usuarios de la productora
     const users=[
-      {id:"u_owner",name:"Felipe Torres",email:"owner@theproject.cl",pass:"crew123",role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]},
-      {id:"u_coord",name:"Valentina Ruz",email:"coord@theproject.cl",pass:"crew123",role:"coordinator",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1","ev2"]},
-      {id:"u_jpuerta",name:"Marco Silva",email:"jefepuerta@theproject.cl",pass:"crew123",role:"door_chief",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
-      {id:"u_puerta",name:"Felipe Ortega",email:"puerta@theproject.cl",pass:"crew123",role:"door_staff",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
-      {id:"u_vip",name:"Sofía Medina",email:"vip@theproject.cl",pass:"crew123",role:"vip_staff",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
-      {id:"u_caja",name:"Diego Caja",email:"caja@theproject.cl",pass:"crew123",role:"cashier",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
-      {id:"u_jemb",name:"Javiera Morales",email:"jefe@theproject.cl",pass:"crew123",role:"ambassador_chief",puntos:320,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1","ev2"]},
-      {id:"u_emb1",name:"Martina Vargas",email:"emb@theproject.cl",pass:"crew123",role:"embajador",puntos:640,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1","ev2"]},
-      {id:"u_emb2",name:"Ana López",email:"ana@theproject.cl",pass:"crew123",role:"embajador",puntos:1240,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1"]},
-      {id:"u_emb3",name:"Diego Pérez",email:"diego@theproject.cl",pass:"crew123",role:"embajador",puntos:720,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev2"]},
+      {id:"u_owner",name:"Felipe Torres",email:"owner@theproject.cl",pass:"guestly123",role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]},
+      {id:"u_coord",name:"Valentina Ruz",email:"coord@theproject.cl",pass:"guestly123",role:"coordinator",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1","ev2"]},
+      {id:"u_jpuerta",name:"Marco Silva",email:"jefepuerta@theproject.cl",pass:"guestly123",role:"door_chief",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
+      {id:"u_puerta",name:"Felipe Ortega",email:"puerta@theproject.cl",pass:"guestly123",role:"door_staff",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
+      {id:"u_vip",name:"Sofía Medina",email:"vip@theproject.cl",pass:"guestly123",role:"vip_staff",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
+      {id:"u_caja",name:"Diego Caja",email:"caja@theproject.cl",pass:"guestly123",role:"cashier",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:["ev1"]},
+      {id:"u_jemb",name:"Javiera Morales",email:"jefe@theproject.cl",pass:"guestly123",role:"ambassador_chief",puntos:320,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1","ev2"]},
+      {id:"u_emb1",name:"Martina Vargas",email:"emb@theproject.cl",pass:"guestly123",role:"embajador",puntos:640,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1","ev2"]},
+      {id:"u_emb2",name:"Ana López",email:"ana@theproject.cl",pass:"guestly123",role:"embajador",puntos:1240,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev1"]},
+      {id:"u_emb3",name:"Diego Pérez",email:"diego@theproject.cl",pass:"guestly123",role:"embajador",puntos:720,equipo_id:"eq1",productora_id:prodId,evento_ids:["ev2"]},
     ];
     await sbPost("users",users);
 
@@ -1000,7 +1000,7 @@ function initAdminApp(){
   $("sb-role-lbl").textContent=rm(CU.role).label;
 
   if(CU.role==="superadmin"){
-    $("sb-prod-name").textContent="CREW PLATFORM";
+    $("sb-prod-name").textContent="Guestly";
     $("sb-prod-sub").textContent="SUPERADMIN";
     $("sb-prod-color").style.background="#534AB7";
   } else {
@@ -1020,7 +1020,7 @@ function buildSidebar(){
   const allSections=[];
 
   if(role==="superadmin"){
-    allSections.push({label:"CREW Global",items:[
+    allSections.push({label:"Guestly Global",items:[
       {v:"crew-global",icon:"dashboard",label:"Dashboard global"},
       {v:"productoras",icon:"building",label:"Productoras"},
       {v:"usuarios-global",icon:"users",label:"Todos los usuarios"},
@@ -1611,7 +1611,7 @@ function inyectarBannerImpersonacion(){
         <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${CP.nombre}</div>
       </div>
     </div>
-    <button onclick="salirDeProductora()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;flex-shrink:0">← Volver a CREW global</button>`;
+    <button onclick="salirDeProductora()" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);color:#fff;font-size:12px;font-weight:600;padding:6px 12px;border-radius:8px;cursor:pointer;flex-shrink:0">← Volver a Guestly global</button>`;
   main.insertBefore(banner,main.firstChild);
 }
 
@@ -1669,7 +1669,7 @@ VIEWS["crew-global"]=()=>{
   $("main-content").innerHTML=`
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <div>
-        <div class="page-title" style="margin-bottom:2px">Vista global de CREW</div>
+        <div class="page-title" style="margin-bottom:2px">Vista global de Guestly</div>
         <div style="font-size:12px;color:#888">Resumen ejecutivo de todas las productoras</div>
       </div>
       <button class="btn btn-primary" onclick="openNuevaProd()">+ Nueva productora</button>
@@ -1831,7 +1831,7 @@ function openNuevaProd(){
       <label class="form-label">Email</label>
       <input class="form-input" id="np-owner-email" placeholder="owner@productora.cl" type="email">
       <label class="form-label">Contraseña</label>
-      <input class="form-input" id="np-owner-pass" value="crew123">
+      <input class="form-input" id="np-owner-pass" value="guestly123">
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -1843,7 +1843,7 @@ async function saveNuevaProd(){
   const nombre=($("np-nombre")?.value||"").trim();
   const ownerName=(($("np-owner-name")?.value||"")+" "+($("np-owner-apl")?.value||"")).trim();
   const ownerEmail=($("np-owner-email")?.value||"").trim();
-  const ownerPass=$("np-owner-pass")?.value||"crew123";
+  const ownerPass=$("np-owner-pass")?.value||"guestly123";
   if(!nombre||!ownerName||!ownerEmail){toast("Completa todos los campos","error");return;}
 
   const prodId=uid(),ownerId=uid();
@@ -1859,7 +1859,7 @@ async function saveNuevaProd(){
     {role:"cashier",     name:"Caja Demo",          email:`caja@${domain}`},
     {role:"ambassador_chief",name:"Jefe Emb. Demo", email:`jefe@${domain}`},
     {role:"embajador",   name:"Embajador Demo",     email:`emb@${domain}`},
-  ].map(u=>({id:uid(),name:u.name,email:u.email,pass:"crew123",role:u.role,puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]}));
+  ].map(u=>({id:uid(),name:u.name,email:u.email,pass:"guestly123",role:u.role,puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]}));
 
   // Crear owner
   const ownerU={id:ownerId,name:ownerName,email:ownerEmail,pass:ownerPass,role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]};
@@ -1882,7 +1882,7 @@ async function saveNuevaProd(){
     // Email al dueño de la productora
     await sendEmail(
       ownerEmail,
-      `Bienvenido a CREW Platform — ${nombre}`,
+      `Bienvenido a Guestly — ${nombre}`,
       emailTemplates.nuevaProductora(ownerName,ownerEmail,ownerPass,nombre)
     );
   }catch(e){console.warn("Email/log error:",e);}
@@ -1900,7 +1900,7 @@ async function saveNuevaProd(){
       <div style="display:flex;justify-content:space-between;padding:8px 0"><span style="color:#888;font-size:12px">Contraseña:</span><strong style="font-size:13px">${ownerPass}</strong></div>
     </div>
     <div style="background:#f9f9f9;border-radius:10px;padding:16px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px">👥 Usuarios demo creados (contraseña: crew123)</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px">👥 Usuarios demo creados (contraseña: guestly123)</div>
       ${demoUsers.map(u=>`<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f0f0f0"><span style="font-size:12px">${rm(u.role).icon} ${rm(u.role).label}</span><span style="font-size:11px;color:#888">${u.email}</span></div>`).join("")}
     </div>
     <div class="modal-footer"><button class="btn btn-primary" onclick="closeModal();VIEWS.productoras()">Entendido</button></div>`);
@@ -1921,12 +1921,12 @@ async function impersonateProd(prodId){
 async function salirDeProductora(){
   CP=null;
   currentEvId=null;
-  $("sb-prod-name").textContent="CREW PLATFORM";
+  $("sb-prod-name").textContent="Guestly";
   $("sb-prod-sub").textContent="SUPERADMIN";
   $("sb-prod-color").style.background="#534AB7";
   buildSidebar(); // re-render sidebar para que oculte secciones operativas
   goView("crew-global");
-  toast("Vista global de CREW","success");
+  toast("Vista global de Guestly","success");
 }
 
 // ── USUARIOS GLOBAL (superadmin) ──
@@ -2004,7 +2004,7 @@ VIEWS["usuarios-global"]=()=>{
       const supers=filtra(D.users.filter(u=>u.role==="superadmin"));
       if(!supers.length)return "";
       return `<div class="card" style="margin-bottom:16px;border-left:4px solid #EC4899;background:linear-gradient(135deg,#fff,#fdf2f8)">
-        <div style="font-size:14px;font-weight:700;margin-bottom:10px;color:#9D174D">🔒 Cuentas CREW (superadmin)</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:10px;color:#9D174D">🔒 Cuentas Guestly (superadmin)</div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Nombre</th><th>Email</th><th></th></tr></thead>
           <tbody>${supers.map(u=>`<tr>
@@ -4582,7 +4582,7 @@ function openAddJefe(){
     <div class="alert alert-info" style="margin-top:0">Crea su acceso. Luego él inicia sesión con su email y contraseña, y arma sus propios grupos de embajadores.</div>
     <label class="form-label">Nombre completo <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-n" placeholder="Ej: Pedro Sánchez">
     <label class="form-label">Email (usuario) <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-e" type="email" placeholder="pedro@correo.cl">
-    <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-p" value="crew123">
+    <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-p" value="guestly123">
     <label class="form-label">WhatsApp <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-w" placeholder="56912345678">
     <label class="form-label">Instagram <span style="color:#EF4444">*</span></label><input class="form-input" id="aj-ig" placeholder="@usuario">
     <div style="font-size:11px;color:#888;margin-top:8px">* Todos los campos son obligatorios.</div>
@@ -4596,7 +4596,7 @@ async function saveJefe(){
   if(!whatsapp){toast("Falta el WhatsApp (obligatorio)","error");return;}
   if(!instagram){toast("Falta el Instagram (obligatorio)","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const u={id:uid(),name,email,pass:$("aj-p")?.value||"crew123",role:"ambassador_chief",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram};
+  const u={id:uid(),name,email,pass:$("aj-p")?.value||"guestly123",role:"ambassador_chief",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram};
   D.users.push(u);
   try{await sbPost("users",[u]);await log("add_jefe","user",u.id,`Nuevo Jefe de Embajadores: ${name}`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast(`✓ Jefe ${name} creado. Puede iniciar sesión con ${email}`,"success");VIEWS.embajadores();
@@ -4608,7 +4608,7 @@ function openAddEmb(modo="interno"){
     <div class="alert alert-info" style="margin-top:0">Embajador propio de la productora, reporta directo a ti (no a un jefe externo).</div>
     <label class="form-label">Nombre y apellido <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-n" placeholder="Nombre completo">
     <label class="form-label">Email (usuario) <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-e" type="email" placeholder="emb@correo.cl">
-    <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-p" value="crew123">
+    <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-p" value="guestly123">
     <label class="form-label">WhatsApp <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-w" placeholder="56912345678">
     <label class="form-label">Instagram <span style="color:#EF4444">*</span></label><input class="form-input" id="ae2-ig" placeholder="@usuario">
     <div style="font-size:11px;color:#888;margin-top:8px">* Todos los campos son obligatorios. WhatsApp e Instagram permiten contactarlo cuando no cumple campañas.</div>
@@ -4622,7 +4622,7 @@ async function saveEmb(){
   if(!whatsapp){toast("Falta el WhatsApp (obligatorio para contactarlo)","error");return;}
   if(!instagram){toast("Falta el Instagram (obligatorio para contactarlo)","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const u={id:uid(),name,email,pass:$("ae2-p")?.value||"crew123",role:"embajador",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram};
+  const u={id:uid(),name,email,pass:$("ae2-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram};
   D.users.push(u);
   try{await sbPost("users",[u]);await log("add_emb_interno","user",u.id,`Nuevo embajador interno: ${name}`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ "+name+" agregado","success");VIEWS.embajadores();
@@ -5466,7 +5466,7 @@ function openNuevoUser(){
   openModal("Nuevo usuario",`
     <label class="form-label">Nombre completo</label><input class="form-input" id="nu-n" placeholder="Nombre Apellido">
     <label class="form-label">Email</label><input class="form-input" id="nu-e" type="email" placeholder="email@productora.cl">
-    <label class="form-label">Contraseña</label><input class="form-input" id="nu-p" value="crew123">
+    <label class="form-label">Contraseña</label><input class="form-input" id="nu-p" value="guestly123">
     <label class="form-label">Rol</label>
     <select class="form-select" id="nu-r">
       ${rolesDisponibles.map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join("")}
@@ -5485,7 +5485,7 @@ async function saveNuevoUser(){
   // Email duplicado
   if(D.users.some(x=>x.email.toLowerCase()===email.toLowerCase())){toast("Ese email ya existe","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const u={id:uid(),name,email,pass:$("nu-p")?.value||"crew123",role:nuevoRol,puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]};
+  const u={id:uid(),name,email,pass:$("nu-p")?.value||"guestly123",role:nuevoRol,puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]};
   D.users.push(u);
   try{await sbPost("users",[u]);await log("add_user","user",u.id,`Nuevo ${u.role}: ${name} (creado por ${CU.role})`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ Usuario creado","success");VIEWS.usuarios();
@@ -5549,7 +5549,7 @@ function openEditUser(uid,callbackView){
     <label class="form-label">Nueva contraseña <span style="font-size:10px;color:#aaa">(dejar vacío para no cambiar)</span></label>
     <input class="form-input" id="eu-pass" type="text" placeholder="Nueva contraseña" autocomplete="new-password">
     <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-      <button class="btn" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('eu-pass').value='crew123'">Sugerir: crew123</button>
+      <button class="btn" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('eu-pass').value='guestly123'">Sugerir: guestly123</button>
       <button class="btn" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('eu-pass').value=generarPassAleatoria()">Aleatoria</button>
     </div>
     ${u.role!=="superadmin"?`
@@ -6090,7 +6090,7 @@ function initCompradorApp(){
     appEl.innerHTML=`
       <div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:16px">
         <div style="background:#141414;border:1px solid #222;border-radius:16px;padding:36px;width:380px;max-width:100%;text-align:center">
-          <h1 style="font-size:26px;letter-spacing:4px;color:#fff;font-weight:700;margin-bottom:16px">CREW</h1>
+          <h1 style="font-size:26px;letter-spacing:4px;color:#fff;font-weight:700;margin-bottom:16px">Guestly</h1>
           <div style="font-size:40px;margin-bottom:12px">🪑</div>
           <p style="color:#777;font-size:14px;margin-bottom:24px">No tienes ninguna mesa asignada.<br>Contacta al organizador del evento.</p>
           <button onclick="doLogout()" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:13px">Cerrar sesión</button>
@@ -6103,7 +6103,7 @@ function initCompradorApp(){
     let html = `
       <div style="background:#0a0a0a;padding:20px 16px;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700">CREW</div>
+          <div style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700">Guestly</div>
           <div style="font-size:10px;color:#555;margin-top:2px">MIS MESAS</div>
         </div>
         <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">⏻</button>
@@ -6173,7 +6173,7 @@ function renderCompradorApp(mesaId){
         <div style="display:flex;align-items:center;gap:12px;min-width:0">
           ${mostrarVolver?`<button onclick="initCompradorApp()" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Volver a mis mesas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>`:""}
           <div style="min-width:0">
-            <h1 style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700;margin:0">CREW</h1>
+            <h1 style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700;margin:0">Guestly</h1>
             <div style="font-size:10px;color:#555;letter-spacing:1px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev?.name||"EVENTO"}</div>
           </div>
         </div>
@@ -6865,7 +6865,7 @@ function openJefeAddEmb(){
       <label class="form-label">Email <span style="color:#EF4444">*</span></label><input class="form-input" id="je-e" type="email" placeholder="emb@correo.cl">
       <label class="form-label">WhatsApp <span style="color:#EF4444">*</span></label><input class="form-input" id="je-w" placeholder="56912345678">
       <label class="form-label">Instagram <span style="color:#EF4444">*</span></label><input class="form-input" id="je-ig" placeholder="@usuario">
-      <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="je-p" value="crew123">
+      <label class="form-label">Contraseña <span style="color:#EF4444">*</span></label><input class="form-input" id="je-p" value="guestly123">
       <div style="font-size:11px;color:#888;margin-top:6px">* Todos los campos son obligatorios.</div>
       <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveJefeEmb('${jefeGrupoSel}')">Agregar</button></div>
     </div>
@@ -6892,7 +6892,7 @@ async function saveJefeEmb(eqId){
   if(!email){toast("Falta el email","error");return;}
   if(!whatsapp){toast("Falta el WhatsApp (obligatorio)","error");return;}
   if(!instagram){toast("Falta el Instagram (obligatorio)","error");return;}
-  const u={id:uid(),name,email,pass:$("je-p")?.value||"crew123",role:"embajador",puntos:0,equipo_id:eqId||null,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram};
+  const u={id:uid(),name,email,pass:$("je-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:eqId||null,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram};
   D.users.push(u);
   try{await sbPost("users",[u]);await log("add_user","user",u.id,`Jefe agrega: ${name} al grupo`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ "+name+" agregado","success");jefeView("equipo");
@@ -6930,7 +6930,7 @@ async function importEmbCSV(eqId){
       descartados.push(`${name} (falta ${!whatsapp?"WhatsApp":""}${!whatsapp&&!instagram?" y ":""}${!instagram?"Instagram":""})`);
       return;
     }
-    nuevos.push({id:uid(),name,rut:get(row,iR),email:get(row,iE)||`${name.replace(/\s+/g,"").toLowerCase()}@crew.cl`,pass:"crew123",role:"embajador",puntos:0,equipo_id:eqId,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram});
+    nuevos.push({id:uid(),name,rut:get(row,iR),email:get(row,iE)||`${name.replace(/\s+/g,"").toLowerCase()}@guestly.cl`,pass:"guestly123",role:"embajador",puntos:0,equipo_id:eqId,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram});
   });
   if(!nuevos.length){
     if(st)st.innerHTML=`<div class="alert alert-danger">❌ No se cargó ningún embajador. WhatsApp e Instagram son obligatorios.${descartados.length?`<br><br><strong>${descartados.length} descartado(s):</strong><br>${descartados.slice(0,10).join("<br>")}${descartados.length>10?`<br>...y ${descartados.length-10} más`:""}`:""}</div>`;
@@ -7161,7 +7161,7 @@ function renderEmbRanking(mc){
 // ══════════════════════════════════════════════════════════════════
 
 // ── Utilidades Close Friends ──
-const CF_APP_URL = "https://crewcl.netlify.app";
+const CF_APP_URL = "https://guestly.cl";
 
 function validarRUT(rut){
   if(!rut) return false;
@@ -7301,7 +7301,7 @@ function mostrarRegistroCF(eventoId){
     const mostrarLobby = ()=>{
       screen.innerHTML=`
         <div class="cf-lobby">
-          <div class="cf-lobby-brand">POWERED BY CREW</div>
+          <div class="cf-lobby-brand">POWERED BY GUESTLY</div>
           <div class="cf-lobby-title">${prodNombre.toUpperCase()}</div>
           <div class="cf-lobby-sub">${ev?.name||"Evento especial"}</div>
           <button class="cf-lobby-btn" onclick="mostrarFormCF()">
@@ -7419,7 +7419,7 @@ async function enviarPostulacionCF(eventoId, productora_id){
     const cont = document.getElementById("cf-screen")||document.querySelector(".cf-box");
     if(cont) cont.innerHTML=`
       <div style="text-align:center;padding:60px 20px;max-width:380px;margin:0 auto">
-        <div style="font-size:11px;letter-spacing:4px;color:#555;margin-bottom:40px">CREW</div>
+        <div style="font-size:11px;letter-spacing:4px;color:#555;margin-bottom:40px">Guestly</div>
         <div style="font-size:32px;font-weight:800;color:#fff;margin-bottom:12px">Listo.</div>
         <div style="font-size:14px;color:#666;line-height:1.7">
           Revisaremos tu postulación pronto.<br>
@@ -7458,7 +7458,7 @@ function mostrarCompraCF(token){
     .cf-ok .icon{font-size:48px;margin-bottom:12px}
   </style>
   <div class="cf-wrap">
-    <div class="cf-top"><h1>CREW</h1><p>CLOSE FRIENDS</p></div>
+    <div class="cf-top"><h1>Guestly</h1><p>CLOSE FRIENDS</p></div>
     <div id="cf-compra-content"><div style="text-align:center;color:#888;padding:40px">Cargando...</div></div>
   </div>`;
 
@@ -7786,7 +7786,7 @@ VIEWS.cfPostulantes = async()=>{
         await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
           <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
             <div style="background:#fff;border-radius:14px;padding:32px">
-              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">CREW</h1>
+              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
               <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
               <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
               <div style="text-align:center;margin:24px 0">
@@ -8048,7 +8048,7 @@ VIEWS.cfConciliacion = async()=>{
         await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
           <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
             <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
-              <h1 style="font-size:22px;letter-spacing:4px">CREW</h1>
+              <h1 style="font-size:22px;letter-spacing:4px">Guestly</h1>
               <div style="font-size:48px;margin:20px 0">🎉</div>
               <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
               <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
