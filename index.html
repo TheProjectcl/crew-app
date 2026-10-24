@@ -7316,7 +7316,7 @@ function mostrarRegistroCF(eventoId){
     const mostrarLobby = ()=>{
       screen.innerHTML=`
         <div class="cf-lobby">
-          <div class="cf-lobby-brand">POWERED BY GUESTLY</div>
+          <div style="margin-bottom:36px">${glLogo("neg",24,"margin:0 auto")}</div>
           <div class="cf-lobby-title">${prodNombre.toUpperCase()}</div>
           <div class="cf-lobby-sub">${ev?.name||"Evento especial"}</div>
           <button class="cf-lobby-btn" onclick="mostrarFormCF()">
