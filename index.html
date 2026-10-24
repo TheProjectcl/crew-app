@@ -7521,14 +7521,15 @@ function mostrarCompraCF(token){
         </div>
         <div class="cf-card">
           <h3>Selecciona tus entradas</h3>
-          <label>Cantidad (máx. ${tope})</label>
+          <label>Cantidad</label>
           <select id="cf-cantidad" onchange="actualizarTotalCF(${precio})">
-            ${Array.from({length:tope},(_,i)=>`<option value="${i+1}">${i+1} entrada${i>0?"s":""}</option>`).join("")}
+            <option value="1">1 entrada (solo yo)</option>
+            ${tope>=2?`<option value="2">2 entradas (yo + una amiga)</option>`:""}
           </select>
           <div id="cf-amiga-fields"></div>
           <div class="total-box">
             <div class="monto" id="cf-total">$${precio.toLocaleString("es-CL")}</div>
-            <div class="label">Total a transferir</div>
+            <div class="label" id="cf-total-label">Total a transferir</div>
           </div>
           <div id="cf-compra-err" class="cf-err" style="display:none"></div>
           <button class="cf-btn" onclick="confirmarOrdenCF('${token}','${post.id}','${post.evento_id}','${post.productora_id}',${precio},${tope})">Confirmar y ver datos de pago</button>
@@ -7542,19 +7543,42 @@ function mostrarCompraCF(token){
 function actualizarTotalCF(precio){
   const cant = parseInt(document.getElementById("cf-cantidad")?.value||1);
   const totalEl = document.getElementById("cf-total");
-  if(totalEl) totalEl.textContent = "$"+(cant*precio).toLocaleString("es-CL");
+  const labelEl = document.getElementById("cf-total-label");
   const fields = document.getElementById("cf-amiga-fields");
   if(!fields) return;
+
   if(cant>=2){
+    // Revisar modo de pago elegido
+    const modo = document.getElementById("cf-pago-modo")?.value||"separado";
+    const esSeparado = modo==="separado";
+    const montoMostrar = esSeparado ? precio : cant*precio;
+    if(totalEl) totalEl.textContent = "$"+montoMostrar.toLocaleString("es-CL");
+    if(labelEl) labelEl.textContent = esSeparado ? "Tu entrada (ella paga la suya aparte)" : "Total por las dos entradas";
+
     fields.innerHTML=`
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid #2e2e2e">
-        <div style="font-size:12px;color:#EC4899;margin-bottom:10px;font-weight:600">Datos de tu amiga (2° entrada)</div>
+        <div style="font-size:12px;color:#EC4899;margin-bottom:10px;font-weight:600">¿Cómo pagan?</div>
+        <select id="cf-pago-modo" onchange="actualizarTotalCF(${precio})" style="margin-bottom:14px">
+          <option value="separado">Cada una paga su entrada (le enviamos link a ella)</option>
+          <option value="junto">Yo pago las dos entradas juntas</option>
+        </select>
+        <div style="font-size:12px;color:#EC4899;margin-bottom:10px;font-weight:600">Datos de tu amiga</div>
         <label>Nombre completo</label><input id="cf-a2-nombre" type="text" placeholder="Nombre de tu amiga">
         <label>RUT</label><input id="cf-a2-rut" type="text" placeholder="12345678-9">
         <label>Instagram</label><input id="cf-a2-ig" type="text" placeholder="@usuario">
         <label>WhatsApp</label><input id="cf-a2-wa" type="tel" placeholder="+56912345678">
+        <label>Email</label><input id="cf-a2-email" type="email" placeholder="correo@ejemplo.com">
       </div>`;
-  }else{ fields.innerHTML=""; }
+    // Re-bind el select de modo (se acaba de recrear el DOM)
+    setTimeout(()=>{
+      const modoSel = document.getElementById("cf-pago-modo");
+      if(modoSel){ modoSel.value=modo; }
+    },0);
+  }else{
+    fields.innerHTML="";
+    if(totalEl) totalEl.textContent = "$"+precio.toLocaleString("es-CL");
+    if(labelEl) labelEl.textContent = "Total a transferir";
+  }
 }
 
 async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, tope){
@@ -7566,39 +7590,108 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
 
   // Validar datos amiga si aplica
   let amiga2 = null;
+  let modoPago = "solo"; // "solo" | "junto" | "separado"
   if(cant>=2){
+    modoPago = document.getElementById("cf-pago-modo")?.value||"separado";
     const a2n = (document.getElementById("cf-a2-nombre")?.value||"").trim();
     const a2r = normRUT(document.getElementById("cf-a2-rut")?.value||"");
     const a2ig= normIG(document.getElementById("cf-a2-ig")?.value||"");
     const a2wa= (document.getElementById("cf-a2-wa")?.value||"").trim();
-    if(!a2n||!a2r||!a2ig||!a2wa) return show("Completa todos los datos de tu amiga.");
+    const a2em= (document.getElementById("cf-a2-email")?.value||"").trim().toLowerCase();
+    if(!a2n||!a2r||!a2ig||!a2wa||!a2em) return show("Completa todos los datos de tu amiga, incluido el email.");
     if(!validarRUT(a2r)) return show("RUT de amiga inválido.");
-    amiga2={nombre:a2n,rut:a2r,instagram:a2ig,whatsapp:a2wa};
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(a2em)) return show("Email de amiga inválido.");
+    amiga2={nombre:a2n,rut:a2r,instagram:a2ig,whatsapp:a2wa,email:a2em};
   }
 
   btn.disabled=true; btn.textContent="Procesando...";
   try{
     // Verificar cupos
     const ordenes = await sbGet("cf_ordenes",`evento_id=eq.${eventoId}&estado=neq.vencido&estado=neq.rechazado`);
-    const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${eventoId}`)]);
+    const [cfgArr, evArr] = await Promise.all([
+      sbGet("cf_config",`evento_id=eq.${eventoId}`),
+      sbGet("eventos",`id=eq.${eventoId}`)
+    ]);
     const cfg = cfgArr[0]||{};
+    const ev = evArr[0]||{};
     const usados = ordenes.reduce((s,o)=>s+(o.cantidad||0),0);
     const cuposDisp = (cfg.cupos_total||100)-usados;
-    if(cuposDisp < cant) return (btn.disabled=false, btn.textContent="Confirmar y ver datos de pago", show(`Solo quedan ${cuposDisp} cupo(s) disponibles.`));
+    const cuposNecesarios = cant; // siempre reservamos el total de cupos
+    if(cuposDisp < cuposNecesarios) return (btn.disabled=false, btn.textContent="Confirmar y ver datos de pago", show(`Solo quedan ${cuposDisp} cupo(s) disponibles.`));
 
-    const ordId = uid();
-    const codigo = cfCodigo();
     const vence = new Date(Date.now()+(cfg.horas_vencimiento||24)*3600*1000).toISOString();
-    const orden = {
-      id:ordId, postulante_id:postId, evento_id:eventoId, productora_id,
-      codigo, cantidad:cant, monto_total:cant*precio, estado:"pendiente",
-      datos_amiga:amiga2?JSON.stringify(amiga2):null,
-      comprobante_url:null, operacion_num:null,
-      created_at:new Date().toISOString(), vence_at:vence,
-      conciliado_por:null, conciliado_at:null
-    };
-    await sbPost("cf_ordenes",[orden]);
-    mostrarPagoCF(ordId);
+
+    if(modoPago==="separado" && amiga2){
+      // Modo separado: orden de 1 entrada para quien compra, orden separada para amiga
+      const ordId = uid(); const codigo = cfCodigo();
+      const orden = {
+        id:ordId, postulante_id:postId, evento_id:eventoId, productora_id,
+        codigo, cantidad:1, monto_total:precio, estado:"pendiente",
+        datos_amiga:null, token_ref:token,
+        comprobante_url:null, operacion_num:null,
+        created_at:new Date().toISOString(), vence_at:vence,
+        conciliado_por:null, conciliado_at:null
+      };
+      await sbPost("cf_ordenes",[orden]);
+
+      // Crear postulante para amiga (ya aprobada) con su propio buy_token
+      const amigaId = uid();
+      const amigaToken = uid();
+      const amigaPost = {
+        id:amigaId, evento_id:eventoId, productora_id,
+        nombre:amiga2.nombre, apellido:"", rut:amiga2.rut,
+        instagram:amiga2.instagram, whatsapp:amiga2.whatsapp,
+        fecha_nacimiento:null, email:amiga2.email,
+        estado:"aprobado", created_at:new Date().toISOString(),
+        buy_token:amigaToken, aprobado_por:postId, motivo_rechazo:null
+      };
+      await sbPost("cf_postulantes",[amigaPost]);
+
+      // Crear orden pendiente para amiga
+      const amigaOrdId = uid(); const amigaCodigo = cfCodigo();
+      const amigaOrden = {
+        id:amigaOrdId, postulante_id:amigaId, evento_id:eventoId, productora_id,
+        codigo:amigaCodigo, cantidad:1, monto_total:precio, estado:"pendiente",
+        datos_amiga:null, token_ref:amigaToken,
+        comprobante_url:null, operacion_num:null,
+        created_at:new Date().toISOString(), vence_at:vence,
+        conciliado_por:null, conciliado_at:null
+      };
+      await sbPost("cf_ordenes",[amigaOrden]);
+
+      // Enviar email a amiga con su link de pago
+      const amigaLink = `${CF_APP_URL}?cf_buy=${amigaToken}`;
+      try{
+        await sendEmail(amiga2.email,`¡Tienes una entrada reservada — ${ev.name||"Close Friends"}!`,`
+          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+            <div style="background:#fff;border-radius:14px;padding:32px">
+              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
+              <h2 style="margin-top:20px">¡Hola ${amiga2.nombre}! 🌸</h2>
+              <p style="color:#555;margin-top:12px">Tu amiga te reservó una entrada para <strong>${ev.name||"Close Friends"}</strong>.</p>
+              <p style="color:#555;margin-top:8px">Completa tu pago para confirmar tu lugar:</p>
+              <div style="text-align:center;margin:24px 0">
+                <a href="${amigaLink}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Pagar mi entrada →</a>
+              </div>
+              <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
+            </div>
+          </div>`);
+      }catch(emailErr){ console.warn("Email amiga no enviado:",emailErr); }
+
+      mostrarPagoCF(ordId);
+    } else {
+      // Modo junto (o solo): una orden con el total de entradas
+      const ordId = uid(); const codigo = cfCodigo();
+      const orden = {
+        id:ordId, postulante_id:postId, evento_id:eventoId, productora_id,
+        codigo, cantidad:cant, monto_total:cant*precio, estado:"pendiente",
+        datos_amiga:amiga2?JSON.stringify(amiga2):null, token_ref:token,
+        comprobante_url:null, operacion_num:null,
+        created_at:new Date().toISOString(), vence_at:vence,
+        conciliado_por:null, conciliado_at:null
+      };
+      await sbPost("cf_ordenes",[orden]);
+      mostrarPagoCF(ordId);
+    }
   }catch(e){ btn.disabled=false; btn.textContent="Confirmar y ver datos de pago"; show("Error: "+e.message); }
 }
 
