@@ -7195,14 +7195,17 @@ function cfCodigo(){ return "CF-"+Math.random().toString(36).slice(2,6).toUpperC
 // Cargar datos CF (tablas nuevas)
 async function loadCF(prodId=null){
   try{
-    const [postulantes, cf_ordenes, cf_config] = await Promise.all([
+    const eventosFiltro = prodId ? `productora_id=eq.${prodId}&order=date.desc` : "order=date.desc";
+    const [postulantes, cf_ordenes, cf_config, eventos] = await Promise.all([
       sbGet("cf_postulantes", prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
       sbGet("cf_ordenes",     prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
       sbGet("cf_config",      prodId ? `productora_id=eq.${prodId}` : ""),
+      (!D.eventos||!D.eventos.length) ? sbGet("eventos", eventosFiltro) : Promise.resolve(null),
     ]);
     D.cf_postulantes = postulantes||[];
     D.cf_ordenes     = cf_ordenes||[];
     D.cf_config      = cf_config||[];
+    if(eventos) D.eventos = eventos;
   }catch(e){ D.cf_postulantes=[]; D.cf_ordenes=[]; D.cf_config=[]; }
 }
 
