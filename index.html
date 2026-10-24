@@ -7782,20 +7782,23 @@ VIEWS.cfPostulantes = async()=>{
       const cfg=getCFConfig(p.evento_id);
       const ev=D.eventos.find(e=>e.id===p.evento_id);
       const link=`${CF_APP_URL}?cf_buy=${token}`;
-      const waMsg=encodeURIComponent(`Hola ${p.nombre}! Fuiste aprobada para Close Friends de ${ev?.name||"el evento"}. Tu link personal de compra: ${link}`);
-      await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
-        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-          <div style="background:#fff;border-radius:14px;padding:32px">
-            <h1 style="font-size:22px;letter-spacing:4px;text-align:center">CREW</h1>
-            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
-            <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
-            <div style="text-align:center;margin:24px 0">
-              <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+      try{
+        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
+          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+            <div style="background:#fff;border-radius:14px;padding:32px">
+              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">CREW</h1>
+              <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
+              <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
+              <div style="text-align:center;margin:24px 0">
+                <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+              </div>
+              <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
             </div>
-            <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
-          </div>
-        </div>`);
-      toast(`Aprobada: ${p.nombre}. Email enviado.`,"ok");
+          </div>`);
+        toast(`✅ Aprobada: ${p.nombre}. Email enviado.`,"ok");
+      }catch(e){
+        toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
+      }
     }
     cfRenderBandeja(currentCfEvId,"pendiente");
     await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}`);
