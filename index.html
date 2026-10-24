@@ -8249,48 +8249,72 @@ VIEWS.cfConciliacion = async()=>{
   };
 
   window.cfConciliar=async(ordenId)=>{
-    await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:CU.id,conciliado_at:new Date().toISOString()});
-    const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
-    if(ord){ ord.estado="conciliado";
-      // Enviar confirmación
-      const post=(D.cf_postulantes||[]).find(p=>p.id===ord.postulante_id);
-      const ev=D.eventos.find(e=>e.id===ord.evento_id);
-      if(post&&ev){
-        const cfg=getCFConfig(ord.evento_id);
-        await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
-          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-            <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
-              <div>${GL_EMAIL_LOGO}</div>
-              <div style="font-size:48px;margin:20px 0">🎉</div>
-              <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
-              <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
-              <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin:20px 0">
-                <div style="font-size:12px;color:#888">Código de entrada</div>
-                <div style="font-size:24px;font-weight:700;color:#16a34a;letter-spacing:2px">${ord.codigo}</div>
+    const btn=document.querySelector(`button[onclick="cfConciliar('${ordenId}')"]`);
+    if(btn){btn.disabled=true;btn.textContent="Conciliando...";}
+    try{
+      const r=await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:CU.id,conciliado_at:new Date().toISOString()});
+      if(r&&r.error) throw new Error(r.error.message||JSON.stringify(r.error));
+      const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
+      if(ord){ ord.estado="conciliado";
+        // Enviar confirmación
+        const post=(D.cf_postulantes||[]).find(p=>p.id===ord.postulante_id);
+        const ev=D.eventos.find(e=>e.id===ord.evento_id);
+        if(post&&ev){
+          const cfg=getCFConfig(ord.evento_id);
+          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
+            <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+              <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
+                <div>${GL_EMAIL_LOGO}</div>
+                <div style="font-size:48px;margin:20px 0">🎉</div>
+                <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
+                <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
+                <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin:20px 0">
+                  <div style="font-size:12px;color:#888">Código de entrada</div>
+                  <div style="font-size:24px;font-weight:700;color:#16a34a;letter-spacing:2px">${ord.codigo}</div>
+                </div>
+                <p style="font-size:12px;color:#aaa">Muestra este código en la puerta del evento.</p>
               </div>
-              <p style="font-size:12px;color:#aaa">Muestra este código en la puerta del evento.</p>
-            </div>
-          </div>`);
-        toast(`Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
+            </div>`);
+          toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
+        } else {
+          toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
+        }
       }
+      await log("cf_conciliar","cf_ordenes",ordenId,`Orden conciliada: ${ord?.codigo}`);
+      await new Promise(r=>setTimeout(r,600));
+      VIEWS.cfConciliacion();
+    }catch(e){
+      toast(`Error al conciliar: ${e.message}`,"err");
+      if(btn){btn.disabled=false;btn.textContent="✓ Conciliar";}
     }
-    await log("cf_conciliar","cf_ordenes",ordenId,`Orden conciliada: ${ord?.codigo}`);
-    VIEWS.cfConciliacion();
   };
 };
 
 function renderConcPendientes(prodId){
-  const pend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pagado");
+  const pend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(o.estado==="pagado"||o.estado==="pendiente")&&o.comprobante_url);
   if(!pend.length) return `<div style="color:var(--ink-4);font-size:13px">Sin órdenes pendientes de conciliar.</div>`;
   return pend.map(o=>{
     const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
-    return `<div class="row-item" style="margin-bottom:8px">
-      <div>
-        <div style="font-weight:600;font-family:monospace">${o.codigo}</div>
-        <div style="font-size:12px;color:var(--ink-3)">${post?`${post.nombre} ${post.apellido}`:"—"} · $${(o.monto_total||0).toLocaleString("es-CL")}</div>
-        ${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="font-size:11px;color:var(--accent)">Ver comprobante</a>`:""}
+    const nombre = post?`${post.nombre} ${post.apellido||""}`.trim():"—";
+    const monto = `$${(o.monto_total||0).toLocaleString("es-CL")}`;
+    const ocrInfo = o.ocr_monto||o.ocr_rut_origen ? `
+      <div style="margin-top:8px;background:var(--surface-2,#f8f8f8);border-radius:8px;padding:10px;font-size:12px">
+        ${o.ocr_monto?`<div>💰 Monto transferido: <strong>$${Number(o.ocr_monto).toLocaleString("es-CL")}</strong></div>`:""}
+        ${o.ocr_rut_origen?`<div>👤 RUT origen: <strong>${o.ocr_rut_origen}</strong></div>`:""}
+        ${o.ocr_banco?`<div>🏦 Banco: <strong>${o.ocr_banco}</strong></div>`:""}
+        ${o.ocr_fecha?`<div>📅 Fecha: <strong>${o.ocr_fecha}</strong></div>`:""}
+        ${o.ocr_validado?`<div style="color:#16a34a;margin-top:4px">✅ Monto coincide</div>`:`<div style="color:#f59e0b;margin-top:4px">⚠️ Verificar monto</div>`}
+      </div>` : "";
+    return `<div style="background:var(--surface-1,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:18px;font-weight:700;color:var(--ink-1)">${nombre}</div>
+          <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Código: <span style="font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</span> · <strong>${monto}</strong> · ${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""}</div>
+          ${ocrInfo}
+          ${o.comprobante_url?`<div style="margin-top:10px"><a href="${o.comprobante_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2,#f3f4f6);border:1px solid var(--border,#e5e7eb);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--ink-2);text-decoration:none">🖼 Ver comprobante</a></div>`:`<div style="margin-top:6px;font-size:12px;color:var(--ink-4)">Sin comprobante</div>`}
+        </div>
+        <button class="btn btn-success" style="white-space:nowrap;padding:8px 16px;font-size:13px" onclick="cfConciliar('${o.id}')">✓ Conciliar</button>
       </div>
-      <button class="btn btn-success" style="font-size:11px;padding:4px 10px" onclick="cfConciliar('${o.id}')">✓ Conciliar</button>
     </div>`;
   }).join("");
 }
