@@ -7831,6 +7831,54 @@ VIEWS.cfPostulantes = async()=>{
     await log("cf_rechazar","cf_postulantes",id,`Rechazada postulante. Motivo: ${motivo}`);
   };
 
+  window.cfReenviarCorreo=async(id)=>{
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+    if(!p){toast("Postulante no encontrado","error");return;}
+    if(p.estado!=="aprobado"){toast("Solo se puede reenviar a postulantes aprobadas","warn");return;}
+    const cfg=getCFConfig(p.evento_id);
+    const ev=D.eventos.find(e=>e.id===p.evento_id);
+    const token=p.buy_token;
+    if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
+    const link=`${CF_APP_URL}?cf_buy=${token}`;
+    try{
+      await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
+        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+          <div style="background:#fff;border-radius:14px;padding:32px">
+            <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
+            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
+            <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
+            <div style="text-align:center;margin:24px 0">
+              <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+            </div>
+            <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
+          </div>
+        </div>`);
+      toast(`📧 Correo reenviado a ${p.email}`,"ok");
+      await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
+    }catch(e){
+      toast(`Error al enviar correo: ${e.message}`,"error");
+    }
+  };
+
+  window.cfCambiarEmail=async(id)=>{
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+    if(!p){toast("Postulante no encontrado","error");return;}
+    const nuevoEmail=prompt(`Correo actual: ${p.email}\n\nIngresa el nuevo correo:`,p.email);
+    if(!nuevoEmail||nuevoEmail===p.email)return;
+    // Validar formato básico
+    if(!nuevoEmail.includes("@")||!nuevoEmail.includes(".")){toast("Correo inválido","error");return;}
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{email:nuevoEmail.trim().toLowerCase()});
+    p.email=nuevoEmail.trim().toLowerCase();
+    toast(`✅ Email actualizado a ${p.email}`,"ok");
+    await log("cf_cambiar_email","cf_postulantes",id,`Email actualizado a ${nuevoEmail}`);
+    // Si está aprobada, ofrecer reenviar
+    if(p.estado==="aprobado"&&confirm(`¿Deseas reenviar el correo de aprobación al nuevo email ${p.email}?`)){
+      await cfReenviarCorreo(id);
+    }
+    // Refrescar la vista
+    VIEWS.cfPlanilla();
+  };
+
   window.cfAprobarMasivo=async(evId)=>{
     const sel=[...document.querySelectorAll(".cf-sel:checked")].map(c=>c.value);
     if(!sel.length){toast("Selecciona postulantes","warn");return;}
@@ -8158,7 +8206,7 @@ function renderTablaPlanilla(ordenes,posts,q){
       <th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px">RUT</th>
       <th style="padding:8px">IG</th><th style="padding:8px">WA</th>
       <th style="padding:8px">Estado</th><th style="padding:8px">Orden</th>
-      <th style="padding:8px">Tickets</th><th style="padding:8px">Monto</th><th style="padding:8px">Pago</th>
+      <th style="padding:8px">Tickets</th><th style="padding:8px">Monto</th><th style="padding:8px">Pago</th><th style="padding:8px">Acciones</th>
     </tr></thead>
     <tbody>
     ${filtrados.map(p=>{
@@ -8173,8 +8221,12 @@ function renderTablaPlanilla(ordenes,posts,q){
         <td style="padding:8px;text-align:center">${ord?.cantidad||"—"}</td>
         <td style="padding:8px">$${ord?(ord.monto_total||0).toLocaleString("es-CL"):"—"}</td>
         <td style="padding:8px">${ord?badge(ord.estado,ord.estado==="conciliado"?"green":ord.estado==="pagado"?"blue":"amber"):"—"}</td>
+        <td style="padding:8px;white-space:nowrap">
+          ${p.estado==="aprobado"?`<button onclick="cfReenviarCorreo('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Reenviar correo de aprobación">📧 Reenviar</button>`:""}
+          <button onclick="cfCambiarEmail('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Cambiar email">✏️ Email</button>
+        </td>
       </tr>`;
-    }).join("")||`<tr><td colspan="9" style="text-align:center;color:var(--ink-4);padding:24px">Sin resultados.</td></tr>`}
+    }).join("")||`<tr><td colspan="10" style="text-align:center;color:var(--ink-4);padding:24px">Sin resultados.</td></tr>`}
     </tbody></table>`;
 }
 
