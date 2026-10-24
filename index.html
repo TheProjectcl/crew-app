@@ -7212,7 +7212,7 @@ function alertaNombreMasculino(nombre){
   return NOMBRES_MASC.includes(fn);
 }
 
-function cfToken(){ return "cf_"+Math.random().toString(36).slice(2,12); }
+function cfToken(){ return crypto.randomUUID(); }
 function cfCodigo(){ return "CF-"+Math.random().toString(36).slice(2,6).toUpperCase(); }
 
 // Cargar datos CF (tablas nuevas)
