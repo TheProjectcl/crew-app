@@ -477,7 +477,7 @@ function getPulsera(e, ev){
 }
 
 const ROLE_META = {
-  superadmin: {label:"Dueño Software",  badge:"purple", icon:"👑"},
+  superadmin: {label:"All Access CREW",  badge:"purple", icon:"👑"},
   owner:      {label:"Dueño Productora",badge:"blue",   icon:"🎪"},
   coordinator:{label:"Coordinador",     badge:"teal",   icon:"🎯"},
   door_chief: {label:"Jefe Acreditación",badge:"orange",icon:"🚪"},
@@ -488,6 +488,16 @@ const ROLE_META = {
   embajador:  {label:"Embajador",       badge:"green",  icon:"⭐"},
 };
 const rm = r=>ROLE_META[r]||{label:r,badge:"gray",icon:"👤"};
+// rm con contexto de usuario: owners muestran nombre de su productora
+const rmU = u=>{
+  if(!u) return {label:"?",badge:"gray",icon:"👤"};
+  const base = rm(u.role);
+  if(u.role==="owner" && u.productora_id){
+    const prod = D?.productoras?.find(p=>p.id===u.productora_id);
+    if(prod) return {...base, label: prod.nombre, icon:"🎪"};
+  }
+  return base;
+};
 
 const getAforo = (evId=currentEvId)=>D.capacity_log.filter(l=>l.event_id===evId).reduce((s,l)=>s+(l.action==="entry"?l.count:-l.count),0);
 const getMax   = (evId=currentEvId)=>(D.eventos.find(e=>e.id===evId)||{}).max_capacity||500;
@@ -1964,7 +1974,7 @@ VIEWS["usuarios-global"]=()=>{
             return `<tr ${esOwnerProd?'style="background:#fef3c7"':""}>
               <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><strong>${u.name}</strong>${esOwnerProd?` <span style="font-size:10px;font-weight:700;color:#92400E;background:#fde68a;padding:1px 6px;border-radius:4px;margin-left:4px">OWNER</span>`:""}</div></div></td>
               <td style="font-size:12px;color:#888">${u.email}</td>
-              <td>${badge(rm(u.role).icon+" "+rm(u.role).label,rm(u.role).badge)}</td>
+              <td>${badge(rmU(u).icon+" "+rmU(u).label,rmU(u).badge)}</td>
               <td style="font-size:12px">${u.puntos||0}</td>
               <td style="text-align:right"><button class="btn" style="padding:3px 8px;font-size:11px" onclick="openEditUser('${u.id}','usuarios-global')">✏️ Editar</button></td>
             </tr>`;
@@ -1983,7 +1993,7 @@ VIEWS["usuarios-global"]=()=>{
           <tbody>${sinProd.map(u=>`<tr>
             <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<strong>${u.name}</strong></div></td>
             <td style="font-size:12px;color:#888">${u.email}</td>
-            <td>${badge(rm(u.role).icon+" "+rm(u.role).label,rm(u.role).badge)}</td>
+            <td>${badge(rmU(u).icon+" "+rmU(u).label,rmU(u).badge)}</td>
             <td style="text-align:right"><button class="btn" style="padding:3px 8px;font-size:11px" onclick="openEditUser('${u.id}','usuarios-global')">✏️ Editar</button></td>
           </tr>`).join("")}</tbody>
         </table></div>
@@ -5032,10 +5042,10 @@ function openGestionUsuariosEvento(evId){
   const noAsignados=prodUsers.filter(u=>!(u.evento_ids||[]).includes(evId));
   openModal(`👥 Equipo — ${ev.name}`,`
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">Usuarios asignados a este evento</div>
-    <div style="margin-bottom:14px">${asignados.length?asignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px;font-weight:500">${u.name}</div><div style="font-size:11px;color:#888">${u.email}</div></div></div><div style="display:flex;gap:6px;align-items:center">${badge(rm(u.role).icon+" "+rm(u.role).label,rm(u.role).badge)}<button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="desasignarUsuario('${u.id}','${evId}')">✕</button></div></div>`).join(""):`<div style="font-size:12px;color:#aaa">Sin usuarios asignados.</div>`}</div>
+    <div style="margin-bottom:14px">${asignados.length?asignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px;font-weight:500">${u.name}</div><div style="font-size:11px;color:#888">${u.email}</div></div></div><div style="display:flex;gap:6px;align-items:center">${badge(rmU(u).icon+" "+rmU(u).label,rmU(u).badge)}<button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="desasignarUsuario('${u.id}','${evId}')">✕</button></div></div>`).join(""):`<div style="font-size:12px;color:#aaa">Sin usuarios asignados.</div>`}</div>
     <div style="border-top:1px solid #f0f0f0;padding-top:12px">
       <div style="font-size:13px;font-weight:600;margin-bottom:8px">Agregar usuario al evento</div>
-      ${noAsignados.length?noAsignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px">${u.name}</div><div style="font-size:11px;color:#888">${rm(u.role).label}</div></div></div><button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="asignarUsuario('${u.id}','${evId}')">+ Asignar</button></div>`).join(""):`<div style="font-size:12px;color:#aaa">Todos los usuarios están asignados.</div>`}
+      ${noAsignados.length?noAsignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px">${u.name}</div><div style="font-size:11px;color:#888">${rmU(u).label}</div></div></div><button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="asignarUsuario('${u.id}','${evId}')">+ Asignar</button></div>`).join(""):`<div style="font-size:12px;color:#aaa">Todos los usuarios están asignados.</div>`}
     </div>`,true);
 }
 async function asignarUsuario(uid,evId){
@@ -5431,7 +5441,7 @@ VIEWS.usuarios=()=>{
         return `<tr ${esOwnerProd?'style="background:#fef3c7"':""}>
           <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><strong>${u.name}</strong>${esOwnerProd?` <span style="font-size:10px;font-weight:700;color:#92400E;background:#fde68a;padding:1px 6px;border-radius:4px;margin-left:4px">OWNER</span>`:""}</div></div></td>
           <td style="font-size:12px;color:#888">${u.email}</td>
-          <td>${badge(rm(u.role).icon+" "+rm(u.role).label,rm(u.role).badge)}</td>
+          <td>${badge(rmU(u).icon+" "+rmU(u).label,rmU(u).badge)}</td>
           <td style="font-size:12px">${u.puntos||0}</td>
           <td style="text-align:right">
             <div style="display:flex;gap:4px;justify-content:flex-end">
