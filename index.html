@@ -7695,6 +7695,24 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
   }catch(e){ btn.disabled=false; btn.textContent="Confirmar y ver datos de pago"; show("Error: "+e.message); }
 }
 
+function copiarDatosTransferencia(){
+  const el = document.getElementById("datos-transferencia");
+  const d = el ? el.dataset : {};
+  const txt = [d.nombre, d.rut, d.banco, d.tipo, d.num, d.email].filter(Boolean).join("\n");
+  navigator.clipboard.writeText(txt).then(()=>{
+    const btn = document.getElementById("btn-copiar-datos");
+    if(btn){ btn.textContent="✓ Copiado"; btn.style.color="#4ade80"; setTimeout(()=>{ btn.textContent="Copiar datos"; btn.style.color="#ccc"; },2000); }
+  }).catch(()=>{
+    // fallback para móvil
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+    document.body.removeChild(ta);
+    const btn = document.getElementById("btn-copiar-datos");
+    if(btn){ btn.textContent="✓ Copiado"; btn.style.color="#4ade80"; setTimeout(()=>{ btn.textContent="Copiar datos"; btn.style.color="#ccc"; },2000); }
+  });
+}
+
 // ── PÁGINA PÚBLICA: Pago ──
 function mostrarPagoCF(ordenId){
   const cont = document.getElementById("cf-compra-content")||document.body;
@@ -7715,13 +7733,22 @@ function mostrarPagoCF(ordenId){
         <h3 style="color:#EC4899">Código de orden: ${ord.codigo}</h3>
         <div style="font-size:12px;color:#888;margin-bottom:16px">Vence: ${vence}</div>
         <div style="background:#1e1e1e;border-radius:10px;padding:16px;margin-bottom:16px">
-          <div style="font-size:13px;color:#888;margin-bottom:8px">Datos de transferencia</div>
-          <div style="color:#fff;font-size:14px;line-height:2">
-            <div><span style="color:#888">Banco:</span> ${cfg.banco||"Banco Santander"}</div>
-            <div><span style="color:#888">Tipo:</span> ${cfg.cuenta_tipo||"Cuenta Corriente"}</div>
-            <div><span style="color:#888">N° Cuenta:</span> ${cfg.cuenta_num||"—"}</div>
-            <div><span style="color:#888">Nombre:</span> ${cfg.cuenta_nombre||"—"}</div>
-            <div><span style="color:#888">RUT:</span> ${cfg.cuenta_rut||"—"}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;color:#888">Datos de transferencia</div>
+            <button id="btn-copiar-datos" onclick="copiarDatosTransferencia()" style="background:#2e2e2e;border:none;border-radius:6px;color:#ccc;font-size:11px;padding:5px 10px;cursor:pointer">Copiar datos</button>
+          </div>
+          <div id="datos-transferencia" style="color:#fff;font-size:14px;line-height:2"
+            data-nombre="${(cfg.cuenta_nombre||'').replace(/"/g,'&quot;')}"
+            data-rut="${cfg.cuenta_rut||''}"
+            data-banco="${(cfg.banco||'Banco Santander').replace(/"/g,'&quot;')}"
+            data-tipo="${cfg.cuenta_tipo||'Cuenta Corriente'}"
+            data-num="${cfg.cuenta_num||''}"
+            data-email="${cfg.cuenta_email||''}">
+            <div>${cfg.cuenta_nombre||"—"}</div>
+            <div>${cfg.cuenta_rut||"—"}</div>
+            <div>${cfg.banco||"Banco Santander"}</div>
+            <div>${cfg.cuenta_tipo||"Cuenta Corriente"}</div>
+            <div>${cfg.cuenta_num||"—"}</div>
           </div>
         </div>
         <div style="background:#EC4899;border-radius:10px;padding:14px;text-align:center;margin-bottom:16px">
