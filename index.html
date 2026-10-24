@@ -7156,6 +7156,1019 @@ function renderEmbRanking(mc){
     </div>`;
 }
 
+// ══════════════════════════════════════════════════════════════════
+// MÓDULO CLOSE FRIENDS — Venta con descuento solo mujeres
+// ══════════════════════════════════════════════════════════════════
+
+// ── Utilidades Close Friends ──
+const CF_APP_URL = "https://crewcl.netlify.app";
+
+function validarRUT(rut){
+  if(!rut) return false;
+  const r = rut.trim().replace(/[.\-\s]/g,"").toUpperCase();
+  if(r.length < 2) return false;
+  const body = r.slice(0,-1);
+  const dv   = r.slice(-1);
+  let sum=0, mul=2;
+  for(let i=body.length-1;i>=0;i--){
+    sum += parseInt(body[i])*mul;
+    mul = mul===7?2:mul+1;
+  }
+  const expected = 11-(sum%11);
+  const dvCalc = expected===11?"0":expected===10?"K":String(expected);
+  return dvCalc === dv;
+}
+
+function normRUT(r){ return (r||"").trim().replace(/[.\-\s]/g,"").toUpperCase(); }
+function normIG(ig){ return (ig||"").replace(/^@/,"").toLowerCase().trim(); }
+
+// Nombres típicamente masculinos para alerta (solo alerta, nunca rechazo)
+const NOMBRES_MASC = ["alejandro","alex","andres","carlos","claudio","cristian","daniel","david","diego","eduardo","emilio","enrique","esteban","fabian","felipe","fernando","francisco","gabriel","gonzalo","guillermo","gustavo","hector","hugo","ignacio","ivan","javier","jesus","joaquin","jorge","jose","juan","julio","kevin","leonardo","lucas","luis","manuel","marcelo","mario","martin","mateo","matias","mauricio","miguel","nicolas","pablo","patricio","paulo","pedro","rafael","raul","ricardo","roberto","rodrigo","sebastian","sergio","tomas","victor"];
+function alertaNombreMasculino(nombre){
+  const fn = (nombre||"").split(" ")[0].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"");
+  return NOMBRES_MASC.includes(fn);
+}
+
+function cfToken(){ return "cf_"+Math.random().toString(36).slice(2,12); }
+function cfCodigo(){ return "CF-"+Math.random().toString(36).slice(2,6).toUpperCase(); }
+
+// Cargar datos CF (tablas nuevas)
+async function loadCF(prodId=null){
+  try{
+    const [postulantes, cf_ordenes, cf_config] = await Promise.all([
+      sbGet("cf_postulantes", prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
+      sbGet("cf_ordenes",     prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
+      sbGet("cf_config",      prodId ? `productora_id=eq.${prodId}` : ""),
+    ]);
+    D.cf_postulantes = postulantes||[];
+    D.cf_ordenes     = cf_ordenes||[];
+    D.cf_config      = cf_config||[];
+  }catch(e){ D.cf_postulantes=[]; D.cf_ordenes=[]; D.cf_config=[]; }
+}
+
+// Obtener config CF para un evento
+function getCFConfig(eventoId){
+  return D.cf_config?.find(c=>c.evento_id===eventoId) || {
+    precio:15000, cupos_total:100, tope_persona:2, horas_vencimiento:24,
+    banco:"Banco Santander", cuenta_tipo:"Cuenta Corriente", cuenta_num:"",
+    cuenta_nombre:"", cuenta_rut:"", activo:false, cierre_venta:null,
+    msg_aprobacion:"¡Felicidades! Fuiste aprobada para Close Friends. Usa tu link personal para comprar tu entrada.",
+    msg_confirmacion:"¡Tu entrada está confirmada! Muestra este QR en la puerta."
+  };
+}
+
+// Cupos disponibles CF para un evento
+function cfCuposDisponibles(eventoId){
+  const cfg = getCFConfig(eventoId);
+  const ordenes = (D.cf_ordenes||[]).filter(o=>o.evento_id===eventoId && ["pendiente","pagado","conciliado"].includes(o.estado));
+  const usados = ordenes.reduce((s,o)=>s+(o.cantidad||0),0);
+  return Math.max(0, (cfg.cupos_total||100) - usados);
+}
+
+// ── PÁGINA PÚBLICA: Lobby → Registro Close Friends (sin login) ──
+// Accesible via ?cf=EVENTO_ID
+// Primero muestra pantalla lobby de la productora, luego el formulario
+function mostrarRegistroCF(eventoId){
+  const ESTILOS_CF = `
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Inter",sans-serif}
+    body{background:#000;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px}
+    .cf-lobby{text-align:center;max-width:380px;width:100%;padding:0 16px}
+    .cf-lobby-brand{font-size:11px;letter-spacing:6px;color:#555;text-transform:uppercase;margin-bottom:48px}
+    .cf-lobby-title{font-size:42px;font-weight:800;letter-spacing:-1px;color:#fff;line-height:1.1;margin-bottom:8px}
+    .cf-lobby-sub{font-size:12px;letter-spacing:3px;color:#666;margin-bottom:60px;text-transform:uppercase}
+    .cf-lobby-btn{display:block;width:100%;padding:16px;background:#fff;color:#000;border:none;border-radius:10px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;transition:background .15s}
+    .cf-lobby-btn:hover{background:#e5e5e5}
+    .cf-lobby-footer{font-size:10px;color:#333;margin-top:32px;letter-spacing:1px}
+    .cf-box{background:#141414;border:1px solid #222;border-radius:16px;padding:32px;width:420px;max-width:100%}
+    .cf-title{text-align:center;margin-bottom:24px}
+    .cf-title h1{font-size:20px;letter-spacing:6px;color:#fff;font-weight:800;text-transform:uppercase}
+    .cf-title p{font-size:10px;color:#555;letter-spacing:3px;margin-top:6px;text-transform:uppercase}
+    .cf-subtitle{font-size:13px;color:#aaa;text-align:center;margin-bottom:20px;line-height:1.6}
+    label{display:block;font-size:10px;color:#666;margin-bottom:4px;margin-top:12px;letter-spacing:1px;text-transform:uppercase}
+    input{width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;outline:none}
+    input:focus{border-color:#fff}
+    .cf-btn{width:100%;padding:13px;background:#fff;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-top:20px}
+    .cf-btn:hover{background:#e5e5e5}
+    .cf-btn:disabled{background:#333;color:#666;cursor:not-allowed}
+    .cf-err{color:#f87171;font-size:12px;margin-top:8px;text-align:center}
+    .cf-ok{text-align:center;padding:24px 0}
+    .cf-ok h2{color:#fff;font-size:18px;margin-bottom:8px}
+    .cf-ok p{color:#aaa;font-size:13px;line-height:1.6}
+    .cf-check{display:flex;align-items:flex-start;gap:10px;margin-top:16px}
+    .cf-check input[type=checkbox]{width:16px;height:16px;margin-top:2px;flex-shrink:0;accent-color:#fff}
+    .cf-check label{font-size:12px;color:#666;text-transform:none;letter-spacing:0;margin:0}
+    .cf-evento-info{background:#1a1a1a;border-radius:10px;padding:14px;margin-bottom:20px;text-align:center}
+    .cf-evento-info .ev-name{font-size:15px;font-weight:700;color:#fff}
+    .cf-evento-info .ev-date{font-size:12px;color:#666;margin-top:4px}
+    .cf-back{background:none;border:none;color:#555;font-size:12px;letter-spacing:1px;cursor:pointer;margin-bottom:20px;text-decoration:underline;padding:0}
+  </style>`;
+
+  document.body.innerHTML = ESTILOS_CF + `<div id="cf-screen"></div>`;
+
+  (async()=>{
+    const screen = document.getElementById("cf-screen");
+    // Cargar evento y config antes de mostrar cualquier pantalla
+    let ev, cfg;
+    try{
+      const [evArr, cfCfgArr] = await Promise.all([
+        sbGet("eventos",`id=eq.${eventoId}`),
+        sbGet("cf_config",`evento_id=eq.${eventoId}`)
+      ]);
+      ev = evArr[0]; cfg = cfCfgArr[0];
+    }catch(e){ ev=null; cfg=null; }
+
+    const nombreProd = cfg?.nombre_productora || (ev?.productora_id ? "" : "THE PROJECT");
+    // Si hay productora, buscar su nombre
+    let prodNombre = nombreProd;
+    if(!prodNombre && ev?.productora_id){
+      try{
+        const pArr = await sbGet("productoras",`id=eq.${ev.productora_id}`);
+        prodNombre = pArr[0]?.nombre || "THE PROJECT";
+      }catch(e){ prodNombre = "THE PROJECT"; }
+    }
+
+    // ── PANTALLA 1: Lobby ──
+    const mostrarLobby = ()=>{
+      screen.innerHTML=`
+        <div class="cf-lobby">
+          <div class="cf-lobby-brand">POWERED BY CREW</div>
+          <div class="cf-lobby-title">${prodNombre.toUpperCase()}</div>
+          <div class="cf-lobby-sub">${ev?.name||"Evento especial"}</div>
+          <button class="cf-lobby-btn" onclick="mostrarFormCF()">
+            MEJORES AMIGOS ${prodNombre.toUpperCase()}
+          </button>
+          <div class="cf-lobby-footer">ACCESO EXCLUSIVO · SOLO MUJERES</div>
+        </div>`;
+    };
+
+    // ── PANTALLA 2: Formulario de registro ──
+    window.mostrarFormCF = ()=>{
+      if(!ev){
+        screen.innerHTML=`<div class="cf-box"><div class="cf-err" style="font-size:14px;padding:20px">Evento no encontrado.</div></div>`;
+        return;
+      }
+      if(!cfg || !cfg.activo){
+        screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El registro para este evento está cerrado o no disponible.</p></div></div>`;
+        return;
+      }
+      if(cfg.cierre_venta && new Date()>new Date(cfg.cierre_venta)){
+        screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El período de registro ha finalizado.</p></div></div>`;
+        return;
+      }
+      const evDate = ev.date ? new Date(ev.date).toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
+      screen.innerHTML=`
+        <div class="cf-box">
+          <button class="cf-back" onclick="mostrarLobbyExt()">← Volver</button>
+          <div class="cf-title">
+            <h1>${prodNombre}</h1>
+            <p>MEJORES AMIGOS</p>
+          </div>
+          <div class="cf-evento-info">
+            <div class="ev-name">${ev.name||"Evento"}</div>
+            <div class="ev-date">${evDate}${ev.venue?" · "+ev.venue:""}</div>
+          </div>
+          <div class="cf-subtitle">Postula para acceder a precio especial. Solo mujeres mayores de 18 años.</div>
+          <div id="cf-form-err" class="cf-err" style="display:none"></div>
+          <label>Nombre *</label>
+          <input id="cf-nombre" type="text" placeholder="Tu nombre">
+          <label>Apellido *</label>
+          <input id="cf-apellido" type="text" placeholder="Tu apellido">
+          <label>RUT *</label>
+          <input id="cf-rut" type="text" placeholder="12345678-9" onblur="this.value=this.value.replace(/[.\\s]/g,'')">
+          <label>Instagram *</label>
+          <input id="cf-ig" type="text" placeholder="@tuusuario">
+          <label>WhatsApp *</label>
+          <input id="cf-wa" type="tel" placeholder="+56912345678">
+          <label>Fecha de nacimiento *</label>
+          <input id="cf-dob" type="date" max="${new Date(Date.now()-18*365.25*24*3600*1000).toISOString().slice(0,10)}">
+          <label>Email (para recibir tu link) *</label>
+          <input id="cf-email" type="email" placeholder="tu@email.com">
+          <div class="cf-check">
+            <input type="checkbox" id="cf-consent">
+            <label for="cf-consent">Acepto que mis datos sean utilizados para gestionar mi participación en el evento. Entiendo que mi postulación será revisada.</label>
+          </div>
+          <button class="cf-btn" onclick="enviarPostulacionCF('${eventoId}','${ev.productora_id||""}')">Enviar postulación</button>
+        </div>`;
+    };
+
+    window.mostrarLobbyExt = mostrarLobby;
+    mostrarLobby();
+
+    // Si la URL trae ?cf_skip_lobby=1 ir directo al form (para admins que testean)
+    if(new URLSearchParams(window.location.search).has("cf_skip_lobby")) mostrarFormCF();
+  })();
+}
+
+async function enviarPostulacionCF(eventoId, productora_id){
+  const err = document.getElementById("cf-form-err");
+  const btn = document.querySelector(".cf-btn");
+  const nombre   = (document.getElementById("cf-nombre")?.value||"").trim();
+  const apellido = (document.getElementById("cf-apellido")?.value||"").trim();
+  const rut      = normRUT(document.getElementById("cf-rut")?.value||"");
+  const ig       = normIG(document.getElementById("cf-ig")?.value||"");
+  const wa       = (document.getElementById("cf-wa")?.value||"").trim();
+  const dob      = document.getElementById("cf-dob")?.value||"";
+  const email    = (document.getElementById("cf-email")?.value||"").trim();
+  const consent  = document.getElementById("cf-consent")?.checked;
+
+  err.style.display="none";
+  const show = msg=>{ err.textContent=msg; err.style.display="block"; };
+
+  if(!nombre||!apellido) return show("Por favor ingresa tu nombre y apellido.");
+  if(!rut||!validarRUT(rut)) return show("RUT inválido. Ingresa con formato 12345678-9.");
+  if(!ig) return show("Ingresa tu usuario de Instagram.");
+  if(!wa.match(/^\+?569\d{8}$/)) return show("WhatsApp inválido. Usa formato +56912345678.");
+  if(!dob) return show("Ingresa tu fecha de nacimiento.");
+  const edad = (Date.now()-new Date(dob))/1000/3600/24/365.25;
+  if(edad < 18) return show("Debes ser mayor de 18 años para participar.");
+  if(!email.includes("@")) return show("Email inválido.");
+  if(!consent) return show("Debes aceptar el consentimiento de datos.");
+
+  btn.disabled=true; btn.textContent="Enviando...";
+  try{
+    // Verificar duplicados y blocklist
+    const [existing, bloqueados] = await Promise.all([
+      sbGet("cf_postulantes",`evento_id=eq.${eventoId}`),
+      sbGet("lista_bloqueo",`productora_id=eq.${productora_id}`)
+    ]);
+    const norm = s=>(s||"").toLowerCase().replace(/[.\-\s]/g,"");
+    if(existing.find(p=>normRUT(p.rut)===rut)) return show("Ya existe una postulación con este RUT para este evento.");
+    if(existing.find(p=>normIG(p.instagram)===ig)) return show("Ya existe una postulación con este Instagram para este evento.");
+    if(existing.find(p=>(p.email||"").toLowerCase()===email.toLowerCase())) return show("Ya existe una postulación con este email.");
+    const bloq = bloqueados.find(b=>normRUT(b.rut)===rut || norm(b.nombre)===norm(nombre+" "+apellido));
+    if(bloq) return show("No es posible procesar tu postulación en este momento.");
+
+    const id = uid();
+    await sbPost("cf_postulantes",[{
+      id, evento_id:eventoId, productora_id, nombre, apellido,
+      rut, instagram:ig, whatsapp:wa, fecha_nacimiento:dob, email,
+      estado:"pendiente", created_at:new Date().toISOString(),
+      buy_token:null, aprobado_por:null, motivo_rechazo:null
+    }]);
+
+    const cont = document.getElementById("cf-screen")||document.querySelector(".cf-box");
+    if(cont) cont.innerHTML=`
+      <div style="text-align:center;padding:60px 20px;max-width:380px;margin:0 auto">
+        <div style="font-size:11px;letter-spacing:4px;color:#555;margin-bottom:40px">CREW</div>
+        <div style="font-size:32px;font-weight:800;color:#fff;margin-bottom:12px">Listo.</div>
+        <div style="font-size:14px;color:#666;line-height:1.7">
+          Revisaremos tu postulación pronto.<br>
+          Si eres aprobada, recibirás un email<br>con tu link personal de compra.
+        </div>
+      </div>`;
+  }catch(e){
+    btn.disabled=false; btn.textContent="Enviar postulación";
+    show("Error al enviar: "+e.message);
+  }
+}
+
+// ── PÁGINA PÚBLICA: Compra con token personal ──
+function mostrarCompraCF(token){
+  document.body.innerHTML=`
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Inter",sans-serif}
+    body{background:#0a0a0a;min-height:100vh;padding:16px}
+    .cf-wrap{max-width:480px;margin:0 auto}
+    .cf-top{text-align:center;padding:28px 0 20px}
+    .cf-top h1{font-size:22px;letter-spacing:4px;color:#fff;font-weight:700}
+    .cf-top p{font-size:11px;color:#888;letter-spacing:2px;margin-top:4px}
+    .cf-card{background:#141414;border:1px solid #222;border-radius:14px;padding:22px;margin-bottom:14px}
+    .cf-card h3{font-size:14px;font-weight:600;color:#fff;margin-bottom:14px}
+    label{display:block;font-size:11px;color:#888;margin-bottom:4px;margin-top:10px;letter-spacing:.5px;text-transform:uppercase}
+    input,select{width:100%;padding:10px 12px;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:8px;color:#fff;font-size:13px;outline:none}
+    input:focus,select:focus{border-color:#EC4899}
+    select option{background:#1e1e1e}
+    .cf-btn{width:100%;padding:12px;background:#EC4899;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px}
+    .cf-btn:disabled{background:#444;cursor:not-allowed}
+    .total-box{background:#1e1e1e;border-radius:10px;padding:14px;margin-top:14px;text-align:center}
+    .total-box .monto{font-size:28px;font-weight:700;color:#EC4899}
+    .total-box .label{font-size:12px;color:#888;margin-top:4px}
+    .cf-err{color:#f87171;font-size:12px;margin-top:8px;text-align:center}
+    .cf-ok{text-align:center;padding:24px}
+    .cf-ok .icon{font-size:48px;margin-bottom:12px}
+  </style>
+  <div class="cf-wrap">
+    <div class="cf-top"><h1>CREW</h1><p>CLOSE FRIENDS</p></div>
+    <div id="cf-compra-content"><div style="text-align:center;color:#888;padding:40px">Cargando...</div></div>
+  </div>`;
+
+  (async()=>{
+    const cont = document.getElementById("cf-compra-content");
+    try{
+      const postArr = await sbGet("cf_postulantes",`buy_token=eq.${token}`);
+      const post = postArr[0];
+      if(!post){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Link inválido o expirado.</p></div>`; return; }
+      if(post.estado!=="aprobado"){ cont.innerHTML=`<div class="cf-ok"><div class="icon">⏳</div><p style="color:#aaa">Tu postulación aún está en revisión.</p></div>`; return; }
+
+      // Verificar si ya tiene orden activa
+      const ordenesExist = await sbGet("cf_ordenes",`postulante_id=eq.${post.id}&estado=neq.vencido&estado=neq.rechazado`);
+      if(ordenesExist.length){ mostrarPagoCF(ordenesExist[0].id); return; }
+
+      const [evArr, cfgArr] = await Promise.all([
+        sbGet("eventos",`id=eq.${post.evento_id}`),
+        sbGet("cf_config",`evento_id=eq.${post.evento_id}`)
+      ]);
+      const ev = evArr[0]; const cfg = cfgArr[0];
+      if(!ev||!cfg){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Evento no disponible.</p></div>`; return; }
+      if(!cfg.activo||( cfg.cierre_venta&&new Date()>new Date(cfg.cierre_venta))){ cont.innerHTML=`<div class="cf-ok"><div class="icon">🔒</div><p style="color:#aaa">Venta cerrada.</p></div>`; return; }
+
+      const tope = cfg.tope_persona||2;
+      const precio = cfg.precio||15000;
+      const evDate = ev.date ? new Date(ev.date).toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
+
+      cont.innerHTML=`
+        <div class="cf-card">
+          <div style="text-align:center;margin-bottom:16px">
+            <div style="font-size:16px;font-weight:700;color:#fff">${ev.name}</div>
+            <div style="font-size:12px;color:#888;margin-top:4px">${evDate} · ${ev.venue||""}</div>
+          </div>
+          <div style="font-size:13px;color:#ccc;margin-bottom:8px">Hola, <strong style="color:#fff">${post.nombre}</strong> 👋</div>
+          <div style="font-size:12px;color:#888">Precio por entrada: <strong style="color:#EC4899">$${precio.toLocaleString("es-CL")}</strong></div>
+        </div>
+        <div class="cf-card">
+          <h3>Selecciona tus entradas</h3>
+          <label>Cantidad (máx. ${tope})</label>
+          <select id="cf-cantidad" onchange="actualizarTotalCF(${precio})">
+            ${Array.from({length:tope},(_,i)=>`<option value="${i+1}">${i+1} entrada${i>0?"s":""}</option>`).join("")}
+          </select>
+          <div id="cf-amiga-fields"></div>
+          <div class="total-box">
+            <div class="monto" id="cf-total">$${precio.toLocaleString("es-CL")}</div>
+            <div class="label">Total a transferir</div>
+          </div>
+          <div id="cf-compra-err" class="cf-err" style="display:none"></div>
+          <button class="cf-btn" onclick="confirmarOrdenCF('${token}','${post.id}','${post.evento_id}','${post.productora_id}',${precio},${tope})">Confirmar y ver datos de pago</button>
+        </div>`;
+
+      actualizarTotalCF(precio);
+    }catch(e){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Error: ${e.message}</p></div>`; }
+  })();
+}
+
+function actualizarTotalCF(precio){
+  const cant = parseInt(document.getElementById("cf-cantidad")?.value||1);
+  const totalEl = document.getElementById("cf-total");
+  if(totalEl) totalEl.textContent = "$"+(cant*precio).toLocaleString("es-CL");
+  const fields = document.getElementById("cf-amiga-fields");
+  if(!fields) return;
+  if(cant>=2){
+    fields.innerHTML=`
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid #2e2e2e">
+        <div style="font-size:12px;color:#EC4899;margin-bottom:10px;font-weight:600">Datos de tu amiga (2° entrada)</div>
+        <label>Nombre completo</label><input id="cf-a2-nombre" type="text" placeholder="Nombre de tu amiga">
+        <label>RUT</label><input id="cf-a2-rut" type="text" placeholder="12345678-9">
+        <label>Instagram</label><input id="cf-a2-ig" type="text" placeholder="@usuario">
+        <label>WhatsApp</label><input id="cf-a2-wa" type="tel" placeholder="+56912345678">
+      </div>`;
+  }else{ fields.innerHTML=""; }
+}
+
+async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, tope){
+  const btn = document.querySelector(".cf-btn");
+  const err = document.getElementById("cf-compra-err");
+  const cant = parseInt(document.getElementById("cf-cantidad")?.value||1);
+  err.style.display="none";
+  const show = msg=>{ err.textContent=msg; err.style.display="block"; };
+
+  // Validar datos amiga si aplica
+  let amiga2 = null;
+  if(cant>=2){
+    const a2n = (document.getElementById("cf-a2-nombre")?.value||"").trim();
+    const a2r = normRUT(document.getElementById("cf-a2-rut")?.value||"");
+    const a2ig= normIG(document.getElementById("cf-a2-ig")?.value||"");
+    const a2wa= (document.getElementById("cf-a2-wa")?.value||"").trim();
+    if(!a2n||!a2r||!a2ig||!a2wa) return show("Completa todos los datos de tu amiga.");
+    if(!validarRUT(a2r)) return show("RUT de amiga inválido.");
+    amiga2={nombre:a2n,rut:a2r,instagram:a2ig,whatsapp:a2wa};
+  }
+
+  btn.disabled=true; btn.textContent="Procesando...";
+  try{
+    // Verificar cupos
+    const ordenes = await sbGet("cf_ordenes",`evento_id=eq.${eventoId}&estado=neq.vencido&estado=neq.rechazado`);
+    const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${eventoId}`)]);
+    const cfg = cfgArr[0]||{};
+    const usados = ordenes.reduce((s,o)=>s+(o.cantidad||0),0);
+    const cuposDisp = (cfg.cupos_total||100)-usados;
+    if(cuposDisp < cant) return (btn.disabled=false, btn.textContent="Confirmar y ver datos de pago", show(`Solo quedan ${cuposDisp} cupo(s) disponibles.`));
+
+    const ordId = uid();
+    const codigo = cfCodigo();
+    const vence = new Date(Date.now()+(cfg.horas_vencimiento||24)*3600*1000).toISOString();
+    const orden = {
+      id:ordId, postulante_id:postId, evento_id:eventoId, productora_id,
+      codigo, cantidad:cant, monto_total:cant*precio, estado:"pendiente",
+      datos_amiga:amiga2?JSON.stringify(amiga2):null,
+      comprobante_url:null, operacion_num:null,
+      created_at:new Date().toISOString(), vence_at:vence,
+      conciliado_por:null, conciliado_at:null
+    };
+    await sbPost("cf_ordenes",[orden]);
+    mostrarPagoCF(ordId);
+  }catch(e){ btn.disabled=false; btn.textContent="Confirmar y ver datos de pago"; show("Error: "+e.message); }
+}
+
+// ── PÁGINA PÚBLICA: Pago ──
+function mostrarPagoCF(ordenId){
+  const cont = document.getElementById("cf-compra-content")||document.body;
+  (async()=>{
+    const [ordArr] = await Promise.all([sbGet("cf_ordenes",`id=eq.${ordenId}`)]);
+    const ord = ordArr[0];
+    if(!ord){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Orden no encontrada.</p></div>`; return; }
+    if(ord.estado==="conciliado"||ord.estado==="confirmado"){
+      cont.innerHTML=`<div class="cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">¡Pago confirmado!</h2><p style="color:#aaa">Tu entrada está lista. Código: <strong style="color:#EC4899">${ord.codigo}</strong></p></div>`; return;
+    }
+    const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${ord.evento_id}`)]);
+    const cfg = cfgArr[0]||{};
+    const vence = ord.vence_at ? new Date(ord.vence_at).toLocaleString("es-CL") : "24 horas";
+    const monto = (ord.monto_total||0).toLocaleString("es-CL");
+
+    cont.innerHTML=`
+      <div class="cf-card">
+        <h3 style="color:#EC4899">Código de orden: ${ord.codigo}</h3>
+        <div style="font-size:12px;color:#888;margin-bottom:16px">Vence: ${vence}</div>
+        <div style="background:#1e1e1e;border-radius:10px;padding:16px;margin-bottom:16px">
+          <div style="font-size:13px;color:#888;margin-bottom:8px">Datos de transferencia</div>
+          <div style="color:#fff;font-size:14px;line-height:2">
+            <div><span style="color:#888">Banco:</span> ${cfg.banco||"Banco Santander"}</div>
+            <div><span style="color:#888">Tipo:</span> ${cfg.cuenta_tipo||"Cuenta Corriente"}</div>
+            <div><span style="color:#888">N° Cuenta:</span> ${cfg.cuenta_num||"—"}</div>
+            <div><span style="color:#888">Nombre:</span> ${cfg.cuenta_nombre||"—"}</div>
+            <div><span style="color:#888">RUT:</span> ${cfg.cuenta_rut||"—"}</div>
+          </div>
+        </div>
+        <div style="background:#EC4899;border-radius:10px;padding:14px;text-align:center;margin-bottom:16px">
+          <div style="font-size:11px;color:rgba(255,255,255,.7);margin-bottom:4px">MONTO EXACTO</div>
+          <div style="font-size:28px;font-weight:700;color:#fff">$${monto}</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.8);margin-top:4px">Comentario: ${ord.codigo}</div>
+        </div>
+        <div style="font-size:12px;color:#888;margin-bottom:14px">Sube tu comprobante de pago para que podamos validarlo:</div>
+        <div id="comp-preview" style="margin-bottom:12px"></div>
+        <input type="file" id="comp-file" accept="image/*,application/pdf" style="display:none" onchange="previewCompCF(this)">
+        <button class="cf-btn" style="background:#222;border:1px solid #333;margin-bottom:8px" onclick="document.getElementById('comp-file').click()">Seleccionar comprobante</button>
+        <button class="cf-btn" id="comp-btn" onclick="subirComprobanteCF('${ordenId}')" disabled>Enviar comprobante</button>
+        <div id="comp-err" class="cf-err" style="display:none"></div>
+      </div>`;
+  })();
+}
+
+let _compFile = null;
+function previewCompCF(input){
+  _compFile = input.files?.[0];
+  if(!_compFile) return;
+  const prev = document.getElementById("comp-preview");
+  if(_compFile.type.startsWith("image/")){
+    const r=new FileReader(); r.onload=e=>{ prev.innerHTML=`<img src="${e.target.result}" style="width:100%;border-radius:8px;max-height:160px;object-fit:cover">`; }; r.readAsDataURL(_compFile);
+  }else{ prev.innerHTML=`<div style="background:#1e1e1e;border-radius:8px;padding:12px;color:#aaa;font-size:12px">📄 ${_compFile.name}</div>`; }
+  const btn=document.getElementById("comp-btn"); if(btn)btn.removeAttribute("disabled");
+}
+
+async function subirComprobanteCF(ordenId){
+  if(!_compFile){ return; }
+  const btn=document.getElementById("comp-btn"); const err=document.getElementById("comp-err");
+  btn.disabled=true; btn.textContent="Subiendo..."; err.style.display="none";
+  try{
+    // Subir a Supabase Storage
+    const ext = _compFile.name.split(".").pop();
+    const path = `comprobantes/${ordenId}.${ext}`;
+    const sr = await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{
+      method:"POST", headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":_compFile.type,"x-upsert":"true"},
+      body:_compFile
+    });
+    if(!sr.ok){ const t=await sr.text(); throw new Error(t); }
+    const compUrl = `${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+
+    // Llamar Edge Function OCR
+    let ocrData = {};
+    try{
+      const ocr = await fetch(`${SB_URL}/functions/v1/cf-ocr`,{
+        method:"POST", headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":"application/json"},
+        body:JSON.stringify({orden_id:ordenId, comprobante_url:compUrl})
+      });
+      if(ocr.ok) ocrData = await ocr.json();
+    }catch(e){ console.warn("OCR error",e); }
+
+    // Actualizar orden
+    await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{
+      comprobante_url:compUrl, estado:"pagado",
+      operacion_num:ocrData.operacion||null, ocr_monto:ocrData.monto||null,
+      ocr_fecha:ocrData.fecha||null, ocr_rut_origen:ocrData.rut_origen||null,
+      ocr_banco:ocrData.banco||null, ocr_validado:ocrData.valido||false
+    });
+
+    document.getElementById("comp-preview").parentElement.innerHTML=`
+      <div class="cf-ok">
+        <div class="icon">📤</div>
+        <h2 style="color:#fff;font-size:16px;margin-bottom:8px">¡Comprobante enviado!</h2>
+        <p style="color:#aaa;font-size:13px">Revisaremos tu pago pronto. Recibirás una confirmación por email.</p>
+      </div>`;
+  }catch(e){ btn.disabled=false; btn.textContent="Enviar comprobante"; err.textContent="Error: "+e.message; err.style.display="block"; }
+}
+
+// ── VISTAS ADMIN: Close Friends ──
+
+// Agregar CF al sidebar
+const _origBuildSidebar = buildSidebar;
+buildSidebar = function(){
+  _origBuildSidebar();
+  const nav=$("sidebar-nav"); if(!nav) return;
+  const role=CU?.role;
+  if(["superadmin","owner","coordinator"].includes(role)){
+    const cfSection = document.createElement("div");
+    cfSection.innerHTML=`
+      <div class="nav-sec">Close Friends</div>
+      <div class="nav-item" data-v="cf-postulantes" onclick="goView('cf-postulantes')">${NAV_ICONS["users"]||""}<span>Postulantes</span></div>
+      <div class="nav-item" data-v="cf-ordenes" onclick="goView('cf-ordenes')">${NAV_ICONS["card"]||""}<span>Órdenes / Pago</span></div>
+      <div class="nav-item" data-v="cf-conciliacion" onclick="goView('cf-conciliacion')">${NAV_ICONS["chart"]||""}<span>Conciliación</span></div>
+      <div class="nav-item" data-v="cf-planilla" onclick="goView('cf-planilla')">${NAV_ICONS["list"]||""}<span>Planilla</span></div>
+      <div class="nav-item" data-v="cf-config" onclick="goView('cf-config')">${NAV_ICONS["settings"]||""}<span>Config CF</span></div>`;
+    nav.appendChild(cfSection);
+  }
+};
+
+// Patch goView para manejar vistas CF
+const _origGoView = goView;
+goView = async function(v){
+  const cfViews=["cf-postulantes","cf-ordenes","cf-conciliacion","cf-planilla","cf-config"];
+  if(!cfViews.includes(v)){ return _origGoView(v); }
+  // Cargar datos CF si no están
+  if(!D.cf_postulantes) await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  // Actualizar sidebar activo
+  document.querySelectorAll(".nav-item").forEach(el=>{ el.classList.toggle("active", el.dataset.v===v); });
+  const mc = $("main-content"); if(!mc) return;
+  if(v==="cf-postulantes") VIEWS.cfPostulantes();
+  else if(v==="cf-ordenes") VIEWS.cfOrdenes();
+  else if(v==="cf-conciliacion") VIEWS.cfConciliacion();
+  else if(v==="cf-planilla") VIEWS.cfPlanilla();
+  else if(v==="cf-config") VIEWS.cfConfig();
+};
+
+// ── Vista: Bandeja de postulantes ──
+VIEWS.cfPostulantes = async()=>{
+  await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const evs = D.eventos.filter(e=>prodId===null||e.productora_id===prodId).filter(e=>e.status==="active");
+  let currentCfEvId = evs[0]?.id||null;
+
+  const renderPostulantes = (evId, filtro="todos")=>{
+    const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
+    const filtrados = filtro==="todos"?posts:posts.filter(p=>p.estado===filtro);
+    const pendCount = posts.filter(p=>p.estado==="pendiente").length;
+    return `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+        ${["todos","pendiente","aprobado","rechazado"].map(f=>`<button class="btn${filtro===f?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="cfRenderBandeja('${evId}','${f}')">${f==="todos"?"Todos":f==="pendiente"?`Pendientes (${pendCount})`:f==="aprobado"?"Aprobados":"Rechazados"}</button>`).join("")}
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--line-2)">
+          <th style="padding:8px;text-align:left"><input type="checkbox" id="cf-check-all" onchange="cfToggleAll(this)"></th>
+          <th style="padding:8px;text-align:left">Nombre</th>
+          <th style="padding:8px;text-align:left">RUT</th>
+          <th style="padding:8px;text-align:left">Instagram</th>
+          <th style="padding:8px;text-align:left">WhatsApp</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Acciones</th>
+        </tr></thead>
+        <tbody>
+        ${filtrados.length?filtrados.map(p=>`
+          <tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px">${p.estado==="pendiente"?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
+            <td style="padding:8px">
+              <div style="font-weight:500">${p.nombre} ${p.apellido}</div>
+              <div style="font-size:11px;color:var(--ink-4)">${p.email}</div>
+              ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
+            </td>
+            <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
+            <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+            <td style="padding:8px">${p.whatsapp||"—"}</td>
+            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
+            <td style="padding:8px">
+              ${p.estado==="pendiente"?`
+                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobar('${p.id}')">✓ Aprobar</button>
+                <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>
+              `:p.estado==="aprobado"?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>`:"—"}
+            </td>
+          </tr>`).join(""):`<tr><td colspan="7" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
+        </tbody>
+      </table>
+      </div>`;
+  };
+
+  window.cfRenderBandeja=(evId,filtro)=>{ currentCfEvId=evId; $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro); };
+  window.cfToggleAll=(cb)=>{ document.querySelectorAll(".cf-sel").forEach(c=>c.checked=cb.checked); };
+  window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
+
+  window.cfAprobar=async(id)=>{
+    const token=cfToken();
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"aprobado",buy_token:token,aprobado_por:CU.id});
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;}
+    // Enviar email
+    if(p){
+      const cfg=getCFConfig(p.evento_id);
+      const ev=D.eventos.find(e=>e.id===p.evento_id);
+      const link=`${CF_APP_URL}?cf_buy=${token}`;
+      const waMsg=encodeURIComponent(`Hola ${p.nombre}! Fuiste aprobada para Close Friends de ${ev?.name||"el evento"}. Tu link personal de compra: ${link}`);
+      await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
+        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+          <div style="background:#fff;border-radius:14px;padding:32px">
+            <h1 style="font-size:22px;letter-spacing:4px;text-align:center">CREW</h1>
+            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
+            <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
+            <div style="text-align:center;margin:24px 0">
+              <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+            </div>
+            <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
+          </div>
+        </div>`);
+      toast(`Aprobada: ${p.nombre}. Email enviado.`,"ok");
+    }
+    cfRenderBandeja(currentCfEvId,"pendiente");
+    await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}`);
+  };
+
+  window.cfRechazar=async(id)=>{
+    const motivo=prompt("Motivo del rechazo (opcional):")||"";
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"rechazado",motivo_rechazo:motivo});
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="rechazado";}
+    toast("Rechazada","warn"); cfRenderBandeja(currentCfEvId,"pendiente");
+    await log("cf_rechazar","cf_postulantes",id,`Rechazada postulante. Motivo: ${motivo}`);
+  };
+
+  window.cfAprobarMasivo=async(evId)=>{
+    const sel=[...document.querySelectorAll(".cf-sel:checked")].map(c=>c.value);
+    if(!sel.length){toast("Selecciona postulantes","warn");return;}
+    if(!confirm(`¿Aprobar ${sel.length} postulantes?`))return;
+    for(const id of sel) await cfAprobar(id);
+    toast(`${sel.length} aprobadas`,"ok");
+  };
+
+  const mc=$("main-content");
+  mc.innerHTML=`
+    <div class="page-title">Close Friends — Postulantes</div>
+    <div style="margin-bottom:20px">
+      <select class="form-select" style="max-width:300px" onchange="cfRenderBandeja(this.value,'todos')">
+        ${evs.map(e=>`<option value="${e.id}">${e.name} — ${e.date||""}</option>`).join("")}
+      </select>
+      <button class="btn" style="margin-left:8px;font-size:12px" onclick="cfGetLinkRegistro()">🔗 Link de registro</button>
+    </div>
+    <div class="card" id="cf-bandeja">${currentCfEvId?renderPostulantes(currentCfEvId,"todos"):"<p style='color:var(--ink-4)'>Sin eventos activos.</p>"}</div>`;
+
+  window.cfGetLinkRegistro=()=>{
+    const evId=document.querySelector("select")?.value||currentCfEvId;
+    const link=`${CF_APP_URL}?cf=${evId}`;
+    navigator.clipboard.writeText(link);
+    toast("Link de registro copiado: "+link,"ok");
+  };
+};
+
+// ── Vista: Órdenes y estado de pago ──
+VIEWS.cfOrdenes = async()=>{
+  await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const ordenes = (D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
+  const mc=$("main-content");
+
+  const estadoBadge=(e)=>badge(e, e==="conciliado"?"green":e==="pagado"?"blue":e==="pendiente"?"amber":e==="rechazado"?"red":"gray");
+
+  mc.innerHTML=`
+    <div class="page-title">Close Friends — Órdenes</div>
+    <div class="card" style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--line-2)">
+          <th style="padding:8px;text-align:left">Código</th>
+          <th style="padding:8px;text-align:left">Postulante</th>
+          <th style="padding:8px;text-align:left">Evento</th>
+          <th style="padding:8px;text-align:left">Tickets</th>
+          <th style="padding:8px;text-align:left">Monto</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Comprobante</th>
+          <th style="padding:8px;text-align:left">Vence</th>
+        </tr></thead>
+        <tbody>
+          ${ordenes.length?ordenes.map(o=>{
+            const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
+            const ev=D.eventos.find(e=>e.id===o.evento_id);
+            const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL","short"):"—";
+            return `<tr style="border-bottom:1px solid var(--line)">
+              <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</td>
+              <td style="padding:8px">${post?`${post.nombre} ${post.apellido}`:"—"}</td>
+              <td style="padding:8px">${ev?.name||"—"}</td>
+              <td style="padding:8px">${o.cantidad||1}</td>
+              <td style="padding:8px;font-weight:600">$${(o.monto_total||0).toLocaleString("es-CL")}</td>
+              <td style="padding:8px">${estadoBadge(o.estado)}</td>
+              <td style="padding:8px">${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="color:var(--accent)">Ver</a>`:o.estado==="pagado"?"Procesando OCR":"—"}</td>
+              <td style="padding:8px;font-size:11px">${vence}</td>
+            </tr>`;
+          }).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin órdenes.</td></tr>`}
+        </tbody>
+      </table>
+    </div>`;
+};
+
+// ── Vista: Conciliación ──
+VIEWS.cfConciliacion = async()=>{
+  await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const mc=$("main-content");
+
+  mc.innerHTML=`
+    <div class="page-title">Close Friends — Conciliación</div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">Subir cartola Santander</div>
+      <div style="font-size:12px;color:var(--ink-3);margin-bottom:12px">Sube el CSV/Excel de abonos de tu cuenta Santander para hacer el match automático.</div>
+      <input type="file" id="cartola-file" accept=".csv,.xlsx,.xls" style="margin-bottom:8px">
+      <button class="btn btn-primary" style="font-size:12px" onclick="procesarCartolaCF()">Procesar cartola</button>
+    </div>
+    <div id="cf-conc-resultado"></div>
+    <div class="card">
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px">Órdenes pendientes de conciliar</div>
+      <div id="cf-conc-pendientes">${renderConcPendientes(prodId)}</div>
+    </div>`;
+
+  window.procesarCartolaCF=async()=>{
+    const f=document.getElementById("cartola-file")?.files?.[0];
+    if(!f){toast("Selecciona un archivo","warn");return;}
+    const res=document.getElementById("cf-conc-resultado");
+    res.innerHTML=`<div style="color:var(--ink-3);font-size:13px;margin-bottom:12px">Procesando...</div>`;
+    try{
+      const fr=new FileReader(); fr.readAsArrayBuffer(f);
+      fr.onload=async(ev)=>{
+        // Parsear CSV básico (Santander)
+        const text=new TextDecoder("latin1").decode(ev.target.result);
+        const lines=text.split("\n").filter(l=>l.trim());
+        const abonos=[];
+        for(const line of lines){
+          const cols=line.split(";").map(c=>c.trim().replace(/"/g,""));
+          // Buscar columnas con monto positivo (abono)
+          const monto=parseFloat((cols[3]||cols[4]||"0").replace(/\./g,"").replace(",","."));
+          if(monto>0){
+            abonos.push({fecha:cols[0]||cols[1], descripcion:cols[1]||cols[2], monto, referencia:cols[5]||cols[6]||""});
+          }
+        }
+        // Match automático
+        const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pagado");
+        const matches=[];
+        for(const ord of ordenesPend){
+          const match=abonos.find(a=>a.monto===ord.monto_total);
+          if(match) matches.push({orden:ord,abono:match,estado:"CONCILIADO"});
+          else matches.push({orden:ord,abono:null,estado:"REVISAR"});
+        }
+        res.innerHTML=`
+          <div class="card" style="margin-bottom:16px">
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Resultado match automático</div>
+            <div style="display:flex;gap:16px;margin-bottom:16px">
+              <div>${badge(`${matches.filter(m=>m.estado==="CONCILIADO").length} Conciliados`,"green")}</div>
+              <div>${badge(`${matches.filter(m=>m.estado==="REVISAR").length} Revisar`,"amber")}</div>
+            </div>
+            <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px">
+              <thead><tr style="background:var(--line-2)">
+                <th style="padding:8px">Código</th><th style="padding:8px">Monto</th>
+                <th style="padding:8px">Match cartola</th><th style="padding:8px">Estado</th><th style="padding:8px">Acción</th>
+              </tr></thead>
+              <tbody>
+              ${matches.map(m=>`<tr style="border-bottom:1px solid var(--line)">
+                <td style="padding:8px;font-family:monospace;font-weight:600">${m.orden.codigo}</td>
+                <td style="padding:8px">$${(m.orden.monto_total||0).toLocaleString("es-CL")}</td>
+                <td style="padding:8px;font-size:11px">${m.abono?`${m.abono.fecha} — $${m.abono.monto.toLocaleString("es-CL")} — ${m.abono.descripcion.slice(0,30)}`:"Sin match"}</td>
+                <td style="padding:8px">${badge(m.estado, m.estado==="CONCILIADO"?"green":"amber")}</td>
+                <td style="padding:8px"><button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfConciliar('${m.orden.id}')">✓ Confirmar</button></td>
+              </tr>`).join("")}
+              </tbody>
+            </table>
+            </div>
+          </div>`;
+      };
+    }catch(e){ res.innerHTML=`<div style="color:var(--bad)">Error: ${e.message}</div>`; }
+  };
+
+  window.cfConciliar=async(ordenId)=>{
+    await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:CU.id,conciliado_at:new Date().toISOString()});
+    const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
+    if(ord){ ord.estado="conciliado";
+      // Enviar confirmación
+      const post=(D.cf_postulantes||[]).find(p=>p.id===ord.postulante_id);
+      const ev=D.eventos.find(e=>e.id===ord.evento_id);
+      if(post&&ev){
+        const cfg=getCFConfig(ord.evento_id);
+        await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
+          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+            <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
+              <h1 style="font-size:22px;letter-spacing:4px">CREW</h1>
+              <div style="font-size:48px;margin:20px 0">🎉</div>
+              <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
+              <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
+              <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin:20px 0">
+                <div style="font-size:12px;color:#888">Código de entrada</div>
+                <div style="font-size:24px;font-weight:700;color:#16a34a;letter-spacing:2px">${ord.codigo}</div>
+              </div>
+              <p style="font-size:12px;color:#aaa">Muestra este código en la puerta del evento.</p>
+            </div>
+          </div>`);
+        toast(`Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
+      }
+    }
+    await log("cf_conciliar","cf_ordenes",ordenId,`Orden conciliada: ${ord?.codigo}`);
+    VIEWS.cfConciliacion();
+  };
+};
+
+function renderConcPendientes(prodId){
+  const pend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pagado");
+  if(!pend.length) return `<div style="color:var(--ink-4);font-size:13px">Sin órdenes pendientes de conciliar.</div>`;
+  return pend.map(o=>{
+    const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
+    return `<div class="row-item" style="margin-bottom:8px">
+      <div>
+        <div style="font-weight:600;font-family:monospace">${o.codigo}</div>
+        <div style="font-size:12px;color:var(--ink-3)">${post?`${post.nombre} ${post.apellido}`:"—"} · $${(o.monto_total||0).toLocaleString("es-CL")}</div>
+        ${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="font-size:11px;color:var(--accent)">Ver comprobante</a>`:""}
+      </div>
+      <button class="btn btn-success" style="font-size:11px;padding:4px 10px" onclick="cfConciliar('${o.id}')">✓ Conciliar</button>
+    </div>`;
+  }).join("");
+}
+
+// ── Vista: Planilla y puerta ──
+VIEWS.cfPlanilla = async()=>{
+  await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const mc=$("main-content");
+  const ordenes=(D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
+  const posts=(D.cf_postulantes||[]).filter(p=>prodId===null||p.productora_id===prodId);
+
+  const total=posts.length;
+  const aprobadas=posts.filter(p=>p.estado==="aprobado").length;
+  const conOrden=ordenes.length;
+  const conciliadas=ordenes.filter(o=>o.estado==="conciliado").length;
+  const recaudado=ordenes.filter(o=>["pagado","conciliado"].includes(o.estado)).reduce((s,o)=>s+(o.monto_total||0),0);
+
+  mc.innerHTML=`
+    <div class="page-title">Close Friends — Planilla</div>
+    <div class="metrics" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+      <div class="metric"><div class="metric-label">Registradas</div><div class="metric-val">${total}</div></div>
+      <div class="metric"><div class="metric-label">Aprobadas</div><div class="metric-val">${aprobadas}</div></div>
+      <div class="metric"><div class="metric-label">Con orden</div><div class="metric-val">${conOrden}</div></div>
+      <div class="metric"><div class="metric-label">Confirmadas</div><div class="metric-val">${conciliadas}</div></div>
+      <div class="metric"><div class="metric-label">Recaudado</div><div class="metric-val">$${(recaudado/1000).toFixed(0)}k</div></div>
+    </div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:600">Listado completo</div>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" placeholder="Buscar..." style="width:200px;font-size:12px" oninput="cfFiltrarPlanilla(this.value)">
+          <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">Exportar CSV</button>
+        </div>
+      </div>
+      <div id="cf-tabla-planilla" style="overflow-x:auto">${renderTablaPlanilla(ordenes,posts,"")}</div>
+    </div>`;
+
+  window.cfFiltrarPlanilla=(q)=>{ document.getElementById("cf-tabla-planilla").innerHTML=renderTablaPlanilla(ordenes,posts,q); };
+
+  window.cfExportarCSV=()=>{
+    const rows=[["Nombre","Apellido","RUT","Instagram","WhatsApp","Email","Estado Post.","Código Orden","Tickets","Monto","Estado Pago","Aprobado por","Fecha"]];
+    for(const p of posts){
+      const ord=ordenes.find(o=>o.postulante_id===p.id);
+      const aprobador=D.users?.find(u=>u.id===p.aprobado_por);
+      rows.push([p.nombre,p.apellido,p.rut,p.instagram,p.whatsapp,p.email,p.estado,ord?.codigo||"",ord?.cantidad||0,ord?.monto_total||0,ord?.estado||"",aprobador?.name||"",p.created_at?.slice(0,10)||""]);
+    }
+    const csv=rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="close_friends.csv";a.click();
+  };
+};
+
+function renderTablaPlanilla(ordenes,posts,q){
+  const norm=s=>(s||"").toLowerCase();
+  const filtrados=q?posts.filter(p=>norm(p.nombre).includes(norm(q))||norm(p.apellido).includes(norm(q))||norm(p.rut).includes(norm(q))||norm(p.instagram).includes(norm(q))):posts;
+  return `<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
+    <thead><tr style="background:var(--line-2)">
+      <th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px">RUT</th>
+      <th style="padding:8px">IG</th><th style="padding:8px">WA</th>
+      <th style="padding:8px">Estado</th><th style="padding:8px">Orden</th>
+      <th style="padding:8px">Tickets</th><th style="padding:8px">Monto</th><th style="padding:8px">Pago</th>
+    </tr></thead>
+    <tbody>
+    ${filtrados.map(p=>{
+      const ord=ordenes.find(o=>o.postulante_id===p.id);
+      return `<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.email}</div></td>
+        <td style="padding:8px;font-family:monospace">${p.rut}</td>
+        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram}</a></td>
+        <td style="padding:8px">${p.whatsapp}</td>
+        <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
+        <td style="padding:8px;font-family:monospace">${ord?.codigo||"—"}</td>
+        <td style="padding:8px;text-align:center">${ord?.cantidad||"—"}</td>
+        <td style="padding:8px">$${ord?(ord.monto_total||0).toLocaleString("es-CL"):"—"}</td>
+        <td style="padding:8px">${ord?badge(ord.estado,ord.estado==="conciliado"?"green":ord.estado==="pagado"?"blue":"amber"):"—"}</td>
+      </tr>`;
+    }).join("")||`<tr><td colspan="9" style="text-align:center;color:var(--ink-4);padding:24px">Sin resultados.</td></tr>`}
+    </tbody></table>`;
+}
+
+// ── Vista: Config por evento ──
+VIEWS.cfConfig = async()=>{
+  await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const evs=D.eventos.filter(e=>prodId===null||e.productora_id===prodId);
+  const mc=$("main-content");
+  let currentCfCfgEvId=evs[0]?.id||null;
+
+  const renderCfgForm=(evId)=>{
+    const cfg=getCFConfig(evId);
+    return `
+      <div style="margin-bottom:14px">
+        <label class="form-label">Nombre que aparece en el lobby público (ej: "THE PROJECT")</label>
+        <input class="form-input" id="cfg-nombre-prod" value="${cfg.nombre_productora||""}" placeholder="THE PROJECT">
+        <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Aparece como título en la pantalla de bienvenida. Si se deja vacío, se usa el nombre de la productora.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><label class="form-label">Precio por entrada ($)</label><input class="form-input" id="cfg-precio" type="number" value="${cfg.precio||15000}"></div>
+        <div><label class="form-label">Cupos totales</label><input class="form-input" id="cfg-cupos" type="number" value="${cfg.cupos_total||100}"></div>
+        <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
+        <div><label class="form-label">Vencimiento orden (horas)</label><input class="form-input" id="cfg-horas" type="number" value="${cfg.horas_vencimiento||24}"></div>
+        <div><label class="form-label">Cierre de venta</label><input class="form-input" id="cfg-cierre" type="datetime-local" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,16):""}"></div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:20px"><input type="checkbox" id="cfg-activo" ${cfg.activo?"checked":""}><label style="font-size:13px">Módulo activo</label></div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Datos bancarios</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><label class="form-label">Banco</label><input class="form-input" id="cfg-banco" value="${cfg.banco||"Banco Santander"}"></div>
+          <div><label class="form-label">Tipo de cuenta</label><input class="form-input" id="cfg-cta-tipo" value="${cfg.cuenta_tipo||"Cuenta Corriente"}"></div>
+          <div><label class="form-label">N° Cuenta</label><input class="form-input" id="cfg-cta-num" value="${cfg.cuenta_num||""}"></div>
+          <div><label class="form-label">Nombre titular</label><input class="form-input" id="cfg-cta-nom" value="${cfg.cuenta_nombre||""}"></div>
+          <div><label class="form-label">RUT titular</label><input class="form-input" id="cfg-cta-rut" value="${cfg.cuenta_rut||""}"></div>
+        </div>
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Mensajes</div>
+        <div><label class="form-label">Mensaje de aprobación</label><textarea class="form-textarea" id="cfg-msg-apr" rows="2">${cfg.msg_aprobacion||""}</textarea></div>
+        <div style="margin-top:8px"><label class="form-label">Mensaje de confirmación</label><textarea class="form-textarea" id="cfg-msg-conf" rows="2">${cfg.msg_confirmacion||""}</textarea></div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="guardarCfgCF('${evId}','${prodId||""}')">Guardar configuración</button>
+        <button class="btn" onclick="cfCopiarLinkRegistroEv('${evId}')">🔗 Copiar link de registro</button>
+      </div>`;
+  };
+
+  mc.innerHTML=`
+    <div class="page-title">Close Friends — Configuración</div>
+    <div style="margin-bottom:16px">
+      <select class="form-select" style="max-width:300px" onchange="cfRenderCfgEv(this.value)">
+        ${evs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}
+      </select>
+    </div>
+    <div class="card" id="cf-cfg-form">${currentCfCfgEvId?renderCfgForm(currentCfCfgEvId):"Sin eventos."}</div>`;
+
+  window.cfRenderCfgEv=(evId)=>{ currentCfCfgEvId=evId; document.getElementById("cf-cfg-form").innerHTML=renderCfgForm(evId); };
+  window.cfCopiarLinkRegistroEv=(evId)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf=${evId}`); toast("Link copiado","ok"); };
+
+  window.guardarCfgCF=async(evId,pId)=>{
+    const cfg={
+      evento_id:evId, productora_id:pId||null,
+      precio:parseInt(document.getElementById("cfg-precio")?.value||15000),
+      cupos_total:parseInt(document.getElementById("cfg-cupos")?.value||100),
+      tope_persona:parseInt(document.getElementById("cfg-tope")?.value||2),
+      horas_vencimiento:parseInt(document.getElementById("cfg-horas")?.value||24),
+      cierre_venta:document.getElementById("cfg-cierre")?.value||null,
+      activo:document.getElementById("cfg-activo")?.checked||false,
+      nombre_productora:document.getElementById("cfg-nombre-prod")?.value||"",
+      banco:document.getElementById("cfg-banco")?.value||"Banco Santander",
+      cuenta_tipo:document.getElementById("cfg-cta-tipo")?.value||"Cuenta Corriente",
+      cuenta_num:document.getElementById("cfg-cta-num")?.value||"",
+      cuenta_nombre:document.getElementById("cfg-cta-nom")?.value||"",
+      cuenta_rut:document.getElementById("cfg-cta-rut")?.value||"",
+      msg_aprobacion:document.getElementById("cfg-msg-apr")?.value||"",
+      msg_confirmacion:document.getElementById("cfg-msg-conf")?.value||"",
+      updated_at:new Date().toISOString()
+    };
+    try{
+      const ex=(D.cf_config||[]).find(c=>c.evento_id===evId);
+      if(ex){ await sbPatch("cf_config",`evento_id=eq.${evId}`,cfg); ex.precio=cfg.precio; }
+      else{ cfg.id=uid(); await sbPost("cf_config",[cfg]); D.cf_config?.push(cfg); }
+      toast("Configuración guardada","ok");
+      await log("cf_config","cf_config",evId,"Configuración CF actualizada");
+    }catch(e){ toast("Error: "+e.message,"error"); }
+  };
+};
+
+// ── Integración con puerta: Close Friends aparecen como tipo "Close Friends" ──
+// Se engancha en la vista de acreditación con búsqueda por RUT/código
+const _origGoViewPuerta = VIEWS.puerta;
+if(_origGoViewPuerta){
+  const __origPuerta = _origGoViewPuerta;
+  VIEWS.puerta = async function(){
+    await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+    return __origPuerta.apply(this, arguments);
+  };
+}
+
+// ── Detectar acceso público CF en la URL ──
+const _cfUrl = new URLSearchParams(window.location.search);
+if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
+else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
+
 // ═══════════════════════════════════
 // INIT — verificar si hay datos
 // ═══════════════════════════════════
