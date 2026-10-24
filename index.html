@@ -7493,8 +7493,9 @@ function mostrarCompraCF(token){
       if(!post){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Link inválido o expirado.</p></div>`; return; }
       if(post.estado!=="aprobado"){ cont.innerHTML=`<div class="cf-ok"><div class="icon">⏳</div><p style="color:#aaa">Tu postulación aún está en revisión.</p></div>`; return; }
 
-      // Verificar si ya tiene orden activa
-      const ordenesExist = await sbGet("cf_ordenes",`postulante_id=eq.${post.id}&estado=neq.vencido&estado=neq.rechazado`);
+      // Verificar si ya tiene orden activa (filtrar por evento+token para evitar problemas con post.id no-UUID)
+      const todasOrdenes = await sbGet("cf_ordenes",`evento_id=eq.${post.evento_id}&estado=neq.vencido&estado=neq.rechazado`);
+      const ordenesExist = todasOrdenes.filter(o=>o.postulante_id===post.id||o.token_ref===token);
       if(ordenesExist.length){ mostrarPagoCF(ordenesExist[0].id); return; }
 
       const [evArr, cfgArr] = await Promise.all([
