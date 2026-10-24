@@ -7953,8 +7953,14 @@ window.cfCambiarEmail=async(id)=>{
 
 // ── Funciones globales de aprobación CF (fuera del closure para que los onclick siempre las encuentren) ──
 window.cfAprobarConTipo=async(id, evId)=>{
-  const cfg=getCFConfig(evId||(window._cfCurrentEvId?window._cfCurrentEvId():null));
-  const tipos=cfg.tipos_entrada||[];
+  const eid=evId||(window._cfCurrentEvId?window._cfCurrentEvId():null);
+  const cfg=getCFConfig(eid);
+  // Usar tipos guardados en config, o si no hay, las pulseras del evento
+  let tipos=cfg.tipos_entrada||[];
+  if(!tipos.length){
+    const ev=(D.eventos||[]).find(e=>e.id===eid);
+    tipos=(ev?.pulseras||[]).map(p=>p.nombre);
+  }
   if(!tipos.length){
     await window.cfAprobar(id,"");
     return;
@@ -8516,9 +8522,19 @@ VIEWS.cfConfig = async()=>{
         </div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Tipos de entrada</div>
-        <div style="font-size:12px;color:var(--ink-4);margin-bottom:8px">Escribe los tipos separados por coma (ej: General, VIP Mesa, VIP Friends)</div>
-        <input class="form-input" id="cfg-tipos-entrada" value="${(cfg.tipos_entrada||[]).join(", ")}" placeholder="General, VIP Mesa, VIP Friends">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Tipos de entrada (pulseras del evento)</div>
+        ${(()=>{
+          const ev=D.eventos.find(e=>e.id===evId);
+          const pulseras=ev?.pulseras||[];
+          const seleccionadas=cfg.tipos_entrada||[];
+          if(!pulseras.length) return `<div style="font-size:12px;color:var(--ink-4)">Este evento no tiene pulseras configuradas. Ve a <b>Config → Eventos</b> y agrégalas primero.</div>`;
+          return `<div style="font-size:12px;color:var(--ink-4);margin-bottom:8px">Selecciona cuáles aplican para Close Friends:</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px">
+              ${pulseras.map(p=>`<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:13px">
+                <input type="checkbox" class="cfg-tipo-cb" value="${p.nombre}" ${seleccionadas.includes(p.nombre)?"checked":""}> ${p.nombre}
+              </label>`).join("")}
+            </div>`;
+        })()}
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px">Mensajes</div>
@@ -8560,7 +8576,7 @@ VIEWS.cfConfig = async()=>{
       cuenta_rut:document.getElementById("cfg-cta-rut")?.value||"",
       msg_aprobacion:document.getElementById("cfg-msg-apr")?.value||"",
       msg_confirmacion:document.getElementById("cfg-msg-conf")?.value||"",
-      tipos_entrada:(document.getElementById("cfg-tipos-entrada")?.value||"").split(",").map(s=>s.trim()).filter(Boolean),
+      tipos_entrada:[...document.querySelectorAll(".cfg-tipo-cb:checked")].map(cb=>cb.value),
       updated_at:new Date().toISOString()
     };
     try{
