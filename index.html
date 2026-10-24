@@ -7506,7 +7506,10 @@ function mostrarCompraCF(token){
       if(!cfg.activo||( cfg.cierre_venta&&new Date()>new Date(cfg.cierre_venta))){ cont.innerHTML=`<div class="cf-ok"><div class="icon">🔒</div><p style="color:#aaa">Venta cerrada.</p></div>`; return; }
 
       const tope = cfg.tope_persona||2;
-      const precio = cfg.precio||15000;
+      // Usar precio específico del tipo de entrada asignado, o el precio global como fallback
+      const tipoAsignado = post.tipo_entrada||"";
+      const preciosPorTipo = cfg.precios_entrada||{};
+      const precio = (tipoAsignado && preciosPorTipo[tipoAsignado]) ? preciosPorTipo[tipoAsignado] : (cfg.precio||15000);
       const evDate = ev.date ? new Date(ev.date).toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
 
       cont.innerHTML=`
@@ -7516,6 +7519,7 @@ function mostrarCompraCF(token){
             <div style="font-size:12px;color:#888;margin-top:4px">${evDate} · ${ev.venue||""}</div>
           </div>
           <div style="font-size:13px;color:#ccc;margin-bottom:8px">Hola, <strong style="color:#fff">${post.nombre}</strong> 👋</div>
+          ${tipoAsignado?`<div style="font-size:12px;color:#888;margin-bottom:4px">Tipo de entrada: <strong style="color:#EC4899">${tipoAsignado}</strong></div>`:""}
           <div style="font-size:12px;color:#888">Precio por entrada: <strong style="color:#EC4899">$${precio.toLocaleString("es-CL")}</strong></div>
         </div>
         <div class="cf-card">
@@ -7531,7 +7535,7 @@ function mostrarCompraCF(token){
             <div class="label" id="cf-total-label">Total a transferir</div>
           </div>
           <div id="cf-compra-err" class="cf-err" style="display:none"></div>
-          <button class="cf-btn" onclick="confirmarOrdenCF('${token}','${post.id}','${post.evento_id}','${post.productora_id}',${precio},${tope})">Confirmar y ver datos de pago</button>
+          <button class="cf-btn" onclick="confirmarOrdenCF('${token}','${post.id}','${post.evento_id}','${post.productora_id}',${precio},${tope},'${tipoAsignado}')">Confirmar y ver datos de pago</button>
         </div>`;
 
       actualizarTotalCF(precio);
@@ -7580,7 +7584,7 @@ function actualizarTotalCF(precio){
   }
 }
 
-async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, tope){
+async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, tope, tipoEntrada){
   const btn = document.querySelector(".cf-btn");
   const err = document.getElementById("cf-compra-err");
   const cant = parseInt(document.getElementById("cf-cantidad")?.value||1);
@@ -7642,7 +7646,8 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
         instagram:amiga2.instagram, whatsapp:amiga2.whatsapp,
         fecha_nacimiento:null, email:amiga2.email,
         estado:"aprobado", created_at:new Date().toISOString(),
-        buy_token:amigaToken, aprobado_por:postId, motivo_rechazo:null
+        buy_token:amigaToken, aprobado_por:postId, motivo_rechazo:null,
+        tipo_entrada:tipoEntrada||null
       };
       await sbPost("cf_postulantes",[amigaPost]);
 
@@ -8522,18 +8527,29 @@ VIEWS.cfConfig = async()=>{
         </div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Tipos de entrada (pulseras del evento)</div>
+        <div style="font-size:13px;font-weight:600;margin-bottom:4px">Tipos de entrada y precios</div>
+        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Marca los que aplican para Close Friends y pon el precio de cada uno.</div>
         ${(()=>{
           const ev=D.eventos.find(e=>e.id===evId);
           const pulseras=ev?.pulseras||[];
           const seleccionadas=cfg.tipos_entrada||[];
+          // precios_entrada: {nombre: precio}
+          const precios=cfg.precios_entrada||{};
           if(!pulseras.length) return `<div style="font-size:12px;color:var(--ink-4)">Este evento no tiene pulseras configuradas. Ve a <b>Config → Eventos</b> y agrégalas primero.</div>`;
-          return `<div style="font-size:12px;color:var(--ink-4);margin-bottom:8px">Selecciona cuáles aplican para Close Friends:</div>
-            <div style="display:flex;flex-wrap:wrap;gap:8px">
-              ${pulseras.map(p=>`<label style="display:flex;align-items:center;gap:6px;padding:8px 12px;border:1px solid var(--line);border-radius:8px;cursor:pointer;font-size:13px">
-                <input type="checkbox" class="cfg-tipo-cb" value="${p.nombre}" ${seleccionadas.includes(p.nombre)?"checked":""}> ${p.nombre}
-              </label>`).join("")}
-            </div>`;
+          return `<div style="display:flex;flex-direction:column;gap:8px">
+            ${pulseras.map(p=>{
+              const sel=seleccionadas.includes(p.nombre);
+              const precio=precios[p.nombre]||"";
+              return `<div style="display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;background:${sel?"var(--surface-2)":""}">
+                <input type="checkbox" class="cfg-tipo-cb" value="${p.nombre}" ${sel?"checked":""} onchange="this.closest('div').style.background=this.checked?'var(--surface-2)':''">
+                <span style="font-size:13px;font-weight:500;min-width:100px">${p.nombre}</span>
+                <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+                  <span style="font-size:12px;color:var(--ink-4)">$</span>
+                  <input type="number" class="form-input cfg-precio-cb" data-nombre="${p.nombre}" value="${precio}" placeholder="precio" style="width:110px;padding:5px 8px;font-size:13px" min="0">
+                </div>
+              </div>`;
+            }).join("")}
+          </div>`;
         })()}
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
@@ -8577,6 +8593,7 @@ VIEWS.cfConfig = async()=>{
       msg_aprobacion:document.getElementById("cfg-msg-apr")?.value||"",
       msg_confirmacion:document.getElementById("cfg-msg-conf")?.value||"",
       tipos_entrada:[...document.querySelectorAll(".cfg-tipo-cb:checked")].map(cb=>cb.value),
+      precios_entrada:Object.fromEntries([...document.querySelectorAll(".cfg-precio-cb")].map(inp=>[inp.dataset.nombre,parseInt(inp.value)||0])),
       updated_at:new Date().toISOString()
     };
     try{
