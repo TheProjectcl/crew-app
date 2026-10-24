@@ -7951,6 +7951,30 @@ window.cfCambiarEmail=async(id)=>{
   document.getElementById("cf-email-save-send").onclick = ()=>guardarEmail(true);
 };
 
+// ── Funciones globales de aprobación CF (fuera del closure para que los onclick siempre las encuentren) ──
+window.cfAprobarConTipo=async(id, evId)=>{
+  const cfg=getCFConfig(evId||(window._cfCurrentEvId?window._cfCurrentEvId():null));
+  const tipos=cfg.tipos_entrada||[];
+  if(!tipos.length){
+    await window.cfAprobar(id,"");
+    return;
+  }
+  const opciones=tipos.map((t,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;margin-bottom:6px"><input type="radio" name="cf-tipo-sel" value="${t}" ${i===0?"checked":""}><span style="font-size:14px">${t}</span></label>`).join("");
+  openModal("Aprobar postulante — Tipo de entrada",`
+    <p style="color:var(--ink-3);margin-bottom:14px">Selecciona qué tipo de entrada le asignas:</p>
+    <div>${opciones}</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary" onclick="cfConfirmarAprobacion('${id}')">✓ Confirmar aprobación</button>
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+    </div>`);
+};
+window.cfConfirmarAprobacion=async(id)=>{
+  const sel=document.querySelector("input[name='cf-tipo-sel']:checked");
+  const tipo=sel?.value||"";
+  closeModal();
+  await window.cfAprobar(id,tipo);
+};
+
 // ── Vista: Bandeja de postulantes ──
 VIEWS.cfPostulantes = async()=>{
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
@@ -8012,33 +8036,8 @@ VIEWS.cfPostulantes = async()=>{
   window.cfRenderBandeja=(evId,filtro)=>{ currentCfEvId=evId; $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro); };
   window.cfToggleAll=(cb)=>{ document.querySelectorAll(".cf-sel").forEach(c=>c.checked=cb.checked); };
   window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
-
-  // Aprobar con selector de tipo de entrada
-  window.cfAprobarConTipo=async(id, evId)=>{
-    const cfg=getCFConfig(evId||currentCfEvId);
-    const tipos=cfg.tipos_entrada||[];
-    if(!tipos.length){
-      // Sin tipos configurados: aprobar directo
-      await cfAprobar(id, "");
-      return;
-    }
-    // Modal con selector
-    const opciones=tipos.map((t,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;margin-bottom:6px"><input type="radio" name="cf-tipo-sel" value="${t}" ${i===0?"checked":""}><span style="font-size:14px">${t}</span></label>`).join("");
-    openModal("Aprobar postulante — Tipo de entrada",`
-      <p style="color:var(--ink-3);margin-bottom:14px">Selecciona qué tipo de entrada le asignas:</p>
-      <div id="cf-tipo-radios">${opciones}</div>
-      <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-primary" onclick="cfConfirmarAprobacion('${id}')">✓ Confirmar aprobación</button>
-        <button class="btn" onclick="closeModal()">Cancelar</button>
-      </div>`);
-  };
-
-  window.cfConfirmarAprobacion=async(id)=>{
-    const sel=document.querySelector("input[name='cf-tipo-sel']:checked");
-    const tipo=sel?.value||"";
-    closeModal();
-    await cfAprobar(id, tipo);
-  };
+  // exponer evId activo para que las funciones globales lo lean
+  window._cfCurrentEvId=()=>currentCfEvId;
 
   window.cfAprobar=async(id, tipoEntrada)=>{
     const token=cfToken();
