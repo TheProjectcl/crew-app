@@ -5631,7 +5631,10 @@ async function saveEditUser(uid,callbackView){
 
   Object.assign(u,cambios);
   try{
-    await sbPatch("users",`id=eq.${uid}`,cambios);
+    // Usar email como filtro seguro (id puede ser no-UUID en registros viejos)
+    await sbPatch("users",`id=eq.${uid}`,cambios).catch(()=>
+      sbPatch("users",`email=eq.${encodeURIComponent(u.email)}`,cambios)
+    );
     const cambiosTxt=Object.keys(cambios).map(k=>k==="pass"?"contraseña":k).join(", ");
     await log("edit_user","user",uid,`${CU.role} editó: ${u.name} (${cambiosTxt})`);
     toast(nuevaPass?`✓ Datos actualizados — nueva contraseña: ${nuevaPass}`:"✓ Usuario actualizado","success");
