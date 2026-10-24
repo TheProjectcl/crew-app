@@ -8509,7 +8509,6 @@ VIEWS.cfConfig = async()=>{
         <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Aparece como título en la pantalla de bienvenida. Si se deja vacío, se usa el nombre de la productora.</div>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
-        <div><label class="form-label">Precio por entrada ($)</label><input class="form-input" id="cfg-precio" type="number" value="${cfg.precio||15000}"></div>
         <div><label class="form-label">Cupos totales</label><input class="form-input" id="cfg-cupos" type="number" value="${cfg.cupos_total||100}"></div>
         <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
         <div><label class="form-label">Vencimiento orden (horas)</label><input class="form-input" id="cfg-horas" type="number" value="${cfg.horas_vencimiento||24}"></div>
@@ -8578,7 +8577,6 @@ VIEWS.cfConfig = async()=>{
   window.guardarCfgCF=async(evId,pId)=>{
     const cfg={
       evento_id:evId, productora_id:pId||null,
-      precio:parseInt(document.getElementById("cfg-precio")?.value||15000),
       cupos_total:parseInt(document.getElementById("cfg-cupos")?.value||100),
       tope_persona:parseInt(document.getElementById("cfg-tope")?.value||2),
       horas_vencimiento:parseInt(document.getElementById("cfg-horas")?.value||24),
@@ -8598,7 +8596,7 @@ VIEWS.cfConfig = async()=>{
     };
     try{
       const ex=(D.cf_config||[]).find(c=>c.evento_id===evId);
-      if(ex){ await sbPatch("cf_config",`evento_id=eq.${evId}`,cfg); ex.precio=cfg.precio; }
+      if(ex){ await sbPatch("cf_config",`evento_id=eq.${evId}`,cfg); Object.assign(ex,cfg); }
       else{ cfg.id=uid(); await sbPost("cf_config",[cfg]); D.cf_config?.push(cfg); }
       toast("Configuración guardada","ok");
       await log("cf_config","cf_config",evId,"Configuración CF actualizada");
