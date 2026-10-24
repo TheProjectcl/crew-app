@@ -7708,7 +7708,7 @@ goView = async function(v){
 VIEWS.cfPostulantes = async()=>{
   await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const evs = D.eventos.filter(e=>prodId===null||e.productora_id===prodId).filter(e=>e.status==="active");
+  const evs = D.eventos.filter(e=>prodId===null||e.productora_id===prodId).filter(e=>e.status!=="deleted");
   let currentCfEvId = evs[0]?.id||null;
 
   const renderPostulantes = (evId, filtro="todos")=>{
