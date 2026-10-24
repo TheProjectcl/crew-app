@@ -455,7 +455,7 @@ let currentEvId = null;
 // ═══════════════════════════════════
 // HELPERS
 // ═══════════════════════════════════
-const uid = ()=>"x"+Math.random().toString(36).slice(2,10);
+const uid = ()=>crypto.randomUUID();
 const now = ()=>new Date().toISOString();
 const fmtDT = s=>s?new Date(s).toLocaleString("es-CL",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
 const fmtT  = s=>s?new Date(s).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"}):"—";
