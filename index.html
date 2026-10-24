@@ -4,6 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Guestly</title>
+<meta name="description" content="Guestly — plataforma para gestionar invitados, listas, embajadores, ventas y accesos de eventos.">
+<meta name="theme-color" content="#0B0B0C">
+<link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/brand/favicon-32.png">
+<link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
+<meta property="og:title" content="Guestly">
+<meta property="og:description" content="Everything connected. Every guest accounted for.">
+<meta property="og:image" content="https://guestly.cl/brand/og-image.png">
+<meta property="og:url" content="https://guestly.cl">
+<meta name="twitter:card" content="summary_large_image">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Inter","Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
 :root{
@@ -50,6 +60,8 @@ input,select,textarea,button{font-family:inherit}
 .login-box{background:#141414;border:1px solid #222;border-radius:16px;padding:36px;width:380px;max-width:100%}
 .login-logo{text-align:center;margin-bottom:28px}
 .login-logo h1{font-size:30px;letter-spacing:5px;color:#fff;font-weight:700}
+.login-logo .gl-logo{display:block;margin:0 auto}
+.login-logo p{margin-top:14px !important}
 .login-logo p{font-size:11px;color:#888;letter-spacing:2px;margin-top:4px}
 .l-input{width:100%;padding:10px 12px;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:8px;color:#fff;font-size:13px;margin-bottom:10px;outline:none}
 .l-input:focus{border-color:var(--accent)}
@@ -200,7 +212,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 
 <div id="login-screen">
   <div class="login-box">
-    <div class="login-logo"><h1>Guestly</h1><p>PLATFORM</p></div>
+    <div class="login-logo"><h1 style="margin:0;line-height:0"><svg class="gl-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 459.85 80.00" width="172.4" height="30" role="img" aria-label="GUESTLY"><g transform="translate(0.00 0.00) scale(0.8000)"><path d="M50 15 A35 35 0 1 0 85 50 H52" fill="none" stroke="#FFFFFF" stroke-width="18"/><rect x="72.25" y="6.25" width="19.5" height="19.5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><path d="M76.8 16.3 L80.8 20.3 L87.6 12.3" fill="none" stroke="#3DDC84" stroke-width="4"/></g><path d="M132.222 64.486Q125.556 64.486 120.738 61.351Q115.92 58.216 113.37899999999999 52.738Q110.838 47.26 110.838 40.066Q110.838 33.004 113.445 27.459999999999997Q116.05199999999999 21.915999999999997 120.93599999999999 18.714999999999996Q125.82 15.513999999999996 132.684 15.513999999999996Q138.624 15.513999999999996 142.683 17.559999999999995Q146.74200000000002 19.605999999999995 149.18400000000003 23.235999999999997Q151.626 26.866 152.61599999999999 31.618L143.64 32.08Q142.914 27.921999999999997 140.33999999999997 25.447Q137.766 22.972 132.75 22.972Q128.262 22.972 125.39099999999999 25.282Q122.52 27.592 121.101 31.453Q119.682 35.314 119.682 40.066Q119.682 44.95 121.06800000000001 48.778000000000006Q122.45400000000001 52.606 125.391 54.817Q128.328 57.028 132.816 57.028Q136.314 57.028 138.822 55.57599999999999Q141.32999999999998 54.123999999999995 142.78199999999998 51.616Q144.234 49.108 144.36599999999999 45.94H132.816V39.274H152.748V63.43H147.204L146.808 56.368Q145.026 60.064 141.099 62.275000000000006Q137.172 64.486 132.222 64.486Z M188.19 64.486Q182.448 64.486 178.224 62.30800000000001Q174.0 60.13 171.723 56.137Q169.446 52.144 169.446 46.666V16.57H178.026V46.666Q178.026 51.682 180.666 54.355000000000004Q183.306 57.028 188.19 57.028Q193.074 57.028 195.747 54.355000000000004Q198.42000000000002 51.682 198.42000000000002 46.666V16.57H207.0V46.666Q207.0 52.144 204.69 56.137Q202.38 60.13 198.18900000000002 62.30800000000001Q193.99800000000002 64.486 188.19 64.486Z M225.81000000000003 63.43V16.57H257.35800000000006V24.028H234.39000000000004V36.238H256.56600000000003V43.629999999999995H234.39000000000004V55.972H257.886V63.43Z M293.32800000000003 64.486Q287.52000000000004 64.486 283.29600000000005 62.44Q279.072 60.394 276.663 56.730999999999995Q274.254 53.068 273.858 48.184L282.57 47.656Q283.164 52.21 285.87 54.652Q288.576 57.094 293.46000000000004 57.094Q297.618 57.094 299.895 55.543Q302.172 53.992 302.172 51.022Q302.172 49.239999999999995 301.314 47.854Q300.456 46.468 298.014 45.28Q295.572 44.092 290.754 42.97Q284.946 41.65 281.448 39.967Q277.95 38.284 276.366 35.742999999999995Q274.78200000000004 33.202 274.78200000000004 29.373999999999995Q274.78200000000004 25.281999999999996 276.82800000000003 22.147Q278.874 19.012 282.636 17.262999999999998Q286.398 15.513999999999996 291.678 15.513999999999996Q297.288 15.513999999999996 301.21500000000003 17.526999999999997Q305.142 19.54 307.353 23.038Q309.564 26.536 310.092 31.089999999999996L301.446 31.485999999999997Q300.98400000000004 27.658 298.476 25.282Q295.968 22.906 291.546 22.906Q287.85 22.906 285.70500000000004 24.622Q283.56 26.338 283.56 29.043999999999997Q283.56 30.958 284.451 32.211999999999996Q285.34200000000004 33.465999999999994 287.65200000000004 34.39Q289.962 35.314 294.12 36.238Q300.39 37.623999999999995 304.086 39.637Q307.78200000000004 41.65 309.36600000000004 44.355999999999995Q310.95000000000005 47.062 310.95000000000005 50.56Q310.95000000000005 54.85 308.73900000000003 57.985Q306.528 61.12 302.601 62.803Q298.67400000000004 64.486 293.32800000000003 64.486Z M338.6700000000001 63.43V24.028H324.41400000000004V16.57H361.44000000000005V24.028H347.25000000000006V63.43Z M376.752 63.43V16.57H385.33200000000005V55.972H407.57400000000007V63.43Z M435.29400000000004 63.43V44.95L418.92600000000004 16.57H428.562L439.65000000000003 36.501999999999995L450.672 16.57H460.30800000000005L443.94000000000005 44.95V63.43Z" fill="#FFFFFF"/></svg></h1><p>PLATFORM</p></div>
     <input class="l-input" id="li-email" placeholder="Email" type="email" autocomplete="username">
     <input class="l-input" id="li-pass" placeholder="Contraseña" type="password" onkeydown="if(event.key==='Enter')doLogin()">
     <div id="li-err" class="err-msg hidden">Email o contraseña incorrectos.</div>
@@ -326,6 +338,17 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <div id="toast"></div>
 
 <script>
+/* ===== Marca GUESTLY — logotipo horizontal (concepto D: casilla con check verde) ===== */
+const GL_VB_W=459.85, GL_VB_H=80.00;
+const GL_POS='<g transform="translate(0.00 0.00) scale(0.8000)"><path d="M50 15 A35 35 0 1 0 85 50 H52" fill="none" stroke="#0B0B0C" stroke-width="18"/><rect x="72.25" y="6.25" width="19.5" height="19.5" fill="none" stroke="#0B0B0C" stroke-width="4.5"/><path d="M76.8 16.3 L80.8 20.3 L87.6 12.3" fill="none" stroke="#0FA968" stroke-width="4"/></g><path d="M132.222 64.486Q125.556 64.486 120.738 61.351Q115.92 58.216 113.37899999999999 52.738Q110.838 47.26 110.838 40.066Q110.838 33.004 113.445 27.459999999999997Q116.05199999999999 21.915999999999997 120.93599999999999 18.714999999999996Q125.82 15.513999999999996 132.684 15.513999999999996Q138.624 15.513999999999996 142.683 17.559999999999995Q146.74200000000002 19.605999999999995 149.18400000000003 23.235999999999997Q151.626 26.866 152.61599999999999 31.618L143.64 32.08Q142.914 27.921999999999997 140.33999999999997 25.447Q137.766 22.972 132.75 22.972Q128.262 22.972 125.39099999999999 25.282Q122.52 27.592 121.101 31.453Q119.682 35.314 119.682 40.066Q119.682 44.95 121.06800000000001 48.778000000000006Q122.45400000000001 52.606 125.391 54.817Q128.328 57.028 132.816 57.028Q136.314 57.028 138.822 55.57599999999999Q141.32999999999998 54.123999999999995 142.78199999999998 51.616Q144.234 49.108 144.36599999999999 45.94H132.816V39.274H152.748V63.43H147.204L146.808 56.368Q145.026 60.064 141.099 62.275000000000006Q137.172 64.486 132.222 64.486Z M188.19 64.486Q182.448 64.486 178.224 62.30800000000001Q174.0 60.13 171.723 56.137Q169.446 52.144 169.446 46.666V16.57H178.026V46.666Q178.026 51.682 180.666 54.355000000000004Q183.306 57.028 188.19 57.028Q193.074 57.028 195.747 54.355000000000004Q198.42000000000002 51.682 198.42000000000002 46.666V16.57H207.0V46.666Q207.0 52.144 204.69 56.137Q202.38 60.13 198.18900000000002 62.30800000000001Q193.99800000000002 64.486 188.19 64.486Z M225.81000000000003 63.43V16.57H257.35800000000006V24.028H234.39000000000004V36.238H256.56600000000003V43.629999999999995H234.39000000000004V55.972H257.886V63.43Z M293.32800000000003 64.486Q287.52000000000004 64.486 283.29600000000005 62.44Q279.072 60.394 276.663 56.730999999999995Q274.254 53.068 273.858 48.184L282.57 47.656Q283.164 52.21 285.87 54.652Q288.576 57.094 293.46000000000004 57.094Q297.618 57.094 299.895 55.543Q302.172 53.992 302.172 51.022Q302.172 49.239999999999995 301.314 47.854Q300.456 46.468 298.014 45.28Q295.572 44.092 290.754 42.97Q284.946 41.65 281.448 39.967Q277.95 38.284 276.366 35.742999999999995Q274.78200000000004 33.202 274.78200000000004 29.373999999999995Q274.78200000000004 25.281999999999996 276.82800000000003 22.147Q278.874 19.012 282.636 17.262999999999998Q286.398 15.513999999999996 291.678 15.513999999999996Q297.288 15.513999999999996 301.21500000000003 17.526999999999997Q305.142 19.54 307.353 23.038Q309.564 26.536 310.092 31.089999999999996L301.446 31.485999999999997Q300.98400000000004 27.658 298.476 25.282Q295.968 22.906 291.546 22.906Q287.85 22.906 285.70500000000004 24.622Q283.56 26.338 283.56 29.043999999999997Q283.56 30.958 284.451 32.211999999999996Q285.34200000000004 33.465999999999994 287.65200000000004 34.39Q289.962 35.314 294.12 36.238Q300.39 37.623999999999995 304.086 39.637Q307.78200000000004 41.65 309.36600000000004 44.355999999999995Q310.95000000000005 47.062 310.95000000000005 50.56Q310.95000000000005 54.85 308.73900000000003 57.985Q306.528 61.12 302.601 62.803Q298.67400000000004 64.486 293.32800000000003 64.486Z M338.6700000000001 63.43V24.028H324.41400000000004V16.57H361.44000000000005V24.028H347.25000000000006V63.43Z M376.752 63.43V16.57H385.33200000000005V55.972H407.57400000000007V63.43Z M435.29400000000004 63.43V44.95L418.92600000000004 16.57H428.562L439.65000000000003 36.501999999999995L450.672 16.57H460.30800000000005L443.94000000000005 44.95V63.43Z" fill="#0B0B0C"/>';
+const GL_NEG='<g transform="translate(0.00 0.00) scale(0.8000)"><path d="M50 15 A35 35 0 1 0 85 50 H52" fill="none" stroke="#FFFFFF" stroke-width="18"/><rect x="72.25" y="6.25" width="19.5" height="19.5" fill="none" stroke="#FFFFFF" stroke-width="4.5"/><path d="M76.8 16.3 L80.8 20.3 L87.6 12.3" fill="none" stroke="#3DDC84" stroke-width="4"/></g><path d="M132.222 64.486Q125.556 64.486 120.738 61.351Q115.92 58.216 113.37899999999999 52.738Q110.838 47.26 110.838 40.066Q110.838 33.004 113.445 27.459999999999997Q116.05199999999999 21.915999999999997 120.93599999999999 18.714999999999996Q125.82 15.513999999999996 132.684 15.513999999999996Q138.624 15.513999999999996 142.683 17.559999999999995Q146.74200000000002 19.605999999999995 149.18400000000003 23.235999999999997Q151.626 26.866 152.61599999999999 31.618L143.64 32.08Q142.914 27.921999999999997 140.33999999999997 25.447Q137.766 22.972 132.75 22.972Q128.262 22.972 125.39099999999999 25.282Q122.52 27.592 121.101 31.453Q119.682 35.314 119.682 40.066Q119.682 44.95 121.06800000000001 48.778000000000006Q122.45400000000001 52.606 125.391 54.817Q128.328 57.028 132.816 57.028Q136.314 57.028 138.822 55.57599999999999Q141.32999999999998 54.123999999999995 142.78199999999998 51.616Q144.234 49.108 144.36599999999999 45.94H132.816V39.274H152.748V63.43H147.204L146.808 56.368Q145.026 60.064 141.099 62.275000000000006Q137.172 64.486 132.222 64.486Z M188.19 64.486Q182.448 64.486 178.224 62.30800000000001Q174.0 60.13 171.723 56.137Q169.446 52.144 169.446 46.666V16.57H178.026V46.666Q178.026 51.682 180.666 54.355000000000004Q183.306 57.028 188.19 57.028Q193.074 57.028 195.747 54.355000000000004Q198.42000000000002 51.682 198.42000000000002 46.666V16.57H207.0V46.666Q207.0 52.144 204.69 56.137Q202.38 60.13 198.18900000000002 62.30800000000001Q193.99800000000002 64.486 188.19 64.486Z M225.81000000000003 63.43V16.57H257.35800000000006V24.028H234.39000000000004V36.238H256.56600000000003V43.629999999999995H234.39000000000004V55.972H257.886V63.43Z M293.32800000000003 64.486Q287.52000000000004 64.486 283.29600000000005 62.44Q279.072 60.394 276.663 56.730999999999995Q274.254 53.068 273.858 48.184L282.57 47.656Q283.164 52.21 285.87 54.652Q288.576 57.094 293.46000000000004 57.094Q297.618 57.094 299.895 55.543Q302.172 53.992 302.172 51.022Q302.172 49.239999999999995 301.314 47.854Q300.456 46.468 298.014 45.28Q295.572 44.092 290.754 42.97Q284.946 41.65 281.448 39.967Q277.95 38.284 276.366 35.742999999999995Q274.78200000000004 33.202 274.78200000000004 29.373999999999995Q274.78200000000004 25.281999999999996 276.82800000000003 22.147Q278.874 19.012 282.636 17.262999999999998Q286.398 15.513999999999996 291.678 15.513999999999996Q297.288 15.513999999999996 301.21500000000003 17.526999999999997Q305.142 19.54 307.353 23.038Q309.564 26.536 310.092 31.089999999999996L301.446 31.485999999999997Q300.98400000000004 27.658 298.476 25.282Q295.968 22.906 291.546 22.906Q287.85 22.906 285.70500000000004 24.622Q283.56 26.338 283.56 29.043999999999997Q283.56 30.958 284.451 32.211999999999996Q285.34200000000004 33.465999999999994 287.65200000000004 34.39Q289.962 35.314 294.12 36.238Q300.39 37.623999999999995 304.086 39.637Q307.78200000000004 41.65 309.36600000000004 44.355999999999995Q310.95000000000005 47.062 310.95000000000005 50.56Q310.95000000000005 54.85 308.73900000000003 57.985Q306.528 61.12 302.601 62.803Q298.67400000000004 64.486 293.32800000000003 64.486Z M338.6700000000001 63.43V24.028H324.41400000000004V16.57H361.44000000000005V24.028H347.25000000000006V63.43Z M376.752 63.43V16.57H385.33200000000005V55.972H407.57400000000007V63.43Z M435.29400000000004 63.43V44.95L418.92600000000004 16.57H428.562L439.65000000000003 36.501999999999995L450.672 16.57H460.30800000000005L443.94000000000005 44.95V63.43Z" fill="#FFFFFF"/>';
+// glLogo("neg"|"pos", altoPx, estiloExtra) → <svg> del logotipo horizontal
+function glLogo(v,h,extra){
+  const w=Math.round(h*GL_VB_W/GL_VB_H*10)/10;
+  return `<svg class="gl-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${GL_VB_W} ${GL_VB_H}" width="${w}" height="${h}" style="display:block;${extra||""}" role="img" aria-label="GUESTLY">${v==="neg"?GL_NEG:GL_POS}</svg>`;
+}
+// En emails va como PNG: Gmail/Outlook no muestran SVG
+const GL_EMAIL_LOGO='<img src="https://guestly.cl/brand/logo-email.png" alt="GUESTLY" width="230" height="40" style="height:40px;width:230px;display:inline-block;border:0">';
 // ═══════════════════════════════════
 // TEMA CLARO / OSCURO
 // ═══════════════════════════════════
@@ -695,7 +718,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
           <p style="font-size:11px;color:#aaa;letter-spacing:2px;margin-top:4px">PLATFORM</p>
         </div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Hola, ${nombre} 👋</h2>
@@ -716,7 +739,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
         </div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">¡Tu mesa está reservada! 🎉</h2>
         <p style="color:#555;font-size:14px;line-height:1.6">Hola <strong>${nombre}</strong>, tu mesa ha sido asignada para el evento:</p>
@@ -747,7 +770,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">✅</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">¡Perfiles aprobados!</h2>
@@ -766,7 +789,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">⚠️</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">Revisa tu mesa</h2>
@@ -785,7 +808,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
         </div>
         <div style="text-align:center;font-size:40px;margin-bottom:16px">🎉</div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px;text-align:center">¡Mesa confirmada y cerrada!</h2>
@@ -801,7 +824,7 @@ const emailTemplates = {
     <div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
       <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
         <div style="text-align:center;margin-bottom:24px">
-          <h1 style="font-size:26px;letter-spacing:4px;font-weight:700;color:#111;margin:0">Guestly</h1>
+          ${GL_EMAIL_LOGO}
         </div>
         <h2 style="font-size:18px;font-weight:600;margin-bottom:8px">Bienvenido/a a Guestly 🚀</h2>
         <p style="color:#555;font-size:14px;line-height:1.6">Hola <strong>${nombre}</strong>, tu productora <strong>${productora}</strong> ha sido creada en Guestly.</p>
@@ -6090,7 +6113,7 @@ function initCompradorApp(){
     appEl.innerHTML=`
       <div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:16px">
         <div style="background:#141414;border:1px solid #222;border-radius:16px;padding:36px;width:380px;max-width:100%;text-align:center">
-          <h1 style="font-size:26px;letter-spacing:4px;color:#fff;font-weight:700;margin-bottom:16px">Guestly</h1>
+          <div style="margin-bottom:22px">${glLogo("neg",26,"margin:0 auto")}</div>
           <div style="font-size:40px;margin-bottom:12px">🪑</div>
           <p style="color:#777;font-size:14px;margin-bottom:24px">No tienes ninguna mesa asignada.<br>Contacta al organizador del evento.</p>
           <button onclick="doLogout()" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:10px 24px;cursor:pointer;font-size:13px">Cerrar sesión</button>
@@ -6103,7 +6126,7 @@ function initCompradorApp(){
     let html = `
       <div style="background:#0a0a0a;padding:20px 16px;display:flex;justify-content:space-between;align-items:center">
         <div>
-          <div style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700">Guestly</div>
+          ${glLogo("neg",20)}
           <div style="font-size:10px;color:#555;margin-top:2px">MIS MESAS</div>
         </div>
         <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">⏻</button>
@@ -6173,7 +6196,7 @@ function renderCompradorApp(mesaId){
         <div style="display:flex;align-items:center;gap:12px;min-width:0">
           ${mostrarVolver?`<button onclick="initCompradorApp()" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#fff;width:34px;height:34px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" title="Volver a mis mesas"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>`:""}
           <div style="min-width:0">
-            <h1 style="font-size:20px;letter-spacing:3px;color:#fff;font-weight:700;margin:0">Guestly</h1>
+            <h1 style="margin:0;line-height:0">${glLogo("neg",20)}</h1>
             <div style="font-size:10px;color:#555;letter-spacing:1px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ev?.name||"EVENTO"}</div>
           </div>
         </div>
@@ -7419,7 +7442,7 @@ async function enviarPostulacionCF(eventoId, productora_id){
     const cont = document.getElementById("cf-screen")||document.querySelector(".cf-box");
     if(cont) cont.innerHTML=`
       <div style="text-align:center;padding:60px 20px;max-width:380px;margin:0 auto">
-        <div style="font-size:11px;letter-spacing:4px;color:#555;margin-bottom:40px">Guestly</div>
+        <div style="margin-bottom:40px;opacity:.55">${glLogo("neg",14,"margin:0 auto")}</div>
         <div style="font-size:32px;font-weight:800;color:#fff;margin-bottom:12px">Listo.</div>
         <div style="font-size:14px;color:#666;line-height:1.7">
           Revisaremos tu postulación pronto.<br>
@@ -7458,7 +7481,7 @@ function mostrarCompraCF(token){
     .cf-ok .icon{font-size:48px;margin-bottom:12px}
   </style>
   <div class="cf-wrap">
-    <div class="cf-top"><h1>Guestly</h1><p>CLOSE FRIENDS</p></div>
+    <div class="cf-top"><h1 style="line-height:0">${glLogo("neg",22,"margin:0 auto")}</h1><p style="margin-top:12px">CLOSE FRIENDS</p></div>
     <div id="cf-compra-content"><div style="text-align:center;color:#888;padding:40px">Cargando...</div></div>
   </div>`;
 
@@ -7782,7 +7805,7 @@ VIEWS.cfPostulantes = async()=>{
         await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
           <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
             <div style="background:#fff;border-radius:14px;padding:32px">
-              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
+              <div style="text-align:center">${GL_EMAIL_LOGO}</div>
               <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
               <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
               <div style="text-align:center;margin:24px 0">
@@ -8044,7 +8067,7 @@ VIEWS.cfConciliacion = async()=>{
         await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
           <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
             <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
-              <h1 style="font-size:22px;letter-spacing:4px">Guestly</h1>
+              <div>${GL_EMAIL_LOGO}</div>
               <div style="font-size:48px;margin:20px 0">🎉</div>
               <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
               <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
