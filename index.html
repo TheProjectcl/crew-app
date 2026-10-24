@@ -7955,7 +7955,10 @@ window.cfCambiarEmail=async(id)=>{
 VIEWS.cfPostulantes = async()=>{
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   await loadCF(prodId);
-  const evs = (D.eventos||[]).filter(e=>prodId===null||e.productora_id===prodId).filter(e=>e.status!=="deleted");
+  // Solo eventos activos (status "active" o sin status, excluye deleted/finished)
+  const evs = (D.eventos||[])
+    .filter(e=>prodId===null||e.productora_id===prodId)
+    .filter(e=>e.status!=="deleted"&&e.status!=="finished"&&e.status!=="inactive");
   let currentCfEvId = evs[0]?.id||null;
 
   const renderPostulantes = (evId, filtro="todos")=>{
@@ -7989,13 +7992,16 @@ VIEWS.cfPostulantes = async()=>{
             </td>
             <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
             <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
-            <td style="padding:8px">${p.whatsapp||"—"}</td>
+            <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
             <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
             <td style="padding:8px">
               ${p.estado==="pendiente"?`
-                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobar('${p.id}')">✓ Aprobar</button>
+                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
                 <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>
-              `:p.estado==="aprobado"?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>`:"—"}
+              `:p.estado==="aprobado"?`
+                <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px">${p.tipo_entrada||""}</div>
+                <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
+              `:"—"}
             </td>
           </tr>`).join(""):`<tr><td colspan="7" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
         </tbody>
@@ -8007,15 +8013,46 @@ VIEWS.cfPostulantes = async()=>{
   window.cfToggleAll=(cb)=>{ document.querySelectorAll(".cf-sel").forEach(c=>c.checked=cb.checked); };
   window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
 
-  window.cfAprobar=async(id)=>{
+  // Aprobar con selector de tipo de entrada
+  window.cfAprobarConTipo=async(id, evId)=>{
+    const cfg=getCFConfig(evId||currentCfEvId);
+    const tipos=cfg.tipos_entrada||[];
+    if(!tipos.length){
+      // Sin tipos configurados: aprobar directo
+      await cfAprobar(id, "");
+      return;
+    }
+    // Modal con selector
+    const opciones=tipos.map((t,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;margin-bottom:6px"><input type="radio" name="cf-tipo-sel" value="${t}" ${i===0?"checked":""}><span style="font-size:14px">${t}</span></label>`).join("");
+    openModal("Aprobar postulante — Tipo de entrada",`
+      <p style="color:var(--ink-3);margin-bottom:14px">Selecciona qué tipo de entrada le asignas:</p>
+      <div id="cf-tipo-radios">${opciones}</div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" onclick="cfConfirmarAprobacion('${id}')">✓ Confirmar aprobación</button>
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+      </div>`);
+  };
+
+  window.cfConfirmarAprobacion=async(id)=>{
+    const sel=document.querySelector("input[name='cf-tipo-sel']:checked");
+    const tipo=sel?.value||"";
+    closeModal();
+    await cfAprobar(id, tipo);
+  };
+
+  window.cfAprobar=async(id, tipoEntrada)=>{
     const token=cfToken();
-    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"aprobado",buy_token:token,aprobado_por:CU.id});
-    const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;}
+    const patchData={estado:"aprobado",buy_token:token,aprobado_por:CU.id};
+    if(tipoEntrada!==undefined) patchData.tipo_entrada=tipoEntrada;
+    await sbPatch("cf_postulantes",`id=eq.${id}`,patchData);
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+    if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;if(tipoEntrada!==undefined)p.tipo_entrada=tipoEntrada;}
     // Enviar email
     if(p){
       const cfg=getCFConfig(p.evento_id);
       const ev=D.eventos.find(e=>e.id===p.evento_id);
       const link=`${CF_APP_URL}?cf_buy=${token}`;
+      const tipoTexto=tipoEntrada||p.tipo_entrada||"";
       try{
         await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
           <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
@@ -8023,19 +8060,20 @@ VIEWS.cfPostulantes = async()=>{
               <div style="text-align:center">${GL_EMAIL_LOGO}</div>
               <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
               <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
+              ${tipoTexto?`<div style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:14px;margin:16px 0;text-align:center"><div style="font-size:12px;color:#9d174d;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tu entrada asignada</div><div style="font-size:20px;font-weight:700;color:#EC4899">${tipoTexto}</div></div>`:""}
               <div style="text-align:center;margin:24px 0">
-                <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
+                <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada${tipoTexto?` (${tipoTexto})`:""} →</a>
               </div>
               <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
             </div>
           </div>`);
-        toast(`✅ Aprobada: ${p.nombre}. Email enviado.`,"ok");
+        toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Email enviado.`,"ok");
       }catch(e){
         toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
       }
     }
     cfRenderBandeja(currentCfEvId,"pendiente");
-    await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}`);
+    await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}${tipoEntrada?" — "+tipoEntrada:""}`);
   };
 
   window.cfRechazar=async(id)=>{
@@ -8049,9 +8087,31 @@ VIEWS.cfPostulantes = async()=>{
   window.cfAprobarMasivo=async(evId)=>{
     const sel=[...document.querySelectorAll(".cf-sel:checked")].map(c=>c.value);
     if(!sel.length){toast("Selecciona postulantes","warn");return;}
-    if(!confirm(`¿Aprobar ${sel.length} postulantes?`))return;
-    for(const id of sel) await cfAprobar(id);
-    toast(`${sel.length} aprobadas`,"ok");
+    const cfg=getCFConfig(evId||currentCfEvId);
+    const tipos=cfg.tipos_entrada||[];
+    if(!tipos.length){
+      if(!confirm(`¿Aprobar ${sel.length} postulantes?`))return;
+      for(const id of sel) await cfAprobar(id,"");
+      toast(`${sel.length} aprobadas`,"ok");
+      return;
+    }
+    // Con tipos: pedir tipo para todas
+    const opciones=tipos.map((t,i)=>`<label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--line);border-radius:8px;cursor:pointer;margin-bottom:6px"><input type="radio" name="cf-tipo-masivo" value="${t}" ${i===0?"checked":""}><span style="font-size:14px">${t}</span></label>`).join("");
+    openModal(`Aprobar ${sel.length} postulantes — Tipo de entrada`,`
+      <p style="color:var(--ink-3);margin-bottom:14px">¿Qué tipo de entrada les asignas a los ${sel.length} seleccionados?</p>
+      <div>${opciones}</div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button class="btn btn-primary" onclick="cfConfirmarMasivo(${JSON.stringify(sel)})">✓ Aprobar todas</button>
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+      </div>`);
+  };
+
+  window.cfConfirmarMasivo=async(ids)=>{
+    const sel=document.querySelector("input[name='cf-tipo-masivo']:checked");
+    const tipo=sel?.value||"";
+    closeModal();
+    for(const id of ids) await cfAprobar(id,tipo);
+    toast(`${ids.length} aprobadas${tipo?" — "+tipo:""}`, "ok");
   };
 
   // ── QR generator usando canvas ──
@@ -8457,6 +8517,11 @@ VIEWS.cfConfig = async()=>{
         </div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px">Tipos de entrada</div>
+        <div style="font-size:12px;color:var(--ink-4);margin-bottom:8px">Escribe los tipos separados por coma (ej: General, VIP Mesa, VIP Friends)</div>
+        <input class="form-input" id="cfg-tipos-entrada" value="${(cfg.tipos_entrada||[]).join(", ")}" placeholder="General, VIP Mesa, VIP Friends">
+      </div>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
         <div style="font-size:13px;font-weight:600;margin-bottom:10px">Mensajes</div>
         <div><label class="form-label">Mensaje de aprobación</label><textarea class="form-textarea" id="cfg-msg-apr" rows="2">${cfg.msg_aprobacion||""}</textarea></div>
         <div style="margin-top:8px"><label class="form-label">Mensaje de confirmación</label><textarea class="form-textarea" id="cfg-msg-conf" rows="2">${cfg.msg_confirmacion||""}</textarea></div>
@@ -8496,6 +8561,7 @@ VIEWS.cfConfig = async()=>{
       cuenta_rut:document.getElementById("cfg-cta-rut")?.value||"",
       msg_aprobacion:document.getElementById("cfg-msg-apr")?.value||"",
       msg_confirmacion:document.getElementById("cfg-msg-conf")?.value||"",
+      tipos_entrada:(document.getElementById("cfg-tipos-entrada")?.value||"").split(",").map(s=>s.trim()).filter(Boolean),
       updated_at:new Date().toISOString()
     };
     try{
