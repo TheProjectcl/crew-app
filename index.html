@@ -1840,15 +1840,6 @@ async function saveNuevaProd(){
   const color=window._prodColor||"#534AB7";
   const domain=ownerEmail.split("@")[1]||"productora.cl";
 
-  // Crear productora
-  const prod={id:prodId,nombre,owner_id:ownerId,color,created_at:now()};
-  D.productoras.push(prod);
-  try{await sbPost("productoras",[prod]);}catch(e){toast("Error: "+e.message,"error");return;}
-
-  // Crear owner + enviar email
-  const ownerU={id:ownerId,name:ownerName,email:ownerEmail,pass:ownerPass,role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]};
-  D.users.push(ownerU);
-
   // Crear usuarios demo de cada rol
   const demoUsers=[
     {role:"coordinator", name:"Coordinador Demo",  email:`coord@${domain}`},
@@ -1860,9 +1851,23 @@ async function saveNuevaProd(){
     {role:"embajador",   name:"Embajador Demo",     email:`emb@${domain}`},
   ].map(u=>({id:uid(),name:u.name,email:u.email,pass:"crew123",role:u.role,puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]}));
 
+  // Crear owner
+  const ownerU={id:ownerId,name:ownerName,email:ownerEmail,pass:ownerPass,role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[]};
   const allNewUsers=[ownerU,...demoUsers];
+
+  // 1) Primero insertar usuarios (para que el owner exista antes de la FK de productora)
   try{
     await sbPost("users",allNewUsers);
+  }catch(e){toast("Error creando usuarios: "+e.message,"error");return;}
+
+  // 2) Luego crear la productora (owner_id ya existe en users)
+  const prod={id:prodId,nombre,owner_id:ownerId,color,created_at:now()};
+  try{await sbPost("productoras",[prod]);}catch(e){toast("Error: "+e.message,"error");return;}
+
+  D.productoras.push(prod);
+  D.users.push(ownerU);
+
+  try{
     await log("create_productora","productora",prodId,`Nueva productora: ${nombre} — owner: ${ownerName}`);
     // Email al dueño de la productora
     await sendEmail(
@@ -1870,7 +1875,7 @@ async function saveNuevaProd(){
       `Bienvenido a CREW Platform — ${nombre}`,
       emailTemplates.nuevaProductora(ownerName,ownerEmail,ownerPass,nombre)
     );
-  }catch(e){toast("Error creando usuarios: "+e.message,"error");return;}
+  }catch(e){console.warn("Email/log error:",e);}
 
   D.users.push(...demoUsers);
   closeModal();
@@ -4634,11 +4639,11 @@ let newTareaType="grafica";
 const TIPO_ICON={grafica:"🎨",compartir:"🔄",like:"❤️",historia:"📸"};
 const TIPO_LABEL={grafica:"Gráfica + Link + Canción",compartir:"Compartir + Ticketera",like:"Like + Comentar",historia:"Historia"};
 VIEWS.tareas=()=>{
-  const evOp=asegurarEventoOperativo();
-  if(!evOp){$("main-content").innerHTML=`<div class="page-title">Campañas</div><div class="card" style="color:#999;padding:30px;text-align:center"><div style="font-size:32px;margin-bottom:10px">📅</div>No hay eventos activos en este momento.<br><span style="font-size:12px">Las campañas se asocian a eventos activos.</span></div>`;return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const prodEvs=D.eventos.filter(e=>prodId===null||e.productora_id===prodId);
-  if(!currentEvId&&prodEvs[0])currentEvId=prodEvs[0].id;
+  // Para campañas mostramos todos los eventos activos (no solo los operativos en tiempo real)
+  const prodEvs=D.eventos.filter(e=>(prodId===null||e.productora_id===prodId)&&e.status==="active");
+  if(!prodEvs.length){$("main-content").innerHTML=`<div class="page-title">Campañas</div><div class="card" style="color:#999;padding:30px;text-align:center"><div style="font-size:32px;margin-bottom:10px">📅</div>No hay eventos activos.<br><span style="font-size:12px">Crea un evento con estado "Activo" para usar campañas.</span></div>`;return;}
+  if(!currentEvId||!prodEvs.find(e=>e.id===currentEvId))currentEvId=prodEvs[0].id;
   const ev=D.eventos.find(e=>e.id===currentEvId);
   const campañas=D.tareas.filter(t=>t.event_id===currentEvId);
   // embajadores destinatarios: internos (si target incluye __interno__) + de grupos activados por jefes
@@ -4673,7 +4678,7 @@ VIEWS.tareas=()=>{
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-size:12px;font-weight:500;color:#555">Campañas del evento:</span>
         <select class="form-select" style="flex:1;min-width:180px;font-weight:600" onchange="currentEvId=this.value;VIEWS.tareas()">
-          ${prodEvs.filter(esEventoOperativo).map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name} — ${e.date}</option>`).join("")}
+          ${prodEvs.map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name} — ${e.date}</option>`).join("")}
         </select>
         <span style="font-size:12px;color:#999">${campañas.length} campaña(s)</span>
       </div>
