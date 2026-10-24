@@ -8252,7 +8252,8 @@ VIEWS.cfConciliacion = async()=>{
     const btn=document.querySelector(`button[onclick="cfConciliar('${ordenId}')"]`);
     if(btn){btn.disabled=true;btn.textContent="Conciliando...";}
     try{
-      const r=await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:CU.id,conciliado_at:new Date().toISOString()});
+      const isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+      const r=await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:isUuid(CU.id)?CU.id:null,conciliado_at:new Date().toISOString()});
       if(r&&r.error) throw new Error(r.error.message||JSON.stringify(r.error));
       const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
       if(ord){ ord.estado="conciliado";
