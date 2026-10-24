@@ -7373,7 +7373,11 @@ function mostrarRegistroCF(eventoId){
           <label>WhatsApp *</label>
           <input id="cf-wa" type="tel" placeholder="+56912345678">
           <label>Fecha de nacimiento *</label>
-          <input id="cf-dob" type="date" max="${new Date(Date.now()-18*365.25*24*3600*1000).toISOString().slice(0,10)}">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:8px">
+            <input id="cf-dob-d" type="number" placeholder="Día" min="1" max="31" style="text-align:center">
+            <input id="cf-dob-m" type="number" placeholder="Mes" min="1" max="12" style="text-align:center">
+            <input id="cf-dob-y" type="number" placeholder="Año" min="1900" max="2010" style="text-align:center">
+          </div>
           <label>Email (para recibir tu link) *</label>
           <input id="cf-email" type="email" placeholder="tu@email.com">
           <div class="cf-check">
@@ -7400,7 +7404,10 @@ async function enviarPostulacionCF(eventoId, productora_id){
   const rut      = normRUT(document.getElementById("cf-rut")?.value||"");
   const ig       = normIG(document.getElementById("cf-ig")?.value||"");
   const wa       = (document.getElementById("cf-wa")?.value||"").trim();
-  const dob      = document.getElementById("cf-dob")?.value||"";
+  const dobD = (document.getElementById("cf-dob-d")?.value||"").trim().padStart(2,"0");
+  const dobM = (document.getElementById("cf-dob-m")?.value||"").trim().padStart(2,"0");
+  const dobY = (document.getElementById("cf-dob-y")?.value||"").trim();
+  const dob  = dobD&&dobM&&dobY ? `${dobY}-${dobM}-${dobD}` : "";
   const email    = (document.getElementById("cf-email")?.value||"").trim();
   const consent  = document.getElementById("cf-consent")?.checked;
 
