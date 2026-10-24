@@ -922,7 +922,7 @@ async function seedDemo(){
 // LOGIN / LOGOUT
 // ═══════════════════════════════════
 async function doLogin(){
-  const email=$("li-email").value.trim(),pass=$("li-pass").value;
+  const email=$("li-email").value.trim().toLowerCase(),pass=$("li-pass").value;
   if(!email||!pass)return;
   await intentarLogin(email,pass,false);
 }
