@@ -7783,15 +7783,16 @@ window.cfCambiarEmail=async(id)=>{
       <div style="font-size:13px;font-family:monospace;background:var(--line-2);padding:8px 12px;border-radius:8px;margin-bottom:14px;color:var(--ink-4)">${p.email}</div>
       <label style="font-size:12px;color:var(--ink-3);display:block;margin-bottom:6px">Nuevo correo</label>
       <input id="cf-email-input" type="email" value="${p.email}" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);font-size:13px;background:var(--surface);color:var(--ink);box-sizing:border-box">
-      <div style="display:flex;gap:8px;margin-top:18px">
+      <div style="display:flex;gap:8px;margin-top:18px;flex-wrap:wrap">
         <button onclick="document.getElementById('cf-email-modal').remove()" style="flex:1;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-size:13px">Cancelar</button>
-        <button id="cf-email-save" style="flex:1;padding:10px;border-radius:8px;border:none;background:#EC4899;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Guardar</button>
+        <button id="cf-email-save" style="flex:1;padding:10px;border-radius:8px;border:none;background:var(--line-2);color:var(--ink);cursor:pointer;font-size:13px;font-weight:600;border:1px solid var(--line)">Guardar</button>
+        <button id="cf-email-save-send" style="flex:2;padding:10px;border-radius:8px;border:none;background:#EC4899;color:#fff;cursor:pointer;font-size:13px;font-weight:600">Guardar y Reenviar 📧</button>
       </div>
     </div>`;
   document.body.appendChild(modal);
   document.getElementById("cf-email-input").focus();
   document.getElementById("cf-email-input").select();
-  document.getElementById("cf-email-save").onclick = async()=>{
+  const guardarEmail = async(reenviar=false)=>{
     const nuevoEmail = document.getElementById("cf-email-input").value.trim().toLowerCase();
     if(!nuevoEmail||nuevoEmail===p.email){modal.remove();return;}
     if(!nuevoEmail.includes("@")||!nuevoEmail.includes(".")){toast("Correo inválido","error");return;}
@@ -7800,8 +7801,11 @@ window.cfCambiarEmail=async(id)=>{
     modal.remove();
     toast(`✅ Email actualizado a ${nuevoEmail}`,"ok");
     await log("cf_cambiar_email","cf_postulantes",id,`Email actualizado a ${nuevoEmail}`);
+    if(reenviar) await cfReenviarCorreo(id);
     VIEWS.cfPlanilla();
   };
+  document.getElementById("cf-email-save").onclick = ()=>guardarEmail(false);
+  document.getElementById("cf-email-save-send").onclick = ()=>guardarEmail(true);
 };
 
 // ── Vista: Bandeja de postulantes ──
