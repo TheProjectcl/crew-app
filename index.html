@@ -1034,6 +1034,7 @@ function initAdminApp(){
   buildSidebar();
   goView(CU.role==="superadmin"?"crew-global":"dashboard");
   actualizarCampanitas();
+  iniciarCFAutoRefresh();
 }
 
 function buildSidebar(){
@@ -7846,6 +7847,29 @@ buildSidebar = function(){
     nav.appendChild(cfSection);
   }
 };
+
+// ── Auto-refresh CF cada 30 segundos ──
+let _cfAutoRefreshTimer = null;
+async function cfAutoRefresh(){
+  const cfViews=["cf-postulantes","cf-ordenes","cf-conciliacion","cf-planilla"];
+  const activeNav = document.querySelector(".nav-item.active");
+  const currentView = activeNav?.dataset?.v;
+  if(!currentView||!cfViews.includes(currentView)) return;
+  // Recargar datos silenciosamente
+  try{
+    const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+    await loadCF(prodId);
+    // Refrescar vista actual sin scroll ni ruido
+    if(currentView==="cf-postulantes") VIEWS.cfPostulantes();
+    else if(currentView==="cf-ordenes") VIEWS.cfOrdenes();
+    else if(currentView==="cf-conciliacion") VIEWS.cfConciliacion();
+    else if(currentView==="cf-planilla") VIEWS.cfPlanilla();
+  }catch(e){ console.warn("CF auto-refresh error:",e); }
+}
+function iniciarCFAutoRefresh(){
+  if(_cfAutoRefreshTimer) clearInterval(_cfAutoRefreshTimer);
+  _cfAutoRefreshTimer = setInterval(cfAutoRefresh, 30000);
+}
 
 // Patch goView para manejar vistas CF
 const _origGoView = goView;
