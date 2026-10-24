@@ -7804,23 +7804,99 @@ VIEWS.cfPostulantes = async()=>{
     toast(`${sel.length} aprobadas`,"ok");
   };
 
+  // ── QR generator usando canvas ──
+  const cfQR=(text,size=120)=>{
+    // Mini QR via API pública (CDN-safe, sin auth)
+    return `<img src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=000000&format=png" width="${size}" height="${size}" style="border-radius:8px;display:block" alt="QR" onerror="this.style.display='none'">`;
+  };
+
+  const renderLinkPanel=(evId)=>{
+    const link=`${CF_APP_URL}?cf=${evId}`;
+    const ev=evs.find(e=>e.id===evId);
+    const posts=(D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
+    const nPend=posts.filter(p=>p.estado==="pendiente").length;
+    const nApro=posts.filter(p=>p.estado==="aprobado").length;
+    const nRech=posts.filter(p=>p.estado==="rechazado").length;
+    return `
+    <!-- PANEL LINK DESTACADO -->
+    <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px;padding:24px;margin-bottom:20px;color:#fff">
+      <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
+        <!-- QR -->
+        <div style="flex-shrink:0;background:#fff;border-radius:10px;padding:8px">
+          ${cfQR(link,110)}
+        </div>
+        <!-- Info link -->
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#a0aec0;margin-bottom:6px">🔗 Link para compartir</div>
+          <div style="font-size:13px;color:#e2e8f0;font-family:monospace;background:rgba(255,255,255,.08);padding:10px 14px;border-radius:8px;word-break:break-all;margin-bottom:10px">${link}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="cfCopiarReg('${evId}')" style="background:#EC4899;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px">📋 Copiar link</button>
+            <button onclick="cfCompartirWA('${evId}')" style="background:#25D366;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">💬 WhatsApp</button>
+          </div>
+        </div>
+        <!-- Stats -->
+        <div style="flex-shrink:0;display:flex;flex-direction:column;gap:8px;min-width:120px">
+          <div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:12px 16px">
+            <div style="font-size:26px;font-weight:700;color:#FBBF24">${nPend}</div>
+            <div style="font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">Pendientes</div>
+          </div>
+          <div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:12px 16px">
+            <div style="font-size:26px;font-weight:700;color:#34D399">${nApro}</div>
+            <div style="font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">Aprobadas</div>
+          </div>
+          <div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:12px 16px">
+            <div style="font-size:26px;font-weight:700;color:#F87171">${nRech}</div>
+            <div style="font-size:11px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">Rechazadas</div>
+          </div>
+        </div>
+      </div>
+      <!-- Steps -->
+      <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px;background:rgba(255,255,255,.06);border-radius:8px;padding:10px 14px;font-size:12px;color:#CBD5E0">
+          <span style="font-weight:700;color:#EC4899">① </span>Comparte el link o QR en tus redes
+        </div>
+        <div style="flex:1;min-width:160px;background:rgba(255,255,255,.06);border-radius:8px;padding:10px 14px;font-size:12px;color:#CBD5E0">
+          <span style="font-weight:700;color:#EC4899">② </span>Revisa y aprueba/rechaza postulantes aquí
+        </div>
+        <div style="flex:1;min-width:160px;background:rgba(255,255,255,.06);border-radius:8px;padding:10px 14px;font-size:12px;color:#CBD5E0">
+          <span style="font-weight:700;color:#EC4899">③ </span>Las aprobadas reciben su link de compra por email
+        </div>
+      </div>
+    </div>`;
+  };
+
   const mc=$("main-content");
   mc.innerHTML=`
     <div class="page-title">Close Friends — Postulantes</div>
-    <div style="margin-bottom:20px">
-      <select class="form-select" style="max-width:300px" onchange="cfRenderBandeja(this.value,'todos')">
-        ${evs.map(e=>`<option value="${e.id}">${e.name} — ${e.date||""}</option>`).join("")}
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+      <select class="form-select" id="cf-ev-sel" style="max-width:320px" onchange="cfCambiarEvento(this.value)">
+        ${evs.map(e=>`<option value="${e.id}">${e.name}${e.date?" — "+e.date:""}</option>`).join("")}
       </select>
-      <button class="btn" style="margin-left:8px;font-size:12px" onclick="cfGetLinkRegistro()">🔗 Link de registro</button>
     </div>
-    <div class="card" id="cf-bandeja">${currentCfEvId?renderPostulantes(currentCfEvId,"todos"):"<p style='color:var(--ink-4)'>Sin eventos activos.</p>"}</div>`;
+    <div id="cf-link-panel">${currentCfEvId?renderLinkPanel(currentCfEvId):""}</div>
+    <div class="card" id="cf-bandeja">${currentCfEvId?renderPostulantes(currentCfEvId,"pendiente"):"<p style='color:var(--ink-4)'>Sin eventos activos.</p>"}</div>`;
 
-  window.cfGetLinkRegistro=()=>{
-    const evId=document.querySelector("select")?.value||currentCfEvId;
-    const link=`${CF_APP_URL}?cf=${evId}`;
-    navigator.clipboard.writeText(link);
-    toast("Link de registro copiado: "+link,"ok");
+  window.cfCambiarEvento=(evId)=>{
+    currentCfEvId=evId;
+    $("cf-link-panel").innerHTML=renderLinkPanel(evId);
+    cfRenderBandeja(evId,"pendiente");
   };
+
+  window.cfCopiarReg=(evId)=>{
+    const link=`${CF_APP_URL}?cf=${evId||currentCfEvId}`;
+    navigator.clipboard.writeText(link).then(()=>toast("✅ Link copiado","ok")).catch(()=>{
+      prompt("Copia este link:",link);
+    });
+  };
+
+  window.cfCompartirWA=(evId)=>{
+    const ev=evs.find(e=>e.id===(evId||currentCfEvId));
+    const link=`${CF_APP_URL}?cf=${evId||currentCfEvId}`;
+    const msg=encodeURIComponent(`¡Postula a Close Friends${ev?" de "+ev.name:""}! 🌸\n\n${link}`);
+    window.open(`https://wa.me/?text=${msg}`,"_blank");
+  };
+
+  window.cfGetLinkRegistro=()=>cfCopiarReg(currentCfEvId);
 };
 
 // ── Vista: Órdenes y estado de pago ──
