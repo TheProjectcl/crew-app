@@ -7196,17 +7196,23 @@ function cfCodigo(){ return "CF-"+Math.random().toString(36).slice(2,6).toUpperC
 async function loadCF(prodId=null){
   try{
     const eventosFiltro = prodId ? `productora_id=eq.${prodId}&order=date.desc` : "order=date.desc";
-    const [postulantes, cf_ordenes, cf_config, eventos] = await Promise.all([
-      sbGet("cf_postulantes", prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
-      sbGet("cf_ordenes",     prodId ? `productora_id=eq.${prodId}&order=created_at.desc` : "order=created_at.desc"),
-      sbGet("cf_config",      prodId ? `productora_id=eq.${prodId}` : ""),
-      (!D.eventos||!D.eventos.length) ? sbGet("eventos", eventosFiltro) : Promise.resolve(null),
+    // Cargar eventos si no están
+    if(!D.eventos||!D.eventos.length){
+      const eventos = await sbGet("eventos", eventosFiltro);
+      if(eventos) D.eventos = eventos;
+    }
+    // Cargar tablas CF — filtramos por evento_id para evitar problemas con productora_id
+    const evIds = (D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId).map(e=>e.id);
+    const evFilter = evIds.length ? `evento_id=in.(${evIds.join(",")})` : null;
+    const [postulantes, cf_ordenes, cf_config] = await Promise.all([
+      evFilter ? sbGet("cf_postulantes", `${evFilter}&order=created_at.desc`) : Promise.resolve([]),
+      evFilter ? sbGet("cf_ordenes",     `${evFilter}&order=created_at.desc`) : Promise.resolve([]),
+      evFilter ? sbGet("cf_config",      evFilter) : Promise.resolve([]),
     ]);
     D.cf_postulantes = postulantes||[];
     D.cf_ordenes     = cf_ordenes||[];
     D.cf_config      = cf_config||[];
-    if(eventos) D.eventos = eventos;
-  }catch(e){ D.cf_postulantes=[]; D.cf_ordenes=[]; D.cf_config=[]; }
+  }catch(e){ console.error("loadCF error:",e); D.cf_postulantes=[]; D.cf_ordenes=[]; D.cf_config=[]; }
 }
 
 // Obtener config CF para un evento
