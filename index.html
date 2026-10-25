@@ -719,8 +719,8 @@ const glMail={
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F2F2EF"><tr><td align="center" style="padding:36px 12px 40px">
 <table role="presentation" class="gl-c" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px">
 <tr><td align="center" style="padding:0 0 24px"><img src="https://guestly.cl/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
-<tr><td style="background:#FFFFFF;border-radius:16px;border-top:4px solid ${accent}">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${inner}</table>
+<tr><td style="background:#FFFFFF;border-radius:16px">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:4px;background:${accent};border-radius:16px 16px 0 0;font-size:0;line-height:0">&nbsp;</td></tr>${inner}</table>
 </td></tr>
 <tr><td align="center" style="padding:28px 24px 0">
 <p style="margin:0 0 6px;${GL_F}font-size:13px;font-weight:700;color:#0B0B0C">Everything connected. <span style="color:#16C46B">Every guest accounted for.</span></p>
@@ -758,7 +758,7 @@ const glMail={
   },
   fallback(url){
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #E6E6E1;font-size:0;line-height:0">&nbsp;</td></tr></table>
-<p style="margin:18px 0 0;${GL_F}font-size:12px;line-height:18px;color:#8A8A90;word-break:break-all">¿El botón no funciona? Copia este link en tu navegador:<br><span style="color:#0B0B0C">${url}</span></p>`;
+<p style="margin:18px 0 0;${GL_F}font-size:12px;line-height:18px;color:#8A8A90">¿El botón no funciona? Copia este link en tu navegador:<br><span style="color:#0B0B0C;word-break:break-all">${url}</span></p>`;
   },
   note(icon,strong,text){
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F7F7F4;border:1px solid #E6E6E1;border-radius:12px"><tr>
@@ -787,7 +787,7 @@ const glMail={
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
       glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada."),"20px 48px 0")+
       (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"28px 48px 0"):"")+
-      glMail.row(glMail.button(link,`Comprar entrada${tipo?` (${glEsc(tipo)})`:""} &rarr;`)+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
+      glMail.row(glMail.button(link,"Comprar mi entrada &rarr;")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
   },
 
