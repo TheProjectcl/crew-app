@@ -8037,7 +8037,7 @@ VIEWS.cfPostulantes = async()=>{
               `:p.estado==="aprobado"?`
                 <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px">${p.tipo_entrada||""}</div>
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
-              `:"—"}
+              `:`<button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar igual</button>`}
             </td>
           </tr>`).join(""):`<tr><td colspan="7" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
         </tbody>
