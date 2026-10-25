@@ -8006,9 +8006,10 @@ VIEWS.cfPostulantes = async()=>{
     .filter(e=>e.status==="active");
   let currentCfEvId = evs[0]?.id||null;
 
-  const renderPostulantes = (evId, filtro="todos")=>{
+  const renderPostulantes = (evId, filtro="todos", busq="")=>{
     const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
-    const filtrados = filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
+    let filtrados = filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
+    if(busq){const q=busq.toLowerCase();filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q)||(p.rut||"").includes(q)||(p.email||"").toLowerCase().includes(q));}
     const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos").length;
     const faltaInfoCount = posts.filter(p=>p.estado==="falta_info").length;
     const filtrados2 = filtrados;
@@ -8020,8 +8021,9 @@ VIEWS.cfPostulantes = async()=>{
       {key:"rechazado",label:"Rechazados"},
     ];
     return `
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         ${tabs.map(t=>`<button class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfRenderBandeja('${evId}','${t.key}')">${t.label}</button>`).join("")}
+        <input id="cf-busq" class="form-input" style="max-width:200px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Buscar..." value="${busq}" oninput="cfRenderBandeja('${evId}','${filtro}',this.value)">
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
       </div>
       <div style="overflow-x:auto">
@@ -8073,7 +8075,7 @@ VIEWS.cfPostulantes = async()=>{
       </div>`;
   };
 
-  window.cfRenderBandeja=(evId,filtro)=>{ currentCfEvId=evId; $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro); };
+  window.cfRenderBandeja=(evId,filtro,busq)=>{ currentCfEvId=evId; $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro,busq||""); };
   window.cfToggleAll=(cb)=>{ document.querySelectorAll(".cf-sel").forEach(c=>c.checked=cb.checked); };
   window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
   // exponer evId activo para que las funciones globales lo lean
