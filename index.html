@@ -929,7 +929,7 @@ async function doLogin(){
 async function intentarLogin(email,pass,esRestauracion){
   showLoading(true);
   try{
-    const res=await sbGet("users",`email=eq.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}&limit=1`);
+    const res=await sbGet("users",`email=ilike.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}&limit=1`);
     if(!res.length){
       showLoading(false);
       if(esRestauracion){
@@ -3233,7 +3233,7 @@ async function guardarAsignacion(mesaId){
   const isNuevo=!$("asig-existente")||$("asig-existente").classList.contains("hidden");
 
   if(isNuevo){
-    const name=($("asig-n")?.value||"").trim(),email=($("asig-e")?.value||"").trim();
+    const name=($("asig-n")?.value||"").trim(),email=($("asig-e")?.value||"").trim().toLowerCase();
     if(!name||!email){toast("Completa nombre y email","error");return;}
     const u={id:uid(),name,email,pass:$("asig-p")?.value||"mesa123",role:"comprador",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[currentEvId]};
     D.users.push(u);compradorId=u.id;
@@ -4601,7 +4601,7 @@ function openAddJefe(){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveJefe()">Crear jefe</button></div>`);
 }
 async function saveJefe(){
-  const name=($("aj-n")?.value||"").trim(),email=($("aj-e")?.value||"").trim();
+  const name=($("aj-n")?.value||"").trim(),email=($("aj-e")?.value||"").trim().toLowerCase();
   const whatsapp=($("aj-w")?.value||"").trim(),instagram=($("aj-ig")?.value||"").trim();
   if(!name){toast("Falta el nombre","error");return;}
   if(!email){toast("Falta el email","error");return;}
@@ -4627,7 +4627,7 @@ function openAddEmb(modo="interno"){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveEmb()">Agregar</button></div>`);
 }
 async function saveEmb(){
-  const name=($("ae2-n")?.value||"").trim(),email=($("ae2-e")?.value||"").trim();
+  const name=($("ae2-n")?.value||"").trim(),email=($("ae2-e")?.value||"").trim().toLowerCase();
   const whatsapp=($("ae2-w")?.value||"").trim(),instagram=($("ae2-ig")?.value||"").trim();
   if(!name){toast("Falta el nombre","error");return;}
   if(!email){toast("Falta el email","error");return;}
@@ -5487,7 +5487,7 @@ function openNuevoUser(){
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveNuevoUser()">Crear</button></div>`);
 }
 async function saveNuevoUser(){
-  const name=($("nu-n")?.value||"").trim(),email=($("nu-e")?.value||"").trim();if(!name||!email)return;
+  const name=($("nu-n")?.value||"").trim(),email=($("nu-e")?.value||"").trim().toLowerCase();if(!name||!email)return;
   const nuevoRol=$("nu-r")?.value||"door_staff";
   // GUARD adicional por si alguien fuerza el rol vía DevTools: coordinator no puede crear owner/coordinator
   if(CU.role==="coordinator"&&["owner","coordinator","superadmin"].includes(nuevoRol)){
@@ -5598,7 +5598,7 @@ async function saveEditUser(uid,callbackView){
   if(!esSuper&&!esOwner){toast("No tienes permisos","error");return;}
 
   const name=($("eu-name")?.value||"").trim();
-  const email=($("eu-email")?.value||"").trim();
+  const email=($("eu-email")?.value||"").trim().toLowerCase();
   const nuevaPass=($("eu-pass")?.value||"").trim();
   if(!name){toast("Falta el nombre","error");return;}
   if(!email){toast("Falta el email","error");return;}
@@ -6901,7 +6901,7 @@ function jefeTabAdd(t){
   if(bm){bm.className="btn"+(t==="masivo"?" btn-primary":"");bm.style.flex="1";}
 }
 async function saveJefeEmb(eqId){
-  const name=($("je-n")?.value||"").trim(),email=($("je-e")?.value||"").trim();
+  const name=($("je-n")?.value||"").trim(),email=($("je-e")?.value||"").trim().toLowerCase();
   const whatsapp=($("je-w")?.value||"").trim(),instagram=($("je-ig")?.value||"").trim();
   if(!name){toast("Falta el nombre","error");return;}
   if(!email){toast("Falta el email","error");return;}
