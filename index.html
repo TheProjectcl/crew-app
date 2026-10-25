@@ -9539,9 +9539,9 @@ async function mostrarPanelBdayInv(token){
                 </div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
-                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram (opcional)</label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
                 <div id="binv-err" style="color:#dc2626;font-size:12px;display:none"></div>
-                <button class="btn btn-primary" onclick="bdayEnviarInscripcion('${c.id}','${prod?.id||""}','${ev?.name||""}','${prod?.nombre||""}','${ben?.hora_cierre||"16:00"}')" style="width:100%">Inscribirme 🎉</button>
+                <button id="binv-btn" class="btn btn-primary" onclick="bdayEnviarInscripcion('${c.id}','${prod?.id||""}','${ev?.name||""}','${prod?.nombre||""}','${ben?.hora_cierre||"16:00"}')" style="width:100%">Inscribirme 🎉</button>
               </div>`)}
             ${llena&&!cerrada?`<div style="background:#dcfce7;color:#166534;border-radius:8px;padding:12px;text-align:center;font-size:13px;font-weight:600;margin-top:8px">✅ La lista está completa por ahora.</div>`:""}
           </div>
@@ -9551,6 +9551,8 @@ async function mostrarPanelBdayInv(token){
     renderPub();
 
     window.bdayEnviarInscripcion=async(cid,pidBloq,evNom,prodNom,horaCierre)=>{
+      const btn=$("binv-btn");
+      if(btn){if(btn.disabled)return;btn.disabled=true;btn.textContent="Enviando...";}
       const nombre=($("binv-nom")?.value||"").trim();
       const apellido=($("binv-ape")?.value||"").trim();
       const genero=$("binv-gen")?.value||"m";
@@ -9558,14 +9560,19 @@ async function mostrarPanelBdayInv(token){
       const emailInv=($("binv-email")?.value||"").trim().toLowerCase();
       const instagram=normIG($("binv-ig")?.value||"");
       const errEl=$("binv-err");
-      if(!nombre||!apellido||!emailInv||!fecha_nacimiento){
-        if(errEl){errEl.style.display="block";errEl.textContent="Completa todos los campos requeridos.";}return;
+      const mostrarErr=(msg)=>{if(errEl){errEl.style.display="block";errEl.textContent=msg;}if(btn){btn.disabled=false;btn.textContent="Inscribirme 🎉";}};
+      if(!nombre||!apellido||!emailInv||!fecha_nacimiento||!instagram){
+        mostrarErr("Todos los campos son obligatorios.");return;
+      }
+      // Validar formato email básico
+      if(!emailInv.includes("@")||!emailInv.includes(".")){
+        mostrarErr("Ingresa un correo válido.");return;
       }
       // Validar bloqueado
       const bl=(D.lista_bloqueo||[]).filter(b=>!pidBloq||b.productora_id===pidBloq);
       const norm=s=>(s||"").toLowerCase().trim().replace(/[.\-]/g,"");
       const esBloq=bl.find(b=>norm(b.nombre)===norm(nombre+" "+apellido));
-      if(esBloq){if(errEl){errEl.style.display="block";errEl.textContent="No es posible inscribir a esta persona. Por favor reemplázala.";}return;}
+      if(esBloq){mostrarErr("No es posible inscribir a esta persona. Por favor reemplázala.");return;}
       // Guardar
       const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,estado:"pendiente",created_at:now()};
       try{
