@@ -9409,9 +9409,23 @@ window.bdayGuardarCumple=async(id,prodId)=>{
     return toast("Completa todos los campos requeridos","warn");
   }
 
+  // Validar duplicado (mismo email o mismo nombre+apellido en el mismo evento)
+  const duplicado=(D.bday_cumpleaneros||[]).find(c=>
+    c.evento_id===evento_id && c.id!==id &&
+    (c.email?.toLowerCase()===email ||
+     (c.nombre?.toLowerCase()===nombre.toLowerCase() && c.apellido?.toLowerCase()===apellido.toLowerCase()))
+  );
+  if(duplicado){
+    if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
+    return toast(`⚠️ Ya existe un cumpleañero con ese nombre o correo en este evento`,"warn");
+  }
+
   // Validar contra bloqueados
   const bloq=chequearBloqueo(nombre+" "+apellido,"",prodId);
-  if(bloq) return toast(`⚠️ ${nombre} ${apellido} está en lista de bloqueo`,"error");
+  if(bloq){
+    if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
+    return toast(`⚠️ ${nombre} ${apellido} está en lista de bloqueo`,"error");
+  }
 
   const passInicial=bdayPassInicial(nombre,apellido,fecha_nacimiento);
   const token=uid();
