@@ -7456,7 +7456,7 @@ function mostrarRegistroCF(eventoId){
         screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El período de registro ha finalizado.</p></div></div>`;
         return;
       }
-      const evDate = ev.date ? new Date(ev.date).toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
+      const evDate = ev.date ? new Date(ev.date.includes("T")?ev.date:ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
       screen.innerHTML=`
         <div class="cf-box">
           <button class="cf-back" onclick="mostrarLobbyExt()">← Volver</button>
@@ -7626,7 +7626,7 @@ function mostrarCompraCF(token){
       const tipoAsignado = post.tipo_entrada||"";
       const preciosPorTipo = cfg.precios_entrada||{};
       const precio = (tipoAsignado && preciosPorTipo[tipoAsignado]) ? preciosPorTipo[tipoAsignado] : (cfg.precio||15000);
-      const evDate = ev.date ? new Date(ev.date).toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
+      const evDate = ev.date ? new Date(ev.date.includes("T")?ev.date:ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
 
       cont.innerHTML=`
         <div class="cf-card">
