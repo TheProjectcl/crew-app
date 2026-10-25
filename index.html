@@ -8006,13 +8006,60 @@ VIEWS.cfPostulantes = async()=>{
     .filter(e=>e.status==="active");
   let currentCfEvId = evs[0]?.id||null;
 
-  const renderPostulantes = (evId, filtro="todos", busq="")=>{
+  // Filtra filas y devuelve solo el HTML del tbody
+  const renderFilas = (evId, filtro, busq)=>{
     const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
     let filtrados = filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
-    if(busq){const q=busq.toLowerCase().replace(/\D/g,"_wtmp_");const qNum=busq.replace(/\D/g,"");filtrados=filtrados.filter(p=>{const ql=busq.toLowerCase();return (p.nombre||"").toLowerCase().includes(ql)||(p.apellido||"").toLowerCase().includes(ql)||(p.instagram||"").toLowerCase().includes(ql)||(p.rut||"").replace(/\./g,"").toLowerCase().includes(ql.replace(/\./g,""))||(p.email||"").toLowerCase().includes(ql)||(qNum.length>=4&&(p.whatsapp||"").replace(/\D/g,"").includes(qNum));});}
+    if(busq&&busq.trim()){
+      const ql=busq.trim().toLowerCase();
+      const qNum=busq.replace(/\D/g,"");
+      filtrados=filtrados.filter(p=>
+        (p.nombre||"").toLowerCase().includes(ql)||
+        (p.apellido||"").toLowerCase().includes(ql)||
+        (p.instagram||"").toLowerCase().includes(ql)||
+        (p.rut||"").replace(/\./g,"").toLowerCase().includes(ql.replace(/\./g,""))||
+        (p.email||"").toLowerCase().includes(ql)||
+        (qNum.length>=4&&(p.whatsapp||"").replace(/\D/g,"").includes(qNum))
+      );
+    // devuelve html de las filas
+    return filtrados.length?filtrados.map(p=>`
+      <tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:8px">${(p.estado==="pendiente"||p.estado==="docs_recibidos")?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
+        <td style="padding:8px">
+          <div style="font-weight:500">${p.nombre} ${p.apellido}</div>
+          <div style="font-size:11px;color:var(--ink-4)">${p.email}</div>
+          ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
+        </td>
+        <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
+        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+        <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
+        <td style="padding:8px">
+          ${p.doc_instagram?`<a href="${p.doc_instagram}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;margin-bottom:3px;white-space:nowrap">📸 IG</a><br>`:""}
+          ${p.doc_carnet?`<a href="${p.doc_carnet}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;white-space:nowrap">🪪 Carnet</a>`:""}
+          ${!p.doc_instagram&&!p.doc_carnet?"<span style='color:var(--ink-4);font-size:11px'>—</span>":""}
+        </td>
+        <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
+        <td style="padding:8px">
+          <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+          ${p.estado==="aprobado"?`
+            <div style="font-size:11px;color:var(--ink-3);margin-right:4px">${p.tipo_entrada||""}</div>
+            <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
+          `:`
+            <button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
+            ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
+            <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
+          `}
+          <button class="btn" style="font-size:11px;padding:3px 8px;background:#fff;color:#ef4444;border:1px solid #fca5a5;font-weight:700" onclick="cfEliminarPostulante('${p.id}')" title="Eliminar postulante">✕</button>
+          </div>
+        </td>
+      </tr>`).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`;
+  };
+
+  // renderPostulantes: construye el esqueleto completo (tabs + input + tabla vacía)
+  const renderPostulantes = (evId, filtro="todos")=>{
+    const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
     const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos").length;
     const faltaInfoCount = posts.filter(p=>p.estado==="falta_info").length;
-    const filtrados2 = filtrados;
     const tabs = [
       {key:"todos",label:"Todos"},
       {key:"pendiente",label:`Pendientes (${pendCount})`},
@@ -8022,8 +8069,8 @@ VIEWS.cfPostulantes = async()=>{
     ];
     return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
-        ${tabs.map(t=>`<button class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfRenderBandeja('${evId}','${t.key}')">${t.label}</button>`).join("")}
-        <input id="cf-busq" class="form-input" style="max-width:240px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email, RUT, WhatsApp..." value="${busq}" oninput="cfRenderBandeja('${evId}','${filtro}',this.value)">
+        ${tabs.map(t=>`<button id="cf-tab-${t.key}" class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfCambiarFiltro('${evId}','${t.key}')">${t.label}</button>`).join("")}
+        <input id="cf-busq" class="form-input" style="max-width:240px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email, RUT, WhatsApp..." oninput="cfFiltrarFilas()">
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
       </div>
       <div style="overflow-x:auto">
@@ -8038,44 +8085,43 @@ VIEWS.cfPostulantes = async()=>{
           <th style="padding:8px;text-align:left">Estado</th>
           <th style="padding:8px;text-align:left">Acciones</th>
         </tr></thead>
-        <tbody>
-        ${filtrados2.length?filtrados2.map(p=>`
-          <tr style="border-bottom:1px solid var(--line)">
-            <td style="padding:8px">${(p.estado==="pendiente"||p.estado==="docs_recibidos")?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
-            <td style="padding:8px">
-              <div style="font-weight:500">${p.nombre} ${p.apellido}</div>
-              <div style="font-size:11px;color:var(--ink-4)">${p.email}</div>
-              ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
-            </td>
-            <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
-            <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
-            <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
-            <td style="padding:8px">
-              ${p.doc_instagram?`<a href="${p.doc_instagram}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;margin-bottom:3px;white-space:nowrap">📸 IG</a><br>`:""}
-              ${p.doc_carnet?`<a href="${p.doc_carnet}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;white-space:nowrap">🪪 Carnet</a>`:""}
-              ${!p.doc_instagram&&!p.doc_carnet?"<span style='color:var(--ink-4);font-size:11px'>—</span>":""}
-            </td>
-            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
-            <td style="padding:8px">
-              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
-              ${p.estado==="aprobado"?`
-                <div style="font-size:11px;color:var(--ink-3);margin-right:4px">${p.tipo_entrada||""}</div>
-                <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
-              `:`
-                <button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
-                ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
-                <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
-              `}
-              <button class="btn" style="font-size:11px;padding:3px 8px;background:#fff;color:#ef4444;border:1px solid #fca5a5;font-weight:700" onclick="cfEliminarPostulante('${p.id}')" title="Eliminar postulante">✕</button>
-              </div>
-            </td>
-          </tr>`).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
-        </tbody>
+        <tbody id="cf-tbody">${renderFilas(evId,filtro,"")}</tbody>
       </table>
       </div>`;
   };
 
-  window.cfRenderBandeja=(evId,filtro,busq)=>{ currentCfEvId=evId; $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro,busq||""); };
+  let _cfFiltroActivo="todos";
+
+  // Cambia solo las tabs (resaltar activo) y refresca filas — NO toca el input
+  window.cfCambiarFiltro=(evId,filtro)=>{
+    _cfFiltroActivo=filtro;
+    // actualizar estilo de tabs
+    ["todos","pendiente","falta_info","aprobado","rechazado"].forEach(k=>{
+      const btn=$(`cf-tab-${k}`);
+      if(!btn)return;
+      btn.className=`btn${k===filtro?" btn-primary":""}`;
+      if(k==="falta_info"&&k!==filtro){ btn.style.background="#f5f3ff"; btn.style.color="#7c3aed"; btn.style.borderColor="#7c3aed"; }
+      else if(k!==filtro){ btn.style.background=""; btn.style.color=""; btn.style.borderColor=""; }
+    });
+    cfFiltrarFilas();
+  };
+
+  // Filtra las filas sin destruir el input — mantiene el foco
+  window.cfFiltrarFilas=()=>{
+    const evId=currentCfEvId;
+    const busqEl=$("cf-busq");
+    const busq=busqEl?busqEl.value:"";
+    const tbody=$("cf-tbody");
+    if(tbody) tbody.innerHTML=renderFilas(evId,_cfFiltroActivo,busq);
+  };
+
+  window.cfRenderBandeja=(evId,filtro,busq)=>{
+    currentCfEvId=evId;
+    _cfFiltroActivo=filtro||"todos";
+    $("cf-bandeja").innerHTML=renderPostulantes(evId,filtro||"todos");
+    // Si viene con busq, escribir en el input y filtrar
+    if(busq){const el=$("cf-busq");if(el){el.value=busq;cfFiltrarFilas();}}
+  };
   window.cfToggleAll=(cb)=>{ document.querySelectorAll(".cf-sel").forEach(c=>c.checked=cb.checked); };
   window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
   // exponer evId activo para que las funciones globales lo lean
@@ -8810,13 +8856,11 @@ window.cfEliminarPostulante=async(id)=>{
     D.cf_postulantes=(D.cf_postulantes||[]).filter(x=>x.id!==id);
     if(orden) D.cf_ordenes=(D.cf_ordenes||[]).filter(x=>x.id!==orden.id);
     toast(`✓ ${p.nombre} eliminado/a${tienePago?` — recuerda devolver ${montoStr}`:""}`,tienePago?"warn":"ok");
-    cfRenderBandeja(currentCfEvId,_cfFiltroActual||"todos");
+    cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     await log("cf_eliminar","cf_postulantes",id,`Eliminado: ${p.nombre} ${p.apellido} (${p.email})${tienePago?` — tenía pago de ${montoStr}`:""}`);
   }catch(e){ toast("Error al eliminar: "+e.message,"error"); }
 };
-let _cfFiltroActual="todos";
-const _origCfRenderBandeja=window.cfRenderBandeja;
-window.cfRenderBandeja=(evId,filtro)=>{ _cfFiltroActual=filtro||"todos"; _origCfRenderBandeja(evId,filtro); };
+// _cfFiltroActivo se gestiona dentro del VIEWS.cf block
 
 // ── Vista: Base de Datos ──
 VIEWS["base-datos"]=async()=>{
