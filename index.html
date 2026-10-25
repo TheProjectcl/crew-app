@@ -8014,6 +8014,7 @@ VIEWS.cfPostulantes = async()=>{
           <th style="padding:8px;text-align:left">RUT</th>
           <th style="padding:8px;text-align:left">Instagram</th>
           <th style="padding:8px;text-align:left">WhatsApp</th>
+          <th style="padding:8px;text-align:left">Docs</th>
           <th style="padding:8px;text-align:left">Estado</th>
           <th style="padding:8px;text-align:left">Acciones</th>
         </tr></thead>
@@ -8029,6 +8030,11 @@ VIEWS.cfPostulantes = async()=>{
             <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
             <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
             <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
+            <td style="padding:8px">
+              ${p.doc_instagram?`<a href="${p.doc_instagram}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;margin-bottom:3px;white-space:nowrap">📸 IG</a><br>`:""}
+              ${p.doc_carnet?`<a href="${p.doc_carnet}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;white-space:nowrap">🪪 Carnet</a>`:""}
+              ${!p.doc_instagram&&!p.doc_carnet?"<span style='color:var(--ink-4);font-size:11px'>—</span>":""}
+            </td>
             <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":"amber")}</td>
             <td style="padding:8px">
               ${p.estado==="aprobado"?`
@@ -8100,8 +8106,10 @@ VIEWS.cfPostulantes = async()=>{
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);
     if(!p)return;
     const ev=D.eventos.find(e=>e.id===p.evento_id);
-    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"falta_info"});
-    p.estado="falta_info";
+    const uploadToken=cfToken();
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"falta_info",cf_upload_token:uploadToken});
+    p.estado="falta_info"; p.cf_upload_token=uploadToken;
+    const uploadLink=`${CF_APP_URL}?cf_upload=${uploadToken}`;
     try{
       await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,`
         <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
@@ -8114,15 +8122,19 @@ VIEWS.cfPostulantes = async()=>{
               <p style="color:#555;margin:6px 0">1) Pantallazo de tu perfil de Instagram</p>
               <p style="color:#555;margin:6px 0">2) Foto de tu carnet (para corroborar que eres tú y no están usando la identidad de otra persona)</p>
             </div>
-            <p style="color:#555">Con eso ya avanzamos en tu aprobación. ¡Muchas gracias!</p>
-            <p style="font-size:12px;color:#aaa;margin-top:20px;text-align:center">Responde este correo con los documentos solicitados.</p>
+            <p style="color:#555">Puedes subir los documentos directamente haciendo clic en el botón:</p>
+            <div style="text-align:center;margin:24px 0">
+              <a href="${uploadLink}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px">📎 Subir documentos</a>
+            </div>
+            <p style="color:#555">¡Con eso ya avanzamos en tu aprobación! Muchas gracias 🙏</p>
+            <p style="font-size:11px;color:#aaa;margin-top:20px;text-align:center">O copia este link: ${uploadLink}</p>
           </div>
         </div>`);
       toast(`📋 Falta info enviada a ${p.nombre}`,"ok");
     }catch(e){
-      toast(`📋 Estado actualizado (email pendiente de configurar)`,"warn");
+      toast(`📋 Estado actualizado (link: ${uploadLink})`,"warn");
     }
-    cfRenderBandeja(currentCfEvId, document.querySelector(".btn-primary[onclick*='falta_info']") ? "falta_info" : "pendiente");
+    cfRenderBandeja(currentCfEvId,"pendiente");
     await log("cf_falta_info","cf_postulantes",id,`Solicitada más información a ${p.nombre}`);
   };
 
@@ -8647,10 +8659,110 @@ if(_origGoViewPuerta){
   };
 }
 
+// ── Pantalla pública de upload de documentos ──
+async function mostrarUploadCF(uploadToken){
+  document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;font-family:system-ui;padding:20px">
+    <div style="background:#111;border-radius:16px;padding:32px;max-width:460px;width:100%;text-align:center">
+      <div id="upl-content">
+        <div style="margin-bottom:16px">${glLogo("neg",28,"margin:0 auto")}</div>
+        <div style="font-size:10px;letter-spacing:3px;color:#888;margin-bottom:24px">POWERED BY GUESTLY</div>
+        <h2 style="color:#fff;margin:0 0 8px">Sube tus documentos</h2>
+        <p style="color:#888;font-size:14px;margin:0 0 28px">Para completar tu verificación necesitamos los siguientes archivos:</p>
+        <div id="upl-err" style="display:none;background:#fef2f2;color:#dc2626;border-radius:8px;padding:10px;font-size:13px;margin-bottom:16px"></div>
+
+        <div style="background:#1a1a1a;border-radius:12px;padding:20px;margin-bottom:16px;text-align:left">
+          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px">1) PANTALLAZO DE INSTAGRAM</div>
+          <label id="ig-label" style="display:block;border:2px dashed #333;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor=this.dataset.ok?'#7c3aed':'#333'">
+            <div id="ig-preview" style="display:none;margin-bottom:8px"><img id="ig-img" style="max-height:120px;border-radius:6px;max-width:100%"></div>
+            <div id="ig-text" style="color:#666;font-size:13px">📸 Toca para seleccionar imagen</div>
+            <input id="ig-file" type="file" accept="image/*" style="display:none" onchange="prevImg('ig')">
+          </label>
+        </div>
+
+        <div style="background:#1a1a1a;border-radius:12px;padding:20px;margin-bottom:24px;text-align:left">
+          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px">2) FOTO DE TU CARNET</div>
+          <label id="carnet-label" style="display:block;border:2px dashed #333;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor=this.dataset.ok?'#7c3aed':'#333'">
+            <div id="carnet-preview" style="display:none;margin-bottom:8px"><img id="carnet-img" style="max-height:120px;border-radius:6px;max-width:100%"></div>
+            <div id="carnet-text" style="color:#666;font-size:13px">🪪 Toca para seleccionar imagen</div>
+            <input id="carnet-file" type="file" accept="image/*" style="display:none" onchange="prevImg('carnet')">
+          </label>
+        </div>
+
+        <button id="upl-btn" onclick="enviarDocs('${uploadToken}')" style="width:100%;background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:16px;font-size:16px;font-weight:700;cursor:pointer">
+          Enviar documentos
+        </button>
+        <p style="color:#555;font-size:11px;margin-top:16px">Tus datos están protegidos y solo serán usados para verificar tu identidad.</p>
+      </div>
+    </div>
+  </div>`;
+
+  window.prevImg=(tipo)=>{
+    const file=document.getElementById(`${tipo}-file`).files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      document.getElementById(`${tipo}-img`).src=e.target.result;
+      document.getElementById(`${tipo}-preview`).style.display="block";
+      document.getElementById(`${tipo}-text`).textContent="✓ Imagen seleccionada";
+      document.getElementById(`${tipo}-text`).style.color="#a78bfa";
+      document.getElementById(`${tipo}-label`).style.borderColor="#7c3aed";
+      document.getElementById(`${tipo}-label`).dataset.ok="1";
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.enviarDocs=async(token)=>{
+    const igFile=document.getElementById("ig-file").files[0];
+    const carnetFile=document.getElementById("carnet-file").files[0];
+    const errEl=document.getElementById("upl-err");
+    if(!igFile||!carnetFile){ errEl.textContent="Por favor sube ambas imágenes."; errEl.style.display="block"; return; }
+    errEl.style.display="none";
+    const btn=document.getElementById("upl-btn");
+    btn.textContent="Subiendo... ⏳"; btn.disabled=true;
+
+    try{
+      // Buscar el postulante
+      const arr=await sbGet("cf_postulantes",`cf_upload_token=eq.${token}`);
+      if(!arr||!arr.length)throw new Error("Link inválido o expirado.");
+      const post=arr[0];
+
+      // Subir archivos a Supabase Storage
+      const uploadFile=async(file,path)=>{
+        const ext=file.name.split(".").pop()||"jpg";
+        const fullPath=`${path}.${ext}`;
+        const res=await fetch(`${SB_URL}/storage/v1/object/cf-docs/${fullPath}`,{
+          method:"POST",
+          headers:{"apikey":SB_KEY,"Authorization":"Bearer "+SB_KEY,"Content-Type":file.type,"x-upsert":"true"},
+          body:file
+        });
+        if(!res.ok)throw new Error(await res.text());
+        return `${SB_URL}/storage/v1/object/public/cf-docs/${fullPath}`;
+      };
+
+      const igUrl=await uploadFile(igFile,`${post.evento_id}/${post.id}/instagram`);
+      const carnetUrl=await uploadFile(carnetFile,`${post.evento_id}/${post.id}/carnet`);
+
+      // Guardar URLs en el postulante
+      await sbPatch("cf_postulantes",`id=eq.${post.id}`,{doc_instagram:igUrl,doc_carnet:carnetUrl});
+
+      // Mostrar éxito
+      document.getElementById("upl-content").innerHTML=`
+        <div style="font-size:64px;margin-bottom:16px">🎉</div>
+        <h2 style="color:#fff;margin:0 0 12px">¡Documentos enviados!</h2>
+        <p style="color:#888;font-size:15px">Recibimos tu información. Nos contactaremos contigo pronto con la respuesta.</p>
+        <p style="color:#555;font-size:12px;margin-top:24px">Ya puedes cerrar esta página.</p>`;
+    }catch(e){
+      btn.textContent="Enviar documentos"; btn.disabled=false;
+      errEl.textContent=e.message||"Error al subir. Intenta de nuevo."; errEl.style.display="block";
+    }
+  };
+}
+
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
 if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
+else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
 
 // ═══════════════════════════════════
 // INIT — verificar si hay datos
