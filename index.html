@@ -1070,6 +1070,9 @@ function buildSidebar(){
     {v:"incentivos",icon:"trophy",label:"Incentivos"},
     {v:"canjes",icon:"gift",label:"Canjes"},
   ]});
+  allSections.push({label:"Marketing",items:[
+    {v:"base-datos",icon:"users",label:"Base de Datos"},
+  ]});
   allSections.push({label:"Config",items:[
     {v:"eventos",icon:"calendar",label:"Eventos"},
     {v:"usuarios",icon:"user-cog",label:"Usuarios"},
@@ -8059,6 +8062,7 @@ VIEWS.cfPostulantes = async()=>{
                 <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
                 ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
                 <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
+                <button class="btn" style="font-size:11px;padding:3px 8px;margin-left:4px;background:#ef4444;color:#fff;border:none" onclick="cfEliminarPostulante('${p.id}')">🗑</button>
               `}
             </td>
           </tr>`).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
@@ -8784,6 +8788,135 @@ async function mostrarUploadCF(uploadToken){
     }
   };
 }
+
+// ── Eliminar postulante CF ──
+window.cfEliminarPostulante=async(id)=>{
+  const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+  if(!p)return;
+  const confirmar=confirm(`¿Eliminar a ${p.nombre} ${p.apellido} de la inscripción?\n\nEsto eliminará su registro y podrá inscribirse nuevamente.`);
+  if(!confirmar)return;
+  try{
+    await sbDelete("cf_postulantes",`id=eq.${id}`);
+    D.cf_postulantes=(D.cf_postulantes||[]).filter(x=>x.id!==id);
+    toast(`🗑 ${p.nombre} eliminado/a`,"ok");
+    cfRenderBandeja(currentCfEvId,_cfFiltroActual||"pendiente");
+    await log("cf_eliminar","cf_postulantes",id,`Eliminado: ${p.nombre} ${p.apellido} (${p.email})`);
+  }catch(e){ toast("Error al eliminar: "+e.message,"error"); }
+};
+let _cfFiltroActual="pendiente";
+const _origCfRenderBandeja=window.cfRenderBandeja;
+window.cfRenderBandeja=(evId,filtro)=>{ _cfFiltroActual=filtro||"pendiente"; _origCfRenderBandeja(evId,filtro); };
+
+// ── Vista: Base de Datos ──
+VIEWS["base-datos"]=async()=>{
+  const mc=$("main-content");
+  mc.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><h2 style="margin:0">📋 Base de Datos</h2><div id="bd-loading" style="font-size:12px;color:var(--ink-4)">Cargando...</div></div><div id="bd-content"></div>`;
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  await loadCF(prodId);
+  const posts=D.cf_postulantes||[];
+  const evs=D.eventos||[];
+  // Filtros
+  let bdFiltroEv="todos", bdFiltroEstado="todos", bdBusqueda="";
+  const render=()=>{
+    let filtrados=posts;
+    if(bdFiltroEv!=="todos") filtrados=filtrados.filter(p=>p.evento_id===bdFiltroEv);
+    if(bdFiltroEstado!=="todos") filtrados=filtrados.filter(p=>p.estado===bdFiltroEstado);
+    if(bdBusqueda){
+      const q=bdBusqueda.toLowerCase();
+      filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q));
+    }
+    $("bd-content").innerHTML=`
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+        <input class="form-input" style="max-width:200px;margin:0" placeholder="🔍 Buscar..." oninput="window._bdBuscar(this.value)" value="${bdBusqueda}">
+        <select class="form-input" style="max-width:180px;margin:0" onchange="window._bdFiltroEv(this.value)">
+          <option value="todos">Todos los eventos</option>
+          ${evs.map(e=>`<option value="${e.id}" ${bdFiltroEv===e.id?"selected":""}>${e.name}</option>`).join("")}
+        </select>
+        <select class="form-input" style="max-width:160px;margin:0" onchange="window._bdFiltroEstado(this.value)">
+          <option value="todos">Todos los estados</option>
+          <option value="pendiente" ${bdFiltroEstado==="pendiente"?"selected":""}>Pendiente</option>
+          <option value="aprobado" ${bdFiltroEstado==="aprobado"?"selected":""}>Aprobado</option>
+          <option value="rechazado" ${bdFiltroEstado==="rechazado"?"selected":""}>Rechazado</option>
+          <option value="falta_info" ${bdFiltroEstado==="falta_info"?"selected":""}>Falta info</option>
+          <option value="docs_recibidos" ${bdFiltroEstado==="docs_recibidos"?"selected":""}>Docs recibidos</option>
+        </select>
+        <span style="font-size:12px;color:var(--ink-4)">${filtrados.length} contacto${filtrados.length!==1?"s":""}</span>
+        <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar CSV</button>
+        <button class="btn btn-primary" style="font-size:12px;padding:5px 12px" onclick="window._bdCampana()">✉ Enviar campaña</button>
+      </div>
+      <div id="bd-campana-panel" style="display:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px">
+        <div style="font-weight:600;margin-bottom:12px">✉ Nueva campaña de email</div>
+        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">${filtrados.length}</strong> contacto${filtrados.length!==1?"s":""} con los filtros actuales.</div>
+        <div style="margin-bottom:10px"><label class="form-label">Asunto</label><input class="form-input" id="bd-camp-asunto" placeholder="Ej: ¡Te invitamos a nuestro próximo evento!"></div>
+        <div style="margin-bottom:10px"><label class="form-label">Mensaje (HTML o texto)</label><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="window._bdEnviarCampana()">📨 Enviar a ${filtrados.length} contacto${filtrados.length!==1?"s":""}</button>
+          <button class="btn" onclick="document.getElementById('bd-campana-panel').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+      <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead><tr style="background:var(--line-2)">
+          <th style="padding:8px;text-align:left">Nombre</th>
+          <th style="padding:8px;text-align:left">Email</th>
+          <th style="padding:8px;text-align:left">Instagram</th>
+          <th style="padding:8px;text-align:left">WhatsApp</th>
+          <th style="padding:8px;text-align:left">Evento</th>
+          <th style="padding:8px;text-align:left">Estado</th>
+        </tr></thead>
+        <tbody>
+        ${filtrados.length?filtrados.map(p=>{
+          const ev=evs.find(e=>e.id===p.evento_id);
+          return `<tr style="border-bottom:1px solid var(--line)">
+            <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut||""}</div></td>
+            <td style="padding:8px">${p.email||"—"}</td>
+            <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+            <td style="padding:8px">${p.whatsapp||"—"}</td>
+            <td style="padding:8px;font-size:11px;color:var(--ink-3)">${ev?.name||"—"}</td>
+            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
+          </tr>`;
+        }).join(""):`<tr><td colspan="6" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`}
+        </tbody>
+      </table></div>`;
+    $("bd-loading").textContent="";
+    // Actualizar count en panel campaña si está abierto
+    const el=$("bd-camp-count");if(el)el.textContent=filtrados.length;
+    window._bdFiltrados=filtrados;
+  };
+  window._bdBuscar=(v)=>{ bdBusqueda=v; render(); };
+  window._bdFiltroEv=(v)=>{ bdFiltroEv=v; render(); };
+  window._bdFiltroEstado=(v)=>{ bdFiltroEstado=v; render(); };
+  window._bdCampana=()=>{ const p=$("bd-campana-panel"); if(p)p.style.display=p.style.display==="none"?"block":"none"; };
+  window._bdExportar=()=>{
+    const f=window._bdFiltrados||[];
+    const rows=[["Nombre","Apellido","Email","RUT","Instagram","WhatsApp","Evento","Estado"],...f.map(p=>{
+      const ev=evs.find(e=>e.id===p.evento_id);
+      return[p.nombre,p.apellido,p.email,p.rut,p.instagram,p.whatsapp,ev?.name||"",p.estado];
+    })];
+    const csv=rows.map(r=>r.map(c=>`"${(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="base_datos_cf.csv";a.click();
+  };
+  window._bdEnviarCampana=async()=>{
+    const asunto=($("bd-camp-asunto")||{}).value?.trim();
+    const cuerpo=($("bd-camp-cuerpo")||{}).value?.trim();
+    const contactos=window._bdFiltrados||[];
+    if(!asunto||!cuerpo){toast("Completa asunto y mensaje","warn");return;}
+    if(!contactos.length){toast("No hay contactos con los filtros actuales","warn");return;}
+    if(!confirm(`¿Enviar correo a ${contactos.length} contacto${contactos.length!==1?"s":""}?`))return;
+    const btn=document.querySelector("#bd-campana-panel .btn-primary");
+    if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+    let ok=0,fail=0;
+    for(const p of contactos){
+      const html=`<div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px"><div style="text-align:center">${GL_EMAIL_LOGO}</div><div style="margin-top:20px">${cuerpo.replace(/\{nombre\}/gi,p.nombre||"").replace(/\n/g,"<br>")}</div></div></div>`;
+      const sent=await sendEmail(p.email,asunto.replace(/\{nombre\}/gi,p.nombre||""),html);
+      if(sent)ok++;else fail++;
+    }
+    if(btn){btn.disabled=false;btn.textContent=`📨 Enviar a ${contactos.length} contacto${contactos.length!==1?"s":""}`;}
+    toast(`✅ ${ok} enviados${fail?`, ⚠️ ${fail} fallaron`:""}`,ok?"ok":"warn");
+    await log("cf_campana","cf_postulantes",null,`Campaña enviada: "${asunto}" → ${ok} ok, ${fail} fallaron`);
+  };
+  render();
+};
 
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
