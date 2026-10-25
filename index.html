@@ -9240,12 +9240,16 @@ VIEWS["bday-cumpleaneros"] = async()=>{
   await loadBday(prodId);
   const mc=$("main-content");if(!mc)return;
 
-  let _bdayEvFiltro="todos";
+  window._bdayEvFiltro = window._bdayEvFiltro||"todos";
   const evs=(D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId).filter(e=>e.status==="active");
 
+  window.bdaySetFiltro=(val)=>{window._bdayEvFiltro=val;window.renderCumple();};
+
   const renderCumple=()=>{
+    const fv=window._bdayEvFiltro||"todos";
     const cumps=(D.bday_cumpleaneros||[]);
-    const filtrados=_bdayEvFiltro==="todos"?cumps:cumps.filter(c=>c.evento_id===_bdayEvFiltro);
+    const filtrados=fv==="todos"?cumps:cumps.filter(c=>c.evento_id===fv);
+    const busq=($("bday-busq")?.value||"").toLowerCase().trim();
 
     mc.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
@@ -9253,16 +9257,17 @@ VIEWS["bday-cumpleaneros"] = async()=>{
         <button class="btn btn-primary" onclick="bdayNuevoCumple()">+ Registrar cumpleañero</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
-        <button class="btn${_bdayEvFiltro==="todos"?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="_bdayEvFiltro='todos';renderCumple()">Todos</button>
-        ${evs.map(e=>`<button class="btn${_bdayEvFiltro===e.id?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="_bdayEvFiltro='${e.id}';renderCumple()">${e.name}</button>`).join("")}
+        <select class="form-input" style="max-width:260px;margin:0;font-size:13px;padding:6px 10px" onchange="bdaySetFiltro(this.value)">
+          <option value="todos"${fv==="todos"?' selected':''}>Todos los eventos</option>
+          ${evs.map(e=>`<option value="${e.id}"${fv===e.id?' selected':''}>${e.name}</option>`).join("")}
+        </select>
         <input id="bday-busq" class="form-input" style="max-width:220px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email..." oninput="renderCumple()">
       </div>
       <div style="display:grid;gap:12px">
         ${!filtrados.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:""}
         ${filtrados.filter(c=>{
-          const q=($("bday-busq")?.value||"").toLowerCase().trim();
-          if(!q)return true;
-          return ((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q);
+          if(!busq)return true;
+          return ((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(busq)||(c.email||"").toLowerCase().includes(busq);
         }).map(c=>{
           const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
           const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
