@@ -9204,8 +9204,10 @@ function bdayFormBeneficio(id, prodId, cb){
 }
 
 window.bdayGuardarBeneficio=async(id,prodId)=>{
+  const btn=document.querySelector("#modal .btn-primary");
+  if(btn){if(btn.disabled)return;btn.disabled=true;btn.textContent="Guardando...";}
   const nombre=($("bb-nom")?.value||"").trim();
-  if(!nombre)return toast("Nombre requerido","warn");
+  if(!nombre){if(btn){btn.disabled=false;btn.textContent="Guardar";}return toast("Nombre requerido","warn");}
   const data={
     productora_id:prodId||null,
     nombre,
@@ -9392,13 +9394,20 @@ function bdayFormCumple(id, prodId, evs){
 }
 
 window.bdayGuardarCumple=async(id,prodId)=>{
+  // Prevenir doble-click
+  const btn=document.querySelector("#modal .btn-primary");
+  if(btn){if(btn.disabled)return;btn.disabled=true;btn.textContent="Guardando...";}
+
   const nombre=($("bc-nom")?.value||"").trim();
   const apellido=($("bc-ape")?.value||"").trim();
   const fecha_nacimiento=$("bc-fnac")?.value||"";
   const email=($("bc-email")?.value||"").trim().toLowerCase();
   const evento_id=$("bc-ev")?.value||"";
   const beneficio_id=$("bc-ben")?.value||null;
-  if(!nombre||!apellido||!email||!fecha_nacimiento||!evento_id) return toast("Completa todos los campos requeridos","warn");
+  if(!nombre||!apellido||!email||!fecha_nacimiento||!evento_id){
+    if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
+    return toast("Completa todos los campos requeridos","warn");
+  }
 
   // Validar contra bloqueados
   const bloq=chequearBloqueo(nombre+" "+apellido,"",prodId);
