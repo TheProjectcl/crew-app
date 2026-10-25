@@ -750,8 +750,8 @@ const glMail={
 <tr><td align="center" style="padding:14px 24px 18px;${GL_F}font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#16C46B">${foot}</td></tr></table>`;
   },
   button(href,text,dark=false){
-    const bg=dark?"#0B0B0C":"#16C46B", fg=dark?"#FFFFFF":"#0B0B0C";
-    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background:${bg};border-radius:10px"><a href="${href}" target="_blank" style="display:block;padding:16px 28px;${GL_F}font-size:16px;font-weight:700;color:${fg};text-decoration:none;border-radius:10px">${text}</a></td></tr></table>`;
+    const bg=dark?"#0B0B0C":"#16C46B", fg=dark?"#FFFFFF":"#0B0B0C", edge=dark?"#000000":"#0E9F55";
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background:${bg};border-radius:12px;box-shadow:0 4px 0 ${edge}"><a href="${href}" target="_blank" style="display:block;padding:20px 24px;${GL_F}font-size:18px;line-height:22px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:${fg};text-decoration:none;border-radius:12px">${text}</a></td></tr></table>`;
   },
   small(text){
     return `<p style="margin:14px 0 0;text-align:center;${GL_F}font-size:13px;line-height:20px;color:#8A8A90">${text}</p>`;
@@ -776,7 +776,7 @@ const glMail={
       glMail.row(glMail.badge("Aprobación pendiente","warn"),"36px 48px 0")+
       glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#128075;`)+glMail.p("No pudimos concretar tu aprobación. ¿Nos podrías ayudar con lo siguiente?"),"20px 48px 0")+
       glMail.row(box,"28px 48px 0")+
-      glMail.row(`<p style="margin:0 0 20px;${GL_F}font-size:15px;line-height:24px;color:#3A3A40">Puedes subir los documentos directamente desde aquí:</p>`+glMail.button(link,"&#128206;&nbsp; Subir documentos",true),"28px 48px 0")+
+      glMail.row(`<p style="margin:0 0 20px;${GL_F}font-size:15px;line-height:24px;color:#3A3A40">Puedes subir los documentos directamente desde aquí:</p>`+glMail.button(link,"SUBIR DOCUMENTOS",true),"28px 48px 0")+
       glMail.row(glMail.p("¡Con eso ya avanzamos en tu aprobación! Muchas gracias &#128591;",15),"24px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
   },
@@ -787,7 +787,7 @@ const glMail={
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
       glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada."),"20px 48px 0")+
       (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"28px 48px 0"):"")+
-      glMail.row(glMail.button(link,"Comprar mi entrada &rarr;")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
+      glMail.row(glMail.button(link,"COMPRAR MI ENTRADA")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
   },
 
@@ -805,7 +805,7 @@ const glMail={
     return glMail.shell("#16C46B",
       glMail.row(glMail.badge("Entrada reservada"),"36px 48px 0")+
       glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(`Tu amiga te reservó una entrada para <strong style="color:#0B0B0C">${glEsc(evento)}</strong>. Completa tu pago para confirmar tu lugar.`),"20px 48px 0")+
-      glMail.row(glMail.button(link,"Pagar mi entrada &rarr;")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
+      glMail.row(glMail.button(link,"PAGAR MI ENTRADA")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
   }
 };
