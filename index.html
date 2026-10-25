@@ -446,7 +446,7 @@ let currentEvId = null;
 const uid = ()=>crypto.randomUUID();
 const now = ()=>new Date().toISOString();
 const fmtDT = s=>s?new Date(s).toLocaleString("es-CL",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
-const fmtT  = s=>s?new Date(s).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit"}):"—";
+const fmtT  = s=>s?new Date(s).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false}):"—";
 const fmtM  = n=>"$"+(n||0).toLocaleString("es-CL");
 const $     = id=>document.getElementById(id);
 const ini   = n=>(n||"?").trim().split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
@@ -475,7 +475,7 @@ function fmtDeadline(dl){
   if(!dl)return "—";
   if(dl.includes("T")||dl.includes("-")){
     const d=new Date(dl);if(isNaN(d.getTime()))return dl;
-    return d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+    return d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
   }
   return dl; // formato antiguo solo hora
 }
@@ -7833,7 +7833,7 @@ function mostrarPagoCF(ordenId){
     }
     const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${ord.evento_id}`)]);
     const cfg = cfgArr[0]||{};
-    const vence = ord.vence_at ? new Date(ord.vence_at).toLocaleString("es-CL") : "24 horas";
+    const vence = ord.vence_at ? new Date(ord.vence_at).toLocaleString("es-CL",{hour12:false}) : "24 horas";
     const monto = (ord.monto_total||0).toLocaleString("es-CL");
 
     cont.innerHTML=`
@@ -8408,7 +8408,7 @@ VIEWS.cfOrdenes = async()=>{
           ${ordenes.length?ordenes.map(o=>{
             const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
             const ev=D.eventos.find(e=>e.id===o.evento_id);
-            const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL","short"):"—";
+            const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL",{hour12:false}):"—";
             return `<tr style="border-bottom:1px solid var(--line)">
               <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</td>
               <td style="padding:8px">${post?`${post.nombre} ${post.apellido}`:"—"}</td>
