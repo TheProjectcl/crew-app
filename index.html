@@ -8671,21 +8671,35 @@ async function mostrarUploadCF(uploadToken){
         <div id="upl-err" style="display:none;background:#fef2f2;color:#dc2626;border-radius:8px;padding:10px;font-size:13px;margin-bottom:16px"></div>
 
         <div style="background:#1a1a1a;border-radius:12px;padding:20px;margin-bottom:16px;text-align:left">
-          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px">1) PANTALLAZO DE INSTAGRAM</div>
-          <label id="ig-label" style="display:block;border:2px dashed #333;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor=this.dataset.ok?'#7c3aed':'#333'">
-            <div id="ig-preview" style="display:none;margin-bottom:8px"><img id="ig-img" style="max-height:120px;border-radius:6px;max-width:100%"></div>
-            <div id="ig-text" style="color:#666;font-size:13px">📸 Toca para seleccionar imagen</div>
-            <input id="ig-file" type="file" accept="image/*" style="display:none" onchange="prevImg('ig')">
-          </label>
+          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:12px">1) PANTALLAZO DE INSTAGRAM</div>
+          <div id="ig-preview" style="display:none;margin-bottom:10px;text-align:center"><img id="ig-img" style="max-height:140px;border-radius:8px;max-width:100%"></div>
+          <div id="ig-text" style="color:#a78bfa;font-size:12px;text-align:center;margin-bottom:10px;display:none">✓ Imagen seleccionada</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:12px;cursor:pointer;color:#ccc;font-size:13px;font-weight:500">
+              🖼️ Galería
+              <input id="ig-file" type="file" accept="image/*" style="display:none" onchange="prevImg('ig')">
+            </label>
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:12px;cursor:pointer;color:#ccc;font-size:13px;font-weight:500">
+              📸 Cámara
+              <input id="ig-cam" type="file" accept="image/*" capture="environment" style="display:none" onchange="prevImgFrom('ig','ig-cam')">
+            </label>
+          </div>
         </div>
 
         <div style="background:#1a1a1a;border-radius:12px;padding:20px;margin-bottom:24px;text-align:left">
-          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:8px">2) FOTO DE TU CARNET</div>
-          <label id="carnet-label" style="display:block;border:2px dashed #333;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:.2s" onmouseover="this.style.borderColor='#7c3aed'" onmouseout="this.style.borderColor=this.dataset.ok?'#7c3aed':'#333'">
-            <div id="carnet-preview" style="display:none;margin-bottom:8px"><img id="carnet-img" style="max-height:120px;border-radius:6px;max-width:100%"></div>
-            <div id="carnet-text" style="color:#666;font-size:13px">🪪 Toca para seleccionar imagen</div>
-            <input id="carnet-file" type="file" accept="image/*" style="display:none" onchange="prevImg('carnet')">
-          </label>
+          <div style="color:#a78bfa;font-size:12px;font-weight:600;letter-spacing:1px;margin-bottom:12px">2) FOTO DE TU CARNET</div>
+          <div id="carnet-preview" style="display:none;margin-bottom:10px;text-align:center"><img id="carnet-img" style="max-height:140px;border-radius:8px;max-width:100%"></div>
+          <div id="carnet-text" style="color:#a78bfa;font-size:12px;text-align:center;margin-bottom:10px;display:none">✓ Imagen seleccionada</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:12px;cursor:pointer;color:#ccc;font-size:13px;font-weight:500">
+              🖼️ Galería
+              <input id="carnet-file" type="file" accept="image/*" style="display:none" onchange="prevImg('carnet')">
+            </label>
+            <label style="display:flex;align-items:center;justify-content:center;gap:6px;background:#2a2a2a;border:1px solid #444;border-radius:8px;padding:12px;cursor:pointer;color:#ccc;font-size:13px;font-weight:500">
+              📸 Cámara
+              <input id="carnet-cam" type="file" accept="image/*" capture="environment" style="display:none" onchange="prevImgFrom('carnet','carnet-cam')">
+            </label>
+          </div>
         </div>
 
         <button id="upl-btn" onclick="enviarDocs('${uploadToken}')" style="width:100%;background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:16px;font-size:16px;font-weight:700;cursor:pointer">
@@ -8696,20 +8710,18 @@ async function mostrarUploadCF(uploadToken){
     </div>
   </div>`;
 
-  window.prevImg=(tipo)=>{
-    const file=document.getElementById(`${tipo}-file`).files[0];
+  const _showPreview=(tipo,file)=>{
     if(!file)return;
     const reader=new FileReader();
     reader.onload=e=>{
       document.getElementById(`${tipo}-img`).src=e.target.result;
       document.getElementById(`${tipo}-preview`).style.display="block";
-      document.getElementById(`${tipo}-text`).textContent="✓ Imagen seleccionada";
-      document.getElementById(`${tipo}-text`).style.color="#a78bfa";
-      document.getElementById(`${tipo}-label`).style.borderColor="#7c3aed";
-      document.getElementById(`${tipo}-label`).dataset.ok="1";
+      document.getElementById(`${tipo}-text`).style.display="block";
     };
     reader.readAsDataURL(file);
   };
+  window.prevImg=(tipo)=>_showPreview(tipo,document.getElementById(`${tipo}-file`).files[0]);
+  window.prevImgFrom=(tipo,srcId)=>_showPreview(tipo,document.getElementById(srcId).files[0]);
 
   window.enviarDocs=async(token)=>{
     const igFile=document.getElementById("ig-file").files[0];
