@@ -7999,12 +7999,20 @@ VIEWS.cfPostulantes = async()=>{
 
   const renderPostulantes = (evId, filtro="todos")=>{
     const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
-    const filtrados = filtro==="todos"?posts:posts.filter(p=>p.estado===filtro);
-    const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="falta_info").length;
-    const filtrados2 = filtro==="pendiente" ? posts.filter(p=>p.estado==="pendiente"||p.estado==="falta_info") : filtrados;
+    const filtrados = filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
+    const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos").length;
+    const faltaInfoCount = posts.filter(p=>p.estado==="falta_info").length;
+    const filtrados2 = filtrados;
+    const tabs = [
+      {key:"todos",label:"Todos"},
+      {key:"pendiente",label:`Pendientes (${pendCount})`},
+      {key:"falta_info",label:`Falta Info${faltaInfoCount?` (${faltaInfoCount})`:""}`},
+      {key:"aprobado",label:"Aprobados"},
+      {key:"rechazado",label:"Rechazados"},
+    ];
     return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-        ${["todos","pendiente","aprobado","rechazado"].map(f=>`<button class="btn${filtro===f?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="cfRenderBandeja('${evId}','${f}')">${f==="todos"?"Todos":f==="pendiente"?`Pendientes (${pendCount})`:f==="aprobado"?"Aprobados":"Rechazados"}</button>`).join("")}
+        ${tabs.map(t=>`<button class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfRenderBandeja('${evId}','${t.key}')">${t.label}</button>`).join("")}
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
       </div>
       <div style="overflow-x:auto">
@@ -8022,7 +8030,7 @@ VIEWS.cfPostulantes = async()=>{
         <tbody>
         ${filtrados2.length?filtrados2.map(p=>`
           <tr style="border-bottom:1px solid var(--line)">
-            <td style="padding:8px">${p.estado==="pendiente"?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
+            <td style="padding:8px">${(p.estado==="pendiente"||p.estado==="docs_recibidos")?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
             <td style="padding:8px">
               <div style="font-weight:500">${p.nombre} ${p.apellido}</div>
               <div style="font-size:11px;color:var(--ink-4)">${p.email}</div>
@@ -8036,7 +8044,7 @@ VIEWS.cfPostulantes = async()=>{
               ${p.doc_carnet?`<a href="${p.doc_carnet}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;white-space:nowrap">🪪 Carnet</a>`:""}
               ${!p.doc_instagram&&!p.doc_carnet?"<span style='color:var(--ink-4);font-size:11px'>—</span>":""}
             </td>
-            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":"amber")}</td>
+            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
             <td style="padding:8px">
               ${p.estado==="aprobado"?`
                 <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px">${p.tipo_entrada||""}</div>
@@ -8756,7 +8764,7 @@ async function mostrarUploadCF(uploadToken){
       const carnetUrl=await uploadFile(carnetFile,`${post.evento_id}/${post.id}/carnet`);
 
       // Guardar URLs en el postulante y volver a pendiente para revisión
-      await sbPatch("cf_postulantes",`id=eq.${post.id}`,{doc_instagram:igUrl,doc_carnet:carnetUrl,estado:"pendiente"});
+      await sbPatch("cf_postulantes",`id=eq.${post.id}`,{doc_instagram:igUrl,doc_carnet:carnetUrl,estado:"docs_recibidos"});
 
       // Mostrar éxito
       document.getElementById("upl-content").innerHTML=`
