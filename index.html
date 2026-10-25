@@ -705,6 +705,111 @@ async function sendEmail(to, subject, html){
   }
 }
 
+
+// ═══════════════════════════════════
+// EMAIL — Diseño Guestly (templates HTML)
+// ═══════════════════════════════════
+const glEsc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const GL_F="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
+const glMail={
+  shell(accent,inner){
+    return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><title>Guestly</title>
+<style>body{margin:0;padding:0;background:#F2F2EF}table{border-collapse:collapse}@media only screen and (max-width:620px){.gl-c{width:100%!important}.gl-px{padding-left:24px!important;padding-right:24px!important}.gl-h1{font-size:26px!important;line-height:32px!important}.gl-big{font-size:30px!important;line-height:36px!important}}</style></head>
+<body style="margin:0;padding:0;background:#F2F2EF">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F2F2EF"><tr><td align="center" style="padding:36px 12px 40px">
+<table role="presentation" class="gl-c" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:600px">
+<tr><td align="center" style="padding:0 0 24px"><img src="https://guestly.cl/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
+<tr><td style="background:#FFFFFF;border-radius:16px;border-top:4px solid ${accent}">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${inner}</table>
+</td></tr>
+<tr><td align="center" style="padding:28px 24px 0">
+<p style="margin:0 0 6px;${GL_F}font-size:13px;font-weight:700;color:#0B0B0C">Everything connected. <span style="color:#16C46B">Every guest accounted for.</span></p>
+<p style="margin:0;${GL_F}font-size:12px;line-height:19px;color:#8A8A90"><a href="https://guestly.cl" style="color:#0B0B0C;font-weight:600;text-decoration:none">guestly.cl</a> &nbsp;·&nbsp; Santiago, Chile</p>
+</td></tr></table></td></tr></table></body></html>`;
+  },
+  row(html,pad="24px 48px 0",center=false){
+    return `<tr><td class="gl-px"${center?' align="center"':""} style="padding:${pad}">${html}</td></tr>`;
+  },
+  badge(text,kind="ok"){
+    const c=kind==="warn"?["#FFF4D6","#8A5A00","&#9679;"]:["#DDF7E9","#0A7A41","&#10003;"];
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:${c[0]};border-radius:999px;padding:6px 12px;${GL_F}font-size:11px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:${c[1]}">${c[2]}&nbsp; ${text}</td></tr></table>`;
+  },
+  h1(text){
+    return `<h1 class="gl-h1" style="margin:0 0 12px;${GL_F}font-size:30px;line-height:36px;font-weight:800;letter-spacing:-0.8px;color:#0B0B0C">${text}</h1>`;
+  },
+  p(text,size=16){
+    return `<p style="margin:0;${GL_F}font-size:${size}px;line-height:${size+9}px;color:#3A3A40">${text}</p>`;
+  },
+  ticket(label,value,foot,mono=false){
+    const vStyle=mono
+      ?"font-family:'SF Mono',Menlo,Consolas,'Courier New',monospace;font-size:44px;line-height:50px;font-weight:700;letter-spacing:6px;color:#16C46B"
+      :`${GL_F}font-size:34px;line-height:40px;font-weight:800;letter-spacing:-1px;color:#FFFFFF`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0B0B0C;border-radius:14px">
+<tr><td align="center" style="padding:26px 24px 22px"><p style="margin:0 0 10px;${GL_F}font-size:11px;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#8A8A90">${label}</p><p class="gl-big" style="margin:0;${vStyle}">${value}</p></td></tr>
+<tr><td style="padding:0 20px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:2px dashed #2E2E33;font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>
+<tr><td align="center" style="padding:14px 24px 18px;${GL_F}font-size:12px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;color:#16C46B">${foot}</td></tr></table>`;
+  },
+  button(href,text,dark=false){
+    const bg=dark?"#0B0B0C":"#16C46B", fg=dark?"#FFFFFF":"#0B0B0C";
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center" style="background:${bg};border-radius:10px"><a href="${href}" target="_blank" style="display:block;padding:16px 28px;${GL_F}font-size:16px;font-weight:700;color:${fg};text-decoration:none;border-radius:10px">${text}</a></td></tr></table>`;
+  },
+  small(text){
+    return `<p style="margin:14px 0 0;text-align:center;${GL_F}font-size:13px;line-height:20px;color:#8A8A90">${text}</p>`;
+  },
+  fallback(url){
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:1px solid #E6E6E1;font-size:0;line-height:0">&nbsp;</td></tr></table>
+<p style="margin:18px 0 0;${GL_F}font-size:12px;line-height:18px;color:#8A8A90;word-break:break-all">¿El botón no funciona? Copia este link en tu navegador:<br><span style="color:#0B0B0C">${url}</span></p>`;
+  },
+  note(icon,strong,text){
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F7F7F4;border:1px solid #E6E6E1;border-radius:12px"><tr>
+<td width="56" align="center" valign="middle" style="padding:16px 0 16px 16px;font-size:24px;line-height:28px">${icon}</td>
+<td valign="middle" style="padding:16px 18px 16px 12px;${GL_F}font-size:14px;line-height:21px;color:#3A3A40"><strong style="color:#0B0B0C">${strong}</strong><br>${text}</td></tr></table>`;
+  },
+
+  // ── 1) Falta información / documentos extras
+  faltaInfo({nombre,link}){
+    const item=(n,title,sub)=>`<tr><td width="30" valign="top" style="padding:0 0 16px"><div style="width:26px;height:26px;background:#0B0B0C;border-radius:6px;text-align:center;${GL_F}font-size:13px;line-height:26px;font-weight:700;color:#FFFFFF">${n}</div></td><td valign="top" style="padding:2px 0 16px 12px;${GL_F}font-size:15px;line-height:22px;color:#0B0B0C"><strong>${title}</strong>${sub?`<br><span style="color:#6B6B72;font-size:14px">${sub}</span>`:""}</td></tr>`;
+    const box=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F7F7F4;border:1px solid #E6E6E1;border-radius:12px"><tr><td style="padding:24px 24px 8px">
+<p style="margin:0 0 18px;${GL_F}font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:#0B0B0C">Necesitamos que nos envíes</p>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${item(1,"Pantallazo de tu perfil de Instagram","")}${item(2,"Foto de tu carnet","Para corroborar que eres tú y que nadie está usando tu identidad.")}</table></td></tr></table>`;
+    return glMail.shell("#0B0B0C",
+      glMail.row(glMail.badge("Aprobación pendiente","warn"),"36px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#128075;`)+glMail.p("No pudimos concretar tu aprobación. ¿Nos podrías ayudar con lo siguiente?"),"20px 48px 0")+
+      glMail.row(box,"28px 48px 0")+
+      glMail.row(`<p style="margin:0 0 20px;${GL_F}font-size:15px;line-height:24px;color:#3A3A40">Puedes subir los documentos directamente desde aquí:</p>`+glMail.button(link,"&#128206;&nbsp; Subir documentos",true),"28px 48px 0")+
+      glMail.row(glMail.p("¡Con eso ya avanzamos en tu aprobación! Muchas gracias &#128591;",15),"24px 48px 0")+
+      glMail.row(glMail.fallback(link),"28px 48px 40px"));
+  },
+
+  // ── 2) Aprobado Close Friends (link de compra)
+  aprobado({nombre,mensaje,tipo,link}){
+    return glMail.shell("#16C46B",
+      glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada."),"20px 48px 0")+
+      (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"28px 48px 0"):"")+
+      glMail.row(glMail.button(link,`Comprar entrada${tipo?` (${glEsc(tipo)})`:""} &rarr;`)+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
+      glMail.row(glMail.fallback(link),"28px 48px 40px"));
+  },
+
+  // ── 3) Entrada confirmada (después de pagar)
+  confirmada({nombre,mensaje,codigo}){
+    return glMail.shell("#16C46B",
+      glMail.row(`<div style="font-size:52px;line-height:56px">&#127881;</div><div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>`+glMail.badge("Pago recibido"),"40px 48px 0",true)+
+      glMail.row(glMail.h1(`¡${glEsc(nombre)}, tu entrada está confirmada!`)+glMail.p(mensaje||"Ya puedes acercarte a nuestra acreditación el día del evento. ¡Nos vemos!"),"18px 48px 0",true)+
+      glMail.row(glMail.ticket("Código de entrada",glEsc(codigo),"Muestra este código en la puerta del evento",true),"30px 48px 0")+
+      glMail.row(glMail.note("&#129706;","Recuerda llegar con tu carnet de identidad vigente.","Sin carnet no podemos validar tu entrada."),"24px 48px 44px"));
+  },
+
+  // ── 4) Entrada reservada por una amiga
+  amigaReservada({nombre,evento,link}){
+    return glMail.shell("#16C46B",
+      glMail.row(glMail.badge("Entrada reservada"),"36px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(`Tu amiga te reservó una entrada para <strong style="color:#0B0B0C">${glEsc(evento)}</strong>. Completa tu pago para confirmar tu lugar.`),"20px 48px 0")+
+      glMail.row(glMail.button(link,"Pagar mi entrada &rarr;")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
+      glMail.row(glMail.fallback(link),"28px 48px 40px"));
+  }
+};
+
 // Templates
 const emailTemplates = {
 
@@ -7676,19 +7781,7 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
       // Enviar email a amiga con su link de pago
       const amigaLink = `${CF_APP_URL}?cf_buy=${amigaToken}`;
       try{
-        await sendEmail(amiga2.email,`¡Tienes una entrada reservada — ${ev.name||"Close Friends"}!`,`
-          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-            <div style="background:#fff;border-radius:14px;padding:32px">
-              <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
-              <h2 style="margin-top:20px">¡Hola ${amiga2.nombre}! 🌸</h2>
-              <p style="color:#555;margin-top:12px">Tu amiga te reservó una entrada para <strong>${ev.name||"Close Friends"}</strong>.</p>
-              <p style="color:#555;margin-top:8px">Completa tu pago para confirmar tu lugar:</p>
-              <div style="text-align:center;margin:24px 0">
-                <a href="${amigaLink}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Pagar mi entrada →</a>
-              </div>
-              <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
-            </div>
-          </div>`);
+        await sendEmail(amiga2.email,`¡Tienes una entrada reservada — ${ev.name||"Close Friends"}!`,glMail.amigaReservada({nombre:amiga2.nombre,evento:ev.name||"Close Friends",link:amigaLink}));
       }catch(emailErr){ console.warn("Email amiga no enviado:",emailErr); }
 
       mostrarPagoCF(ordId);
@@ -7905,18 +7998,7 @@ window.cfReenviarCorreo=async(id)=>{
   if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
   const link=`${CF_APP_URL}?cf_buy=${token}`;
   try{
-    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
-      <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-        <div style="background:#fff;border-radius:14px;padding:32px">
-          <h1 style="font-size:22px;letter-spacing:4px;text-align:center">Guestly</h1>
-          <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
-          <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
-          <div style="text-align:center;margin:24px 0">
-            <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada →</a>
-          </div>
-          <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
-        </div>
-      </div>`);
+    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link}));
     toast(`📧 Correo reenviado a ${p.email}`,"ok");
     await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
   }catch(e){
@@ -8137,19 +8219,7 @@ VIEWS.cfPostulantes = async()=>{
       const link=`${CF_APP_URL}?cf_buy=${token}`;
       const tipoTexto=tipoEntrada||p.tipo_entrada||"";
       try{
-        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,`
-          <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-            <div style="background:#fff;border-radius:14px;padding:32px">
-              <div style="text-align:center">${GL_EMAIL_LOGO}</div>
-              <h2 style="margin-top:20px">¡Hola ${p.nombre}! 🌸</h2>
-              <p style="color:#555;margin-top:12px">${cfg.msg_aprobacion||"¡Fuiste aprobada!"}</p>
-              ${tipoTexto?`<div style="background:#fdf2f8;border:1px solid #fbcfe8;border-radius:10px;padding:14px;margin:16px 0;text-align:center"><div style="font-size:12px;color:#9d174d;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Tu entrada asignada</div><div style="font-size:20px;font-weight:700;color:#EC4899">${tipoTexto}</div></div>`:""}
-              <div style="text-align:center;margin:24px 0">
-                <a href="${link}" style="background:#EC4899;color:#fff;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">Comprar entrada${tipoTexto?` (${tipoTexto})`:""} →</a>
-              </div>
-              <p style="font-size:12px;color:#aaa;text-align:center">Este link es personal e intransferible.</p>
-            </div>
-          </div>`);
+        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link}));
         toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Email enviado.`,"ok");
       }catch(e){
         toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
@@ -8175,25 +8245,7 @@ VIEWS.cfPostulantes = async()=>{
     await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"falta_info",cf_upload_token:uploadToken});
     p.estado="falta_info"; p.cf_upload_token=uploadToken;
     const uploadLink=`${CF_APP_URL}?cf_upload=${uploadToken}`;
-    const emailOk = await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,`
-        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-          <div style="background:#fff;border-radius:14px;padding:32px">
-            <div style="text-align:center">${GL_EMAIL_LOGO}</div>
-            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 👋</h2>
-            <p style="color:#555;margin-top:12px">No pudimos concretar tu aprobación, ¿nos podrías ayudar con lo siguiente?</p>
-            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px;margin:20px 0">
-              <p style="color:#4c1d95;font-weight:600;margin-bottom:10px">Necesitamos que nos envíes:</p>
-              <p style="color:#555;margin:6px 0">1) Pantallazo de tu perfil de Instagram</p>
-              <p style="color:#555;margin:6px 0">2) Foto de tu carnet (para corroborar que eres tú y no están usando la identidad de otra persona)</p>
-            </div>
-            <p style="color:#555">Puedes subir los documentos directamente haciendo clic en el botón:</p>
-            <div style="text-align:center;margin:24px 0">
-              <a href="${uploadLink}" style="display:inline-block;background:#7c3aed;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:15px">📎 Subir documentos</a>
-            </div>
-            <p style="color:#555">¡Con eso ya avanzamos en tu aprobación! Muchas gracias 🙏</p>
-            <p style="font-size:11px;color:#aaa;margin-top:20px;text-align:center">O copia este link: ${uploadLink}</p>
-          </div>
-        </div>`);
+    const emailOk = await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,glMail.faltaInfo({nombre:p.nombre,link:uploadLink}));
     if(emailOk){
       toast(`📋 Falta info enviada a ${p.nombre}`,"ok");
     } else {
@@ -8463,20 +8515,7 @@ VIEWS.cfConciliacion = async()=>{
         const ev=D.eventos.find(e=>e.id===ord.evento_id);
         if(post&&ev){
           const cfg=getCFConfig(ord.evento_id);
-          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,`
-            <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
-              <div style="background:#fff;border-radius:14px;padding:32px;text-align:center">
-                <div>${GL_EMAIL_LOGO}</div>
-                <div style="font-size:48px;margin:20px 0">🎉</div>
-                <h2>¡${post.nombre}, tu entrada está confirmada!</h2>
-                <p style="color:#555;margin:12px 0">${cfg.msg_confirmacion||"¡Te esperamos!"}</p>
-                <div style="background:#f0fdf4;border-radius:10px;padding:16px;margin:20px 0">
-                  <div style="font-size:12px;color:#888">Código de entrada</div>
-                  <div style="font-size:24px;font-weight:700;color:#16a34a;letter-spacing:2px">${ord.codigo}</div>
-                </div>
-                <p style="font-size:12px;color:#aaa">Muestra este código en la puerta del evento.</p>
-              </div>
-            </div>`);
+          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo}));
           toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
         } else {
           toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
