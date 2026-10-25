@@ -8029,15 +8029,16 @@ VIEWS.cfPostulantes = async()=>{
             <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
             <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
             <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
-            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
+            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":"amber")}</td>
             <td style="padding:8px">
-              ${p.estado==="pendiente"?`
-                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
-                <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>
-              `:p.estado==="aprobado"?`
+              ${p.estado==="aprobado"?`
                 <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px">${p.tipo_entrada||""}</div>
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
-              `:`<button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar igual</button>`}
+              `:`
+                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
+                ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
+                <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
+              `}
             </td>
           </tr>`).join(""):`<tr><td colspan="7" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
         </tbody>
@@ -8093,6 +8094,36 @@ VIEWS.cfPostulantes = async()=>{
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="rechazado";}
     toast("Rechazada","warn"); cfRenderBandeja(currentCfEvId,"pendiente");
     await log("cf_rechazar","cf_postulantes",id,`Rechazada postulante. Motivo: ${motivo}`);
+  };
+
+  window.cfPedirInfo=async(id)=>{
+    const p=(D.cf_postulantes||[]).find(x=>x.id===id);
+    if(!p)return;
+    const ev=D.eventos.find(e=>e.id===p.evento_id);
+    await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"falta_info"});
+    p.estado="falta_info";
+    try{
+      await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,`
+        <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+          <div style="background:#fff;border-radius:14px;padding:32px">
+            <div style="text-align:center">${GL_EMAIL_LOGO}</div>
+            <h2 style="margin-top:20px">¡Hola ${p.nombre}! 👋</h2>
+            <p style="color:#555;margin-top:12px">No pudimos concretar tu aprobación, ¿nos podrías ayudar con lo siguiente?</p>
+            <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:16px;margin:20px 0">
+              <p style="color:#4c1d95;font-weight:600;margin-bottom:10px">Necesitamos que nos envíes:</p>
+              <p style="color:#555;margin:6px 0">1) Pantallazo de tu perfil de Instagram</p>
+              <p style="color:#555;margin:6px 0">2) Foto de tu carnet (para corroborar que eres tú y no están usando la identidad de otra persona)</p>
+            </div>
+            <p style="color:#555">Con eso ya avanzamos en tu aprobación. ¡Muchas gracias!</p>
+            <p style="font-size:12px;color:#aaa;margin-top:20px;text-align:center">Responde este correo con los documentos solicitados.</p>
+          </div>
+        </div>`);
+      toast(`📋 Falta info enviada a ${p.nombre}`,"ok");
+    }catch(e){
+      toast(`📋 Estado actualizado (email pendiente de configurar)`,"warn");
+    }
+    cfRenderBandeja(currentCfEvId, document.querySelector(".btn-primary[onclick*='falta_info']") ? "falta_info" : "pendiente");
+    await log("cf_falta_info","cf_postulantes",id,`Solicitada más información a ${p.nombre}`);
   };
 
   window.cfAprobarMasivo=async(evId)=>{
