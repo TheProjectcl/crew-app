@@ -688,9 +688,15 @@ async function sendEmail(to, subject, html){
       },
       body: JSON.stringify({to, subject, html})
     });
-    const data = await r.json();
-    if(!r.ok) throw new Error(data.error||data.message||JSON.stringify(data));
-    console.log("Email enviado a",to);
+    let data;
+    try{ data=await r.json(); }catch{ data={}; }
+    if(!r.ok){
+      const errMsg = data.error||data.message||JSON.stringify(data)||`HTTP ${r.status}`;
+      console.error("Email error HTTP",r.status,"→",errMsg);
+      toast("⚠️ Email no enviado: "+errMsg,"warn");
+      return false;
+    }
+    console.log("Email enviado a",to,"→",JSON.stringify(data));
     return true;
   }catch(e){
     console.error("Email error:",e.message);
@@ -8119,8 +8125,7 @@ VIEWS.cfPostulantes = async()=>{
     await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"falta_info",cf_upload_token:uploadToken});
     p.estado="falta_info"; p.cf_upload_token=uploadToken;
     const uploadLink=`${CF_APP_URL}?cf_upload=${uploadToken}`;
-    try{
-      await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,`
+    const emailOk = await sendEmail(p.email,`Necesitamos más información — Close Friends ${ev?.name||""}`,`
         <div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
           <div style="background:#fff;border-radius:14px;padding:32px">
             <div style="text-align:center">${GL_EMAIL_LOGO}</div>
@@ -8139,11 +8144,12 @@ VIEWS.cfPostulantes = async()=>{
             <p style="font-size:11px;color:#aaa;margin-top:20px;text-align:center">O copia este link: ${uploadLink}</p>
           </div>
         </div>`);
+    if(emailOk){
       toast(`📋 Falta info enviada a ${p.nombre}`,"ok");
-    }catch(e){
-      toast(`📋 Estado actualizado (link: ${uploadLink})`,"warn");
+    } else {
+      toast(`⚠️ Estado actualizado pero correo no enviado. Link: ${uploadLink}`,"warn");
     }
-    cfRenderBandeja(currentCfEvId,"pendiente");
+    cfRenderBandeja(currentCfEvId,"falta_info");
     await log("cf_falta_info","cf_postulantes",id,`Solicitada más información a ${p.nombre}`);
   };
 
