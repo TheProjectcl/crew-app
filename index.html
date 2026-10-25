@@ -8055,15 +8055,17 @@ VIEWS.cfPostulantes = async()=>{
             </td>
             <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
             <td style="padding:8px">
+              <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
               ${p.estado==="aprobado"?`
-                <div style="font-size:11px;color:var(--ink-3);margin-bottom:4px">${p.tipo_entrada||""}</div>
+                <div style="font-size:11px;color:var(--ink-3);margin-right:4px">${p.tipo_entrada||""}</div>
                 <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
               `:`
-                <button class="btn btn-success" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
-                ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px;margin-right:4px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
+                <button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
+                ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
                 <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
-                <button class="btn" style="font-size:11px;padding:3px 8px;margin-left:4px;background:#ef4444;color:#fff;border:none" onclick="cfEliminarPostulante('${p.id}')">🗑</button>
               `}
+              <button class="btn" style="font-size:11px;padding:3px 8px;background:#fff;color:#ef4444;border:1px solid #fca5a5;font-weight:700" onclick="cfEliminarPostulante('${p.id}')" title="Eliminar postulante">✕</button>
+              </div>
             </td>
           </tr>`).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
         </tbody>
@@ -8793,19 +8795,26 @@ async function mostrarUploadCF(uploadToken){
 window.cfEliminarPostulante=async(id)=>{
   const p=(D.cf_postulantes||[]).find(x=>x.id===id);
   if(!p)return;
-  const confirmar=confirm(`¿Eliminar a ${p.nombre} ${p.apellido} de la inscripción?\n\nEsto eliminará su registro y podrá inscribirse nuevamente.`);
+  // Buscar si tiene orden con pago
+  const orden=(D.cf_ordenes||[]).find(o=>o.postulante_id===id);
+  const tienePago=orden&&orden.monto_total>0&&["pagado","conciliado"].includes(orden.estado);
+  const montoStr=tienePago?`$${(orden.monto_total||0).toLocaleString("es-CL")}`:"";
+  const msgPago=tienePago?`\n\n⚠️ Esta persona tiene un pago registrado de ${montoStr}. Al eliminarla deberás realizar la devolución de forma manual.`:"";
+  const confirmar=confirm(`¿Estás seguro que quieres eliminar a ${p.nombre} ${p.apellido}?\n\nSu registro será borrado y podrá inscribirse nuevamente.${msgPago}`);
   if(!confirmar)return;
   try{
+    if(orden) await sbDelete("cf_ordenes",`id=eq.${orden.id}`);
     await sbDelete("cf_postulantes",`id=eq.${id}`);
     D.cf_postulantes=(D.cf_postulantes||[]).filter(x=>x.id!==id);
-    toast(`🗑 ${p.nombre} eliminado/a`,"ok");
-    cfRenderBandeja(currentCfEvId,_cfFiltroActual||"pendiente");
-    await log("cf_eliminar","cf_postulantes",id,`Eliminado: ${p.nombre} ${p.apellido} (${p.email})`);
+    if(orden) D.cf_ordenes=(D.cf_ordenes||[]).filter(x=>x.id!==orden.id);
+    toast(`✓ ${p.nombre} eliminado/a${tienePago?` — recuerda devolver ${montoStr}`:""}`,tienePago?"warn":"ok");
+    cfRenderBandeja(currentCfEvId,_cfFiltroActual||"todos");
+    await log("cf_eliminar","cf_postulantes",id,`Eliminado: ${p.nombre} ${p.apellido} (${p.email})${tienePago?` — tenía pago de ${montoStr}`:""}`);
   }catch(e){ toast("Error al eliminar: "+e.message,"error"); }
 };
-let _cfFiltroActual="pendiente";
+let _cfFiltroActual="todos";
 const _origCfRenderBandeja=window.cfRenderBandeja;
-window.cfRenderBandeja=(evId,filtro)=>{ _cfFiltroActual=filtro||"pendiente"; _origCfRenderBandeja(evId,filtro); };
+window.cfRenderBandeja=(evId,filtro)=>{ _cfFiltroActual=filtro||"todos"; _origCfRenderBandeja(evId,filtro); };
 
 // ── Vista: Base de Datos ──
 VIEWS["base-datos"]=async()=>{
