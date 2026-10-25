@@ -8009,7 +8009,7 @@ VIEWS.cfPostulantes = async()=>{
   const renderPostulantes = (evId, filtro="todos", busq="")=>{
     const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
     let filtrados = filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
-    if(busq){const q=busq.toLowerCase();filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q)||(p.rut||"").includes(q)||(p.email||"").toLowerCase().includes(q));}
+    if(busq){const q=busq.toLowerCase().replace(/\D/g,"_wtmp_");const qNum=busq.replace(/\D/g,"");filtrados=filtrados.filter(p=>{const ql=busq.toLowerCase();return (p.nombre||"").toLowerCase().includes(ql)||(p.apellido||"").toLowerCase().includes(ql)||(p.instagram||"").toLowerCase().includes(ql)||(p.rut||"").replace(/\./g,"").toLowerCase().includes(ql.replace(/\./g,""))||(p.email||"").toLowerCase().includes(ql)||(qNum.length>=4&&(p.whatsapp||"").replace(/\D/g,"").includes(qNum));});}
     const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos").length;
     const faltaInfoCount = posts.filter(p=>p.estado==="falta_info").length;
     const filtrados2 = filtrados;
@@ -8023,7 +8023,7 @@ VIEWS.cfPostulantes = async()=>{
     return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
         ${tabs.map(t=>`<button class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfRenderBandeja('${evId}','${t.key}')">${t.label}</button>`).join("")}
-        <input id="cf-busq" class="form-input" style="max-width:200px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Buscar..." value="${busq}" oninput="cfRenderBandeja('${evId}','${filtro}',this.value)">
+        <input id="cf-busq" class="form-input" style="max-width:240px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email, RUT, WhatsApp..." value="${busq}" oninput="cfRenderBandeja('${evId}','${filtro}',this.value)">
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
       </div>
       <div style="overflow-x:auto">
@@ -8261,12 +8261,12 @@ VIEWS.cfPostulantes = async()=>{
       </select>
     </div>
     <div id="cf-link-panel">${currentCfEvId?renderLinkPanel(currentCfEvId):""}</div>
-    <div class="card" id="cf-bandeja">${currentCfEvId?renderPostulantes(currentCfEvId,"pendiente"):"<p style='color:var(--ink-4)'>Sin eventos activos.</p>"}</div>`;
+    <div class="card" id="cf-bandeja">${currentCfEvId?renderPostulantes(currentCfEvId,"todos"):"<p style='color:var(--ink-4)'>Sin eventos activos.</p>"}</div>`;
 
   window.cfCambiarEvento=(evId)=>{
     currentCfEvId=evId;
     $("cf-link-panel").innerHTML=renderLinkPanel(evId);
-    cfRenderBandeja(evId,"pendiente");
+    cfRenderBandeja(evId,"todos");
   };
 
   window.cfCopiarReg=(evId)=>{
