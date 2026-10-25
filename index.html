@@ -8000,7 +8000,8 @@ VIEWS.cfPostulantes = async()=>{
   const renderPostulantes = (evId, filtro="todos")=>{
     const posts = (D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
     const filtrados = filtro==="todos"?posts:posts.filter(p=>p.estado===filtro);
-    const pendCount = posts.filter(p=>p.estado==="pendiente").length;
+    const pendCount = posts.filter(p=>p.estado==="pendiente"||p.estado==="falta_info").length;
+    const filtrados2 = filtro==="pendiente" ? posts.filter(p=>p.estado==="pendiente"||p.estado==="falta_info") : filtrados;
     return `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
         ${["todos","pendiente","aprobado","rechazado"].map(f=>`<button class="btn${filtro===f?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="cfRenderBandeja('${evId}','${f}')">${f==="todos"?"Todos":f==="pendiente"?`Pendientes (${pendCount})`:f==="aprobado"?"Aprobados":"Rechazados"}</button>`).join("")}
@@ -8019,7 +8020,7 @@ VIEWS.cfPostulantes = async()=>{
           <th style="padding:8px;text-align:left">Acciones</th>
         </tr></thead>
         <tbody>
-        ${filtrados.length?filtrados.map(p=>`
+        ${filtrados2.length?filtrados2.map(p=>`
           <tr style="border-bottom:1px solid var(--line)">
             <td style="padding:8px">${p.estado==="pendiente"?`<input type="checkbox" class="cf-sel" value="${p.id}">`:`—`}</td>
             <td style="padding:8px">
@@ -8046,7 +8047,7 @@ VIEWS.cfPostulantes = async()=>{
                 <button class="btn" style="font-size:11px;padding:3px 8px;background:#7c3aed;color:#fff;border:none" onclick="cfPedirInfo('${p.id}')">📋 Falta info</button>
               `}
             </td>
-          </tr>`).join(""):`<tr><td colspan="7" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
+          </tr>`).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin postulantes.</td></tr>`}
         </tbody>
       </table>
       </div>`;
@@ -8754,8 +8755,8 @@ async function mostrarUploadCF(uploadToken){
       const igUrl=await uploadFile(igFile,`${post.evento_id}/${post.id}/instagram`);
       const carnetUrl=await uploadFile(carnetFile,`${post.evento_id}/${post.id}/carnet`);
 
-      // Guardar URLs en el postulante
-      await sbPatch("cf_postulantes",`id=eq.${post.id}`,{doc_instagram:igUrl,doc_carnet:carnetUrl});
+      // Guardar URLs en el postulante y volver a pendiente para revisión
+      await sbPatch("cf_postulantes",`id=eq.${post.id}`,{doc_instagram:igUrl,doc_carnet:carnetUrl,estado:"pendiente"});
 
       // Mostrar éxito
       document.getElementById("upl-content").innerHTML=`
