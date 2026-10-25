@@ -1077,6 +1077,7 @@ async function intentarLogin(email,pass,esRestauracion){
     else if(role==="ambassador_chief") initJefeApp();
     else if(role==="embajador") initEmbApp();
     else if(role==="comprador") initCompradorApp();
+    else if(role==="cumpleanero") initBdayApp();
 
     iniciarRealtime();
     return true;
@@ -9007,6 +9008,787 @@ VIEWS["base-datos"]=async()=>{
   };
   render();
 };
+
+// ════════════════════════════════════════════════════════════════════
+// MÓDULO CUMPLEAÑOS — tablas: bday_beneficios, bday_cumpleaneros, bday_invitados
+// ════════════════════════════════════════════════════════════════════
+
+// ── Helpers ──
+function bdayPassInicial(nombre, apellido, fechaNac){
+  // fturu10  → 1ª letra nombre + apellido + día nacimiento, minúscula
+  const n=(nombre||"").trim()[0]||"";
+  const a=(apellido||"").trim().toLowerCase().replace(/\s+/g,"");
+  const d=String(new Date(fechaNac).getUTCDate());
+  return (n+a+d).toLowerCase();
+}
+
+function bdayTokenLink(token){ return `${APP_URL}?bday_inv=${token}`; }
+
+const GL_POWERED = `<div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e8e8e8"><span style="font-size:11px;color:#bbb;letter-spacing:.5px">Powered by <a href="https://guestly.cl" style="color:#534AB7;text-decoration:none;font-weight:600">Guestly.cl</a></span></div>`;
+
+function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, productoraNombre, linkPanel, linkInvitados){
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+    <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+      <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
+      <div style="text-align:center;font-size:48px;margin-bottom:8px">🎂</div>
+      <h2 style="font-size:20px;font-weight:700;text-align:center;color:#1a1a1a;margin-bottom:4px">¡Feliz cumpleaños, ${nombre}!</h2>
+      <p style="text-align:center;color:#666;font-size:14px;margin-bottom:20px">Te celebrarás con <strong>${productoraNombre}</strong> en <strong>${eventoNombre}</strong> 🎉</p>
+      <div style="background:#f0edff;border-radius:10px;padding:16px;margin:16px 0">
+        <p style="font-size:13px;font-weight:600;color:#534AB7;margin-bottom:8px">Tus credenciales de acceso:</p>
+        <div style="margin-bottom:6px"><span style="font-size:12px;color:#888">Email:</span> <strong>${email}</strong></div>
+        <div><span style="font-size:12px;color:#888">Contraseña inicial:</span> <strong style="font-family:monospace;font-size:15px">${pass}</strong></div>
+      </div>
+      <p style="color:#555;font-size:13px;line-height:1.6">Al ingresar podrás:<br>
+        🎟 Ver tu beneficio y cupos<br>
+        👥 Invitar a tus amigos — con tu link personal<br>
+        ✅ Aprobar o rechazar a quienes se inscriban<br>
+        ⏰ Modificar tu lista hasta la hora de cierre</p>
+      <div style="text-align:center;margin-top:20px">
+        <a href="${linkPanel}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Ingresar a mi panel 🎂</a>
+      </div>
+      <p style="font-size:11px;color:#aaa;text-align:center;margin-top:16px">Al ingresar te pediremos que cambies tu contraseña.</p>
+      ${GL_POWERED}
+    </div>
+  </div>`;
+}
+
+function emailBdayInvitacion(nombreCumple, eventoNombre, productoraNombre, linkInscripcion, horaCierre){
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+    <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+      <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
+      <div style="text-align:center;font-size:48px;margin-bottom:8px">🥳</div>
+      <h2 style="font-size:20px;font-weight:700;text-align:center;color:#1a1a1a;margin-bottom:4px">¡Te invitaron!</h2>
+      <p style="text-align:center;color:#666;font-size:14px;margin-bottom:20px"><strong>${nombreCumple}</strong> te invita a su cumpleaños en <strong>${eventoNombre}</strong> — ${productoraNombre}</p>
+      <p style="color:#555;font-size:13px;line-height:1.6;text-align:center">Inscríbete antes de las <strong>${horaCierre}</strong> para quedar en la lista 🎉</p>
+      <div style="text-align:center;margin-top:20px">
+        <a href="${linkInscripcion}" style="background:#ec4899;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">¡Me apunto! 🎂</a>
+      </div>
+      ${GL_POWERED}
+    </div>
+  </div>`;
+}
+
+function emailBdayAprobado(nombreInv, nombreCumple, eventoNombre, productoraNombre){
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+    <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+      <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
+      <div style="text-align:center;font-size:48px;margin-bottom:8px">✅</div>
+      <h2 style="font-size:18px;font-weight:700;text-align:center;color:#1a1a1a">¡Quedaste en la lista!</h2>
+      <p style="color:#555;font-size:14px;line-height:1.6;text-align:center;margin-top:12px">Hola <strong>${nombreInv}</strong>, <strong>${nombreCumple}</strong> te aprobó para su cumpleaños en <strong>${eventoNombre}</strong> — ${productoraNombre} 🎉</p>
+      <div style="background:#dcfce7;border-radius:10px;padding:14px;margin:20px 0;text-align:center">
+        <p style="font-size:14px;font-weight:600;color:#166534;margin:0">Preséntate en puerta el día del evento con tu nombre completo.</p>
+      </div>
+      ${GL_POWERED}
+    </div>
+  </div>`;
+}
+
+// ── Cargar datos bday (lazy) ──
+async function loadBday(prodId){
+  const q = prodId?`productora_id=eq.${prodId}`:`order=id`;
+  const [beneficios, cumpleaneros, invitados] = await Promise.all([
+    sbGet("bday_beneficios", q),
+    sbGet("bday_cumpleaneros", q+(prodId?"&order=created_at.desc":"")),
+    sbGet("bday_invitados", "order=created_at.desc&limit=5000"),
+  ]);
+  D.bday_beneficios  = beneficios||[];
+  D.bday_cumpleaneros = cumpleaneros||[];
+  D.bday_invitados   = invitados||[];
+}
+
+// ── Sidebar CF: agregar sección Cumpleaños ──
+const _origBuildSidebarBday = buildSidebar;
+buildSidebar = function(){
+  _origBuildSidebarBday();
+  const nav=$("sidebar-nav");
+  if(!nav)return;
+  const role=CU?.role;
+  if(!["superadmin","owner","coordinator"].includes(role))return;
+  // Agrega sección Cumpleaños al nav si no existe ya
+  if(!nav.innerHTML.includes("data-v=\"bday-cumpleaneros\"")){
+    nav.innerHTML+=`
+      <div class="nav-sec" style="margin-top:8px">Cumpleaños</div>
+      <div class="nav-item" data-v="bday-cumpleaneros" onclick="goView('bday-cumpleaneros')">${NAV_ICONS["users"]||"🎂"}<span>Cumpleañeros</span></div>
+      <div class="nav-item" data-v="bday-beneficios" onclick="goView('bday-beneficios')">${NAV_ICONS["gift"]||"🎁"}<span>Beneficios</span></div>`;
+    // Re-marcar activo si aplica
+    document.querySelectorAll(".nav-item").forEach(n=>{
+      if(n.dataset.v===CURRENT_VIEW) n.classList.add("active");
+    });
+  }
+};
+
+// ── VIEWS ──
+
+VIEWS["bday-beneficios"] = async()=>{
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  await loadBday(prodId);
+  const bens = D.bday_beneficios||[];
+  const mc=$("main-content");if(!mc)return;
+
+  const renderBens=()=>{
+    mc.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:22px;font-weight:700;margin:0">🎁 Beneficios Cumpleaños</h1>
+        <button class="btn btn-primary" onclick="bdayNuevoBeneficio()">+ Nuevo beneficio</button>
+      </div>
+      ${!bens.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">No hay beneficios creados aún. Crea el primero para empezar.</div>`:""}
+      <div style="display:grid;gap:14px">
+        ${bens.map(b=>`
+          <div class="card" style="padding:18px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+              <div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:6px">🎂 ${b.nombre}</div>
+                <div style="font-size:12px;color:var(--ink-3);display:flex;flex-wrap:wrap;gap:8px">
+                  <span>👥 Hasta ${b.max_invitados} invitados</span>
+                  <span>🎟 ${b.covers_cumple||0} cover(s) cumpleañero</span>
+                  ${b.covers_adicionales?`<span>➕ ${b.covers_adicionales} covers adicionales</span>`:""}
+                  ${b.precio_invitado_h||b.precio_invitado_m?`<span>💰 H: $${(b.precio_invitado_h||0).toLocaleString("es-CL")} / M: $${(b.precio_invitado_m||0).toLocaleString("es-CL")}</span>`:`<span>💰 Entrada gratis invitados</span>`}
+                  ${b.hora_validez?`<span>⏰ Válida hasta ${b.hora_validez}</span>`:""}
+                  ${b.hora_cierre?`<span>🔒 Cierre lista: ${b.hora_cierre}</span>`:""}
+                  ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: ${b.premio_descripcion||"—"}</span>`:""}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-shrink:0">
+                <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayEditarBeneficio('${b.id}')">✏️ Editar</button>
+                <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarBeneficio('${b.id}')">✕</button>
+              </div>
+            </div>
+          </div>`).join("")}
+      </div>`;
+  };
+  renderBens();
+
+  window.bdayNuevoBeneficio=()=>bdayFormBeneficio(null,prodId,renderBens);
+  window.bdayEditarBeneficio=(id)=>bdayFormBeneficio(id,prodId,renderBens);
+  window.bdayEliminarBeneficio=async(id)=>{
+    if(!confirm("¿Eliminar este beneficio?"))return;
+    await sbDelete("bday_beneficios",`id=eq.${id}`);
+    D.bday_beneficios=D.bday_beneficios.filter(b=>b.id!==id);
+    renderBens();toast("Beneficio eliminado","warn");
+  };
+};
+
+function bdayFormBeneficio(id, prodId, cb){
+  const b = id?(D.bday_beneficios||[]).find(x=>x.id===id):null;
+  openModal(b?"Editar beneficio":"Nuevo beneficio",`
+    <div style="display:grid;gap:10px">
+      <label class="form-label">Nombre del beneficio</label>
+      <input class="form-input" id="bb-nom" value="${b?.nombre||""}" placeholder="Ej: Cumpleaños Halloween 1">
+      <div class="form-row">
+        <div><label class="form-label">Máx. invitados</label><input class="form-input" id="bb-maxinv" type="number" min="1" value="${b?.max_invitados||20}"></div>
+        <div><label class="form-label">Covers cumpleañero</label><input class="form-input" id="bb-covc" type="number" min="0" value="${b?.covers_cumple||1}"></div>
+      </div>
+      <div class="form-row">
+        <div><label class="form-label">Covers adicionales</label><input class="form-input" id="bb-covad" type="number" min="0" value="${b?.covers_adicionales||0}"></div>
+        <div></div>
+      </div>
+      <p style="font-size:12px;font-weight:600;color:var(--ink-2);margin:4px 0 0">Precio entrada invitados (0 = gratis)</p>
+      <div class="form-row">
+        <div><label class="form-label">Hombre ($)</label><input class="form-input" id="bb-prh" type="number" min="0" value="${b?.precio_invitado_h||0}"></div>
+        <div><label class="form-label">Mujer ($)</label><input class="form-input" id="bb-prm" type="number" min="0" value="${b?.precio_invitado_m||0}"></div>
+      </div>
+      <div class="form-row">
+        <div><label class="form-label">Hora validez lista</label><input class="form-input" id="bb-hval" type="time" value="${b?.hora_validez||"23:30"}"></div>
+        <div><label class="form-label">Hora cierre lista</label><input class="form-input" id="bb-hcie" type="time" value="${b?.hora_cierre||"16:00"}"></div>
+      </div>
+      <p style="font-size:12px;font-weight:600;color:var(--ink-2);margin:4px 0 0">Premio condicional (opcional)</p>
+      <div class="form-row">
+        <div><label class="form-label">Mín. invitados que deben ingresar</label><input class="form-input" id="bb-pmin" type="number" min="0" value="${b?.premio_min_invitados||""}"></div>
+        <div><label class="form-label">Descripción del premio</label><input class="form-input" id="bb-pdesc" value="${b?.premio_descripcion||""}" placeholder="Ej: 1 botella espumante"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="bdayGuardarBeneficio('${id||""}','${prodId||""}')">Guardar</button>
+    </div>`);
+}
+
+window.bdayGuardarBeneficio=async(id,prodId)=>{
+  const nombre=($("bb-nom")?.value||"").trim();
+  if(!nombre)return toast("Nombre requerido","warn");
+  const data={
+    productora_id:prodId||null,
+    nombre,
+    max_invitados:parseInt($("bb-maxinv")?.value)||20,
+    covers_cumple:parseInt($("bb-covc")?.value)||1,
+    covers_adicionales:parseInt($("bb-covad")?.value)||0,
+    precio_invitado_h:parseInt($("bb-prh")?.value)||0,
+    precio_invitado_m:parseInt($("bb-prm")?.value)||0,
+    hora_validez:$("bb-hval")?.value||"23:30",
+    hora_cierre:$("bb-hcie")?.value||"16:00",
+    premio_min_invitados:parseInt($("bb-pmin")?.value)||null,
+    premio_descripcion:($("bb-pdesc")?.value||"").trim()||null,
+  };
+  if(id){
+    await sbPatch("bday_beneficios",`id=eq.${id}`,data);
+    const idx=D.bday_beneficios.findIndex(b=>b.id===id);
+    if(idx>=0)D.bday_beneficios[idx]={...D.bday_beneficios[idx],...data};
+    toast("Beneficio actualizado","ok");
+  }else{
+    const [nuevo]=await sbPost("bday_beneficios",[{...data,id:uid(),created_at:now()}]);
+    D.bday_beneficios.push(nuevo||{...data,id:uid()});
+    toast("Beneficio creado","ok");
+  }
+  closeModal();VIEWS["bday-beneficios"]();
+};
+
+// ── Vista principal: Cumpleañeros ──
+VIEWS["bday-cumpleaneros"] = async()=>{
+  const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  await loadBday(prodId);
+  const mc=$("main-content");if(!mc)return;
+
+  let _bdayEvFiltro="todos";
+  const evs=(D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId).filter(e=>e.status==="active");
+
+  const renderCumple=()=>{
+    const cumps=(D.bday_cumpleaneros||[]);
+    const filtrados=_bdayEvFiltro==="todos"?cumps:cumps.filter(c=>c.evento_id===_bdayEvFiltro);
+
+    mc.innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:22px;font-weight:700;margin:0">🎂 Cumpleañeros</h1>
+        <button class="btn btn-primary" onclick="bdayNuevoCumple()">+ Registrar cumpleañero</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <button class="btn${_bdayEvFiltro==="todos"?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="_bdayEvFiltro='todos';renderCumple()">Todos</button>
+        ${evs.map(e=>`<button class="btn${_bdayEvFiltro===e.id?" btn-primary":""}" style="font-size:12px;padding:5px 12px" onclick="_bdayEvFiltro='${e.id}';renderCumple()">${e.name}</button>`).join("")}
+        <input id="bday-busq" class="form-input" style="max-width:220px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email..." oninput="renderCumple()">
+      </div>
+      <div style="display:grid;gap:12px">
+        ${!filtrados.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:""}
+        ${filtrados.filter(c=>{
+          const q=($("bday-busq")?.value||"").toLowerCase().trim();
+          if(!q)return true;
+          return ((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q);
+        }).map(c=>{
+          const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+          const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+          const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id);
+          const aprobados=invs.filter(i=>i.estado==="aprobado").length;
+          const pendientes=invs.filter(i=>i.estado==="pendiente").length;
+          const maxInv=ben?.max_invitados||0;
+          return `
+            <div class="card" style="padding:18px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div>
+                  <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
+                  <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
+                  <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Invitados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
+                  ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:4px;display:inline-block">⚠ Datos incompletos</span>`}
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+                  <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
+                  <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
+                  <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
+                </div>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>`;
+
+    // re-bind closures after render
+    window.renderCumple=renderCumple;
+  };
+  renderCumple();
+  window.renderCumple=renderCumple;
+
+  window.bdayNuevoCumple=()=>bdayFormCumple(null,prodId,evs);
+  window.bdayCopiarLink=(token)=>{
+    navigator.clipboard.writeText(bdayTokenLink(token));
+    toast("Link copiado 🔗","ok");
+  };
+  window.bdayEliminarCumple=async(id)=>{
+    if(!confirm("¿Eliminar este cumpleañero y todos sus invitados?"))return;
+    await sbDelete("bday_invitados",`cumpleanero_id=eq.${id}`);
+    await sbDelete("bday_cumpleaneros",`id=eq.${id}`);
+    D.bday_cumpleaneros=D.bday_cumpleaneros.filter(c=>c.id!==id);
+    D.bday_invitados=D.bday_invitados.filter(i=>i.cumpleanero_id!==id);
+    renderCumple();toast("Eliminado","warn");
+  };
+  window.bdayVerInvitados=(cid)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);
+    const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);
+    const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===cid);
+    const aprobados=invs.filter(i=>i.estado==="aprobado").length;
+    openModal(`👥 Invitados de ${c?.nombre||""} ${c?.apellido||""}`,`
+      <div style="margin-bottom:12px;font-size:13px;color:var(--ink-3)">
+        Cupos: <strong>${aprobados}/${ben?.max_invitados||"?"}</strong> aprobados · ${invs.filter(i=>i.estado==="pendiente").length} pendientes
+      </div>
+      <div style="display:grid;gap:8px;max-height:400px;overflow-y:auto">
+        ${!invs.length?`<p style="color:var(--ink-4);text-align:center;padding:24px">Sin invitados aún.</p>`:""}
+        ${invs.map(inv=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;background:var(--line-2)">
+            <div>
+              <div style="font-weight:600;font-size:13px">${inv.nombre} ${inv.apellido} <span style="font-weight:400;color:var(--ink-4);font-size:11px">${inv.genero==="m"?"♂ H":"♀ M"}</span></div>
+              <div style="font-size:11px;color:var(--ink-4)">${inv.email||""} ${inv.instagram?`· @${inv.instagram}`:""}</div>
+            </div>
+            <div style="display:flex;gap:6px;align-items:center">
+              ${badge(inv.estado==="aprobado"?"Aprobado":inv.estado==="rechazado"?"Rechazado":"Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
+              ${inv.estado==="pendiente"?`
+                <button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="bdayAprobarInv('${inv.id}','${cid}')">✓</button>
+                <button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="bdayRechazarInv('${inv.id}','${cid}')">✕</button>
+              `:""}
+              <button class="btn" style="font-size:11px;padding:3px 8px;color:#ef4444;border-color:#fca5a5" onclick="bdayEliminarInv('${inv.id}','${cid}')">🗑</button>
+            </div>
+          </div>`).join("")}
+      </div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+  };
+  window.bdayAprobarInv=async(invId,cid)=>{
+    const inv=(D.bday_invitados||[]).find(i=>i.id===invId);
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);
+    const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);
+    const aprobados=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===cid&&i.estado==="aprobado").length;
+    if(aprobados>=(ben?.max_invitados||999)){return toast(`Cupo lleno (máx. ${ben.max_invitados})`,  "warn");}
+    await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"aprobado"});
+    if(inv){inv.estado="aprobado";}
+    // Correo al invitado
+    const ev=(D.eventos||[]).find(e=>e.id===c?.evento_id);
+    const prod=(D.productoras||[]).find(p=>p.id===c?.productora_id);
+    if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c?.nombre+" "+c?.apellido,ev?.name||"",prod?.nombre||"Guestly"));
+    toast("Invitado aprobado ✅","ok");closeModal();bdayVerInvitados(cid);
+  };
+  window.bdayRechazarInv=async(invId,cid)=>{
+    await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"rechazado"});
+    const inv=(D.bday_invitados||[]).find(i=>i.id===invId);
+    if(inv)inv.estado="rechazado";
+    toast("Invitado rechazado","warn");closeModal();bdayVerInvitados(cid);
+  };
+  window.bdayEliminarInv=async(invId,cid)=>{
+    await sbDelete("bday_invitados",`id=eq.${invId}`);
+    D.bday_invitados=D.bday_invitados.filter(i=>i.id!==invId);
+    toast("Eliminado","warn");closeModal();bdayVerInvitados(cid);
+  };
+};
+
+function bdayFormCumple(id, prodId, evs){
+  const c=id?(D.bday_cumpleaneros||[]).find(x=>x.id===id):null;
+  const bens=(D.bday_beneficios||[]).filter(b=>!prodId||b.productora_id===prodId);
+  openModal(c?"Editar cumpleañero":"Registrar cumpleañero",`
+    <div style="display:grid;gap:10px">
+      <div class="form-row">
+        <div><label class="form-label">Nombre</label><input class="form-input" id="bc-nom" value="${c?.nombre||""}" placeholder="Felipe"></div>
+        <div><label class="form-label">Apellido</label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
+      </div>
+      <div class="form-row">
+        <div><label class="form-label">Fecha de nacimiento</label><input class="form-input" id="bc-fnac" type="date" value="${c?.fecha_nacimiento||""}"></div>
+        <div><label class="form-label">Correo</label><input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com"></div>
+      </div>
+      <label class="form-label">Evento</label>
+      <select class="form-select" id="bc-ev">
+        ${evs.map(e=>`<option value="${e.id}"${c?.evento_id===e.id?" selected":""}>${e.name}${e.date?" — "+e.date:""}</option>`).join("")}
+      </select>
+      <label class="form-label">Beneficio asignado</label>
+      <select class="form-select" id="bc-ben">
+        <option value="">— Sin beneficio —</option>
+        ${bens.map(b=>`<option value="${b.id}"${c?.beneficio_id===b.id?" selected":""}>${b.nombre}</option>`).join("")}
+      </select>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="bdayGuardarCumple('${id||""}','${prodId||""}')">Guardar y enviar bienvenida</button>
+    </div>`);
+}
+
+window.bdayGuardarCumple=async(id,prodId)=>{
+  const nombre=($("bc-nom")?.value||"").trim();
+  const apellido=($("bc-ape")?.value||"").trim();
+  const fecha_nacimiento=$("bc-fnac")?.value||"";
+  const email=($("bc-email")?.value||"").trim().toLowerCase();
+  const evento_id=$("bc-ev")?.value||"";
+  const beneficio_id=$("bc-ben")?.value||null;
+  if(!nombre||!apellido||!email||!fecha_nacimiento||!evento_id) return toast("Completa todos los campos requeridos","warn");
+
+  // Validar contra bloqueados
+  const bloq=chequearBloqueo(nombre+" "+apellido,"",prodId);
+  if(bloq) return toast(`⚠️ ${nombre} ${apellido} está en lista de bloqueo`,"error");
+
+  const passInicial=bdayPassInicial(nombre,apellido,fecha_nacimiento);
+  const token=uid();
+  const ev=(D.eventos||[]).find(e=>e.id===evento_id);
+  const prod=(D.productoras||[]).find(p=>p.id===prodId);
+  const ben=(D.bday_beneficios||[]).find(b=>b.id===beneficio_id);
+
+  const data={
+    productora_id:prodId||null,
+    evento_id,
+    beneficio_id:beneficio_id||null,
+    nombre,apellido,
+    fecha_nacimiento,
+    email,
+    pass_hash:passInicial,  // texto plano para MVP; el usuario cambia en primer login
+    token_invitacion:token,
+    datos_completos:false,
+    created_at:now(),
+  };
+
+  let cumpleId;
+  if(id){
+    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,data);
+    cumpleId=id;
+    const idx=D.bday_cumpleaneros.findIndex(c=>c.id===id);
+    if(idx>=0) D.bday_cumpleaneros[idx]={...D.bday_cumpleaneros[idx],...data};
+    toast("Cumpleañero actualizado","ok");
+  }else{
+    cumpleId=uid();
+    const [nuevo]=await sbPost("bday_cumpleaneros",[{...data,id:cumpleId}]);
+    D.bday_cumpleaneros.push(nuevo||{...data,id:cumpleId});
+    toast("Cumpleañero registrado","ok");
+    // Agregar usuario con role cumpleanero
+    const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,evento_ids:[evento_id],puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true,created_at:now()};
+    await sbPost("users",[userBday]);
+    D.users.push(userBday);
+    // Correo bienvenida
+    const linkPanel=`${APP_URL}?bday_panel=${token}`;
+    const linkInv=bdayTokenLink(token);
+    await sendEmail(email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
+      emailBdayBienvenida(nombre,apellido,email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+  }
+  closeModal();
+  await log("bday_registro","bday_cumpleaneros",cumpleId,`Cumpleañero registrado: ${nombre} ${apellido} — ${ev?.name||""}`);
+  VIEWS["bday-cumpleaneros"]();
+};
+
+// ── Panel público: inscripción de invitados al cumpleaños ──
+async function mostrarPanelBdayInv(token){
+  const ESTILOS_CF_BASE = document.querySelector("style")?.textContent||"";
+  document.body.innerHTML=`<div id="bday-pub-screen" style="min-height:100vh;background:#f4f4f6;display:flex;align-items:center;justify-content:center;padding:24px;font-family:system-ui,sans-serif"></div>`;
+  const screen=document.getElementById("bday-pub-screen");
+  const show=h=>{screen.innerHTML=h;};
+
+  show(`<div style="text-align:center"><div style="font-size:32px">🎂</div><p style="color:#666;font-size:14px;margin-top:8px">Cargando...</p></div>`);
+
+  // Cargar cumpleañero por token
+  let cumps=[], invs=[], ev=null, ben=null, prod=null;
+  try{
+    cumps=await sbGet("bday_cumpleaneros",`token_invitacion=eq.${token}`);
+    if(!cumps.length) return show(`<div style="max-width:400px;text-align:center"><div style="font-size:48px">😕</div><p style="color:#666;font-size:15px;margin-top:12px">Link no válido o expirado.</p></div>`);
+    const c=cumps[0];
+    invs=await sbGet("bday_invitados",`cumpleanero_id=eq.${c.id}`);
+    // Cargar evento, beneficio, productora
+    const [evArr, benArr, prodArr, bloqArr] = await Promise.all([
+      sbGet("eventos",`id=eq.${c.evento_id}`),
+      c.beneficio_id?sbGet("bday_beneficios",`id=eq.${c.beneficio_id}`):[],
+      c.productora_id?sbGet("productoras",`id=eq.${c.productora_id}`):[],
+      sbGet("lista_bloqueo",`productora_id=eq.${c.productora_id}`),
+    ]);
+    ev=evArr[0]||null;
+    ben=benArr[0]||null;
+    prod=prodArr[0]||null;
+    D.lista_bloqueo=(D.lista_bloqueo||[]).concat(bloqArr||[]);
+
+    // Verificar cierre
+    const ahora=new Date();
+    const hCierre=ben?.hora_cierre||"16:00";
+    const fechaEv=ev?.date?new Date(ev.date+" "+hCierre):null;
+    const cerrada=fechaEv&&ahora>=fechaEv;
+
+    const aprobados=invs.filter(i=>i.estado==="aprobado").length;
+    const maxInv=ben?.max_invitados||20;
+    const llena=aprobados>=maxInv;
+
+    const renderPub=()=>{
+      const aprobadosActual=invs.filter(i=>i.estado==="aprobado").length;
+      show(`
+        <div style="max-width:480px;width:100%">
+          <div style="background:#fff;border-radius:16px;padding:28px;border:1px solid #e8e8e8;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+            <div style="text-align:center;margin-bottom:20px">
+              <div style="font-size:48px">🎂</div>
+              <h2 style="font-size:20px;font-weight:700;margin:8px 0 4px">¡Cumpleaños de ${c.nombre}!</h2>
+              <p style="color:#666;font-size:13px">${ev?.name||""} · ${prod?.nombre||""}</p>
+              ${cerrada?`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px;font-size:13px;font-weight:600;margin-top:10px">🔒 La lista está cerrada.</div>`
+              :`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px;font-size:12px;margin-top:10px">⏰ Lista se cierra a las ${hCierre} del día del evento</div>`}
+            </div>
+            ${llena||cerrada?"":(`
+              <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Inscríbete 👇</h3>
+              <div style="display:grid;gap:10px;margin-bottom:14px">
+                <div class="form-row" style="display:flex;gap:10px">
+                  <div style="flex:1"><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Nombre</label><input id="binv-nom" class="form-input" placeholder="Tu nombre" style="width:100%;box-sizing:border-box"></div>
+                  <div style="flex:1"><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Apellido</label><input id="binv-ape" class="form-input" placeholder="Tu apellido" style="width:100%;box-sizing:border-box"></div>
+                </div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Género</label>
+                  <select id="binv-gen" class="form-select" style="width:100%;box-sizing:border-box">
+                    <option value="m">♂ Hombre</option>
+                    <option value="f">♀ Mujer</option>
+                  </select>
+                </div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" style="width:100%;box-sizing:border-box"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram (opcional)</label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+                <div id="binv-err" style="color:#dc2626;font-size:12px;display:none"></div>
+                <button class="btn btn-primary" onclick="bdayEnviarInscripcion('${c.id}','${prod?.id||""}','${ev?.name||""}','${prod?.nombre||""}','${ben?.hora_cierre||"16:00"}')" style="width:100%">Inscribirme 🎉</button>
+              </div>`)}
+            ${llena&&!cerrada?`<div style="background:#dcfce7;color:#166534;border-radius:8px;padding:12px;text-align:center;font-size:13px;font-weight:600;margin-top:8px">✅ La lista está completa por ahora.</div>`:""}
+          </div>
+          ${GL_POWERED}
+        </div>`);
+    };
+    renderPub();
+
+    window.bdayEnviarInscripcion=async(cid,pidBloq,evNom,prodNom,horaCierre)=>{
+      const nombre=($("binv-nom")?.value||"").trim();
+      const apellido=($("binv-ape")?.value||"").trim();
+      const genero=$("binv-gen")?.value||"m";
+      const fecha_nacimiento=$("binv-fnac")?.value||"";
+      const emailInv=($("binv-email")?.value||"").trim().toLowerCase();
+      const instagram=normIG($("binv-ig")?.value||"");
+      const errEl=$("binv-err");
+      if(!nombre||!apellido||!emailInv||!fecha_nacimiento){
+        if(errEl){errEl.style.display="block";errEl.textContent="Completa todos los campos requeridos.";}return;
+      }
+      // Validar bloqueado
+      const bl=(D.lista_bloqueo||[]).filter(b=>!pidBloq||b.productora_id===pidBloq);
+      const norm=s=>(s||"").toLowerCase().trim().replace(/[.\-]/g,"");
+      const esBloq=bl.find(b=>norm(b.nombre)===norm(nombre+" "+apellido));
+      if(esBloq){if(errEl){errEl.style.display="block";errEl.textContent="No es posible inscribir a esta persona. Por favor reemplázala.";}return;}
+      // Guardar
+      const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,estado:"pendiente",created_at:now()};
+      try{
+        await sbPost("bday_invitados",[invData]);
+        // Email invitación al cumpleañero (notificación)
+        const linkInv=bdayTokenLink(c.token_invitacion);
+        await sendEmail(c.email,`Nueva inscripción en tu lista — ${evNom}`,
+          `<div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+            <div style="text-align:center;margin-bottom:16px">${GL_EMAIL_LOGO}</div>
+            <h3 style="font-size:16px;font-weight:700;margin-bottom:8px">Nueva inscripción 🎉</h3>
+            <p style="color:#555;font-size:14px"><strong>${nombre} ${apellido}</strong> quiere unirse a tu lista en <strong>${evNom}</strong>.</p>
+            <p style="color:#555;font-size:13px">Ingresa a tu panel para aprobar o rechazar.</p>
+            <div style="text-align:center;margin-top:20px"><a href="${APP_URL}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Ver mi lista →</a></div>
+            ${GL_POWERED}</div></div>`);
+        show(`<div style="max-width:400px;text-align:center"><div style="font-size:56px;margin-bottom:16px">🎉</div><h2 style="font-size:20px;font-weight:700;color:#1a1a1a">¡Inscripción enviada!</h2><p style="color:#666;font-size:14px;margin-top:8px">${c.nombre} revisará tu solicitud y te avisaremos por correo si quedas aprobado/a.</p>${GL_POWERED}</div>`);
+      }catch(e){
+        if(errEl){errEl.style.display="block";errEl.textContent="Error al inscribirse: "+e.message;}
+      }
+    };
+  }catch(e){
+    show(`<div style="max-width:400px;text-align:center"><div style="font-size:48px">😕</div><p style="color:#666;font-size:15px;margin-top:12px">Error cargando datos: ${e.message}</p></div>`);
+  }
+}
+
+// ── Panel del cumpleañero (auth) ──
+// Se llama desde initAdminApp cuando role === "cumpleanero"
+async function initBdayApp(){
+  // Cargar datos
+  const bdays=await sbGet("bday_cumpleaneros",`email=eq.${CU.email}`);
+  if(!bdays.length){document.getElementById("main-content").innerHTML=`<div style="padding:32px;text-align:center;color:var(--ink-4)">Sin datos de cumpleaños asociados.</div>`;return;}
+  const c=bdays[0];
+  const [invArr, benArr, evArr, prodArr]=await Promise.all([
+    sbGet("bday_invitados",`cumpleanero_id=eq.${c.id}`),
+    c.beneficio_id?sbGet("bday_beneficios",`id=eq.${c.beneficio_id}`):[],
+    sbGet("eventos",`id=eq.${c.evento_id}`),
+    c.productora_id?sbGet("productoras",`id=eq.${c.productora_id}`):[],
+  ]);
+  let invitados=invArr||[];
+  const ben=benArr[0]||null;
+  const ev=evArr[0]||null;
+  const prod=prodArr[0]||null;
+  const maxInv=ben?.max_invitados||20;
+  const hCierre=ben?.hora_cierre||"16:00";
+  const ahora=new Date();
+  const fechaEv=ev?.date?new Date(ev.date+"T"+hCierre):null;
+  const cerrada=fechaEv&&ahora>=fechaEv;
+  const aprobados=()=>invitados.filter(i=>i.estado==="aprobado").length;
+  const pendientes=()=>invitados.filter(i=>i.estado==="pendiente").length;
+
+  const render=()=>{
+    const ap=aprobados(); const pend=pendientes();
+    const progPremio=ben?.premio_min_invitados?Math.min(100,Math.round(ap/ben.premio_min_invitados*100)):0;
+    document.body.innerHTML=`
+      <div style="min-height:100vh;background:#f4f4f6;font-family:system-ui,sans-serif">
+        <div style="background:#534AB7;color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="font-size:24px">🎂</span>
+            <div>
+              <div style="font-weight:700;font-size:16px">Hola, ${c.nombre}!</div>
+              <div style="font-size:12px;opacity:.8">${ev?.name||""} · ${prod?.nombre||""}</div>
+            </div>
+          </div>
+          <button onclick="logoutBday()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
+        </div>
+        <div style="max-width:700px;margin:0 auto;padding:20px;display:grid;gap:16px">
+          ${!c.datos_completos?`
+          <div style="background:#fff;border-radius:14px;padding:24px;border:2px solid #fbbf24">
+            <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;color:#92400e">⚠️ Completa tu perfil para activar tu lista</h3>
+            <div style="display:grid;gap:10px">
+              <div style="display:flex;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nombre</label><input id="bpu-nom" class="form-input" value="${c.nombre||""}" style="width:100%;box-sizing:border-box"></div>
+                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Apellido</label><input id="bpu-ape" class="form-input" value="${c.apellido||""}" style="width:100%;box-sizing:border-box"></div>
+              </div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Foto del carnet (URL o subir)</label>
+                <input id="bpu-carnet" class="form-input" value="${c.foto_carnet||""}" placeholder="https://... o sube una foto" style="width:100%;box-sizing:border-box">
+              </div>
+              <button class="btn btn-primary" onclick="bdayGuardarPerfil()" style="width:100%">Guardar perfil →</button>
+            </div>
+          </div>`:""
+          }
+          <!-- Beneficio y stats -->
+          <div style="background:#fff;border-radius:14px;padding:20px;border:1px solid #e8e8e8">
+            <div style="font-size:13px;font-weight:700;color:#534AB7;margin-bottom:12px">🎁 ${ben?.nombre||"Tu beneficio"}</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#534AB7">${ap}</div><div style="color:#888;font-size:11px">aprobados</div></div>
+              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
+              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
+            </div>
+            ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra hoy a las <strong>${hCierre}</strong>${ev?.date?" ("+ev.date+")" :""}</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
+            ${ben?.premio_min_invitados?`
+              <div style="margin-top:14px">
+                <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">🏆 Premio: ${ben.premio_descripcion||"—"} si ingresan ≥${ben.premio_min_invitados}</div>
+                <div style="background:#e8e8e8;border-radius:99px;height:8px;overflow:hidden">
+                  <div style="background:#534AB7;width:${progPremio}%;height:100%;border-radius:99px;transition:width .3s"></div>
+                </div>
+                <div style="font-size:11px;color:#888;margin-top:4px">${ap} de ${ben.premio_min_invitados} invitados ingresados</div>
+              </div>`:""
+            }
+          </div>
+          <!-- Link para compartir -->
+          <div style="background:#fff;border-radius:14px;padding:20px;border:1px solid #e8e8e8">
+            <div style="font-size:13px;font-weight:700;margin-bottom:10px">🔗 Tu link de invitación</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+              <input id="bday-link-inp" value="${bdayTokenLink(c.token_invitacion)}" readonly style="flex:1;min-width:200px;background:#f4f4f6;border:1px solid var(--line);border-radius:8px;padding:8px 12px;font-size:12px;box-sizing:border-box">
+              <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${bdayTokenLink(c.token_invitacion)}');toast('Link copiado','ok')">Copiar</button>
+            </div>
+            <p style="font-size:11px;color:#aaa;margin-top:8px">Comparte este link con quienes quieres invitar. Se inscriben ellos, tú apruebas o rechazas.</p>
+          </div>
+          <!-- Lista de invitados -->
+          <div style="background:#fff;border-radius:14px;padding:20px;border:1px solid #e8e8e8" id="bday-inv-card">
+            <div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Invitados</div>
+            <div id="bday-inv-list">${renderInvList()}</div>
+          </div>
+        </div>
+        ${GL_POWERED}
+      </div>`;
+    // rebind después de render
+    bindBdayApp();
+  };
+
+  function renderInvList(){
+    if(!invitados.length) return `<p style="color:#aaa;text-align:center;padding:16px;font-size:13px">Sin inscripciones aún.</p>`;
+    return invitados.map(inv=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;background:var(--line-2,#f8f8f8);margin-bottom:6px">
+        <div>
+          <div style="font-weight:600;font-size:13px">${inv.nombre} ${inv.apellido} <span style="font-size:11px;color:#aaa">${inv.genero==="m"?"♂":"♀"}</span></div>
+          <div style="font-size:11px;color:#aaa">${inv.email||""}</div>
+        </div>
+        <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
+          ${badge(inv.estado==="aprobado"?"✓ Aprobado":inv.estado==="rechazado"?"✕ Rechazado":"⏳ Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
+          ${!cerrada&&inv.estado==="pendiente"?`
+            <button onclick="bdaySelfAprobar('${inv.id}')" style="background:#dcfce7;color:#166534;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✓</button>
+            <button onclick="bdaySelfRechazar('${inv.id}')" style="background:#fee2e2;color:#991b1b;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✕</button>
+          `:""}
+          ${!cerrada?`<button onclick="bdaySelfEliminar('${inv.id}')" style="background:none;border:none;color:#ccc;font-size:14px;cursor:pointer;padding:2px 6px">🗑</button>`:""}
+        </div>
+      </div>`).join("");
+  }
+
+  function bindBdayApp(){
+    window.bdaySelfAprobar=async(invId)=>{
+      const inv=invitados.find(i=>i.id===invId);
+      if(aprobados()>=maxInv)return toast(`Cupo lleno (máx. ${maxInv})`,  "warn");
+      await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"aprobado"});
+      if(inv)inv.estado="aprobado";
+      // Correo al invitado
+      if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||""));
+      document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      toast("Aprobado ✅","ok");
+    };
+    window.bdaySelfRechazar=async(invId)=>{
+      const inv=invitados.find(i=>i.id===invId);
+      await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"rechazado"});
+      if(inv)inv.estado="rechazado";
+      document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      toast("Rechazado","warn");
+    };
+    window.bdaySelfEliminar=async(invId)=>{
+      await sbDelete("bday_invitados",`id=eq.${invId}`);
+      invitados=invitados.filter(i=>i.id!==invId);
+      document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      toast("Eliminado","warn");
+    };
+    window.bdayGuardarPerfil=async()=>{
+      const nombre=($("bpu-nom")?.value||"").trim();
+      const apellido=($("bpu-ape")?.value||"").trim();
+      const fecha_nacimiento=$("bpu-fnac")?.value||"";
+      const instagram=normIG($("bpu-ig")?.value||"");
+      const foto_carnet=($("bpu-carnet")?.value||"").trim()||null;
+      if(!nombre||!apellido||!fecha_nacimiento)return toast("Nombre, apellido y fecha de nacimiento son requeridos","warn");
+      await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{nombre,apellido,fecha_nacimiento,instagram:instagram||null,foto_carnet,datos_completos:true});
+      c.nombre=nombre;c.apellido=apellido;c.fecha_nacimiento=fecha_nacimiento;c.instagram=instagram;c.foto_carnet=foto_carnet;c.datos_completos=true;
+      toast("Perfil guardado ✅","ok");render();
+    };
+    window.logoutBday=()=>{
+      CU=null;CP=null;D={};
+      location.reload();
+    };
+  }
+  render();
+}
+
+// ── Hook en el flujo de login para cumpleañero ──
+const _origIniciarSesion=window.iniciarSesion||(()=>{});
+// El flujo de login ya está en el código original; solo nos aseguramos que
+// cuando role === "cumpleanero" se llame initBdayApp
+const _origRouteRole=window._routeRole||(()=>{});
+// Patch del dispatch de roles
+const _origInitApp = window.initAdminApp;
+if(typeof iniciarSesion === "function"){
+  // Parchamos directamente la lógica de dispatch de roles en el onLogin
+  const _patchLogin=()=>{
+    const orig=window.onLogin||(()=>{});
+    window.onLogin=(user)=>{
+      if(user.role==="cumpleanero"){
+        CU=user;
+        initBdayApp();
+        return;
+      }
+      orig(user);
+    };
+  };
+  _patchLogin();
+}
+
+// Patch del dispatch principal de roles
+const _origDispatch=()=>{
+  const role=CU?.role;
+  if(role==="cumpleanero"){initBdayApp();return true;}
+  return false;
+};
+
+// Parchar la detección de rol después del login (línea ~969)
+// Reemplazamos la función que hace el routing de roles
+if(typeof initAdminApp==="function"){
+  const _origInit=initAdminApp;
+  // No redefinimos initAdminApp — mejor hackeamos la rama en el flujo login
+}
+
+// ── Acreditación: sumar invitados de cumpleaños ──
+// Se llama desde la vista de puerta para incluir bday invitados en la búsqueda
+window.bdayBuscarEnAcreditacion=(query, eventoId)=>{
+  const norm=s=>(s||"").toLowerCase().trim();
+  const q=norm(query);
+  if(!q||q.length<2)return[];
+  return (D.bday_invitados||[])
+    .filter(i=>i.evento_id===eventoId||((D.bday_cumpleaneros||[]).find(c=>c.id===i.cumpleanero_id)?.evento_id===eventoId))
+    .filter(i=>i.estado==="aprobado")
+    .filter(i=>norm(i.nombre+" "+i.apellido).includes(q)||norm(i.email).includes(q))
+    .map(i=>{
+      const c=(D.bday_cumpleaneros||[]).find(x=>x.id===i.cumpleanero_id);
+      const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);
+      return {
+        ...i,
+        tipo:"cumpleanos_invitado",
+        info:`🎂 Lista de ${c?.nombre||""} ${c?.apellido||""} · ${ben?.nombre||""}`,
+        precio: i.genero==="m"?(ben?.precio_invitado_h||0):(ben?.precio_invitado_m||0),
+      };
+    });
+};
+
+// ── Detectar acceso público bday en la URL ──
+const _bdayUrl = new URLSearchParams(window.location.search);
+if(_bdayUrl.has("bday_inv")){ mostrarPanelBdayInv(_bdayUrl.get("bday_inv")); }
 
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
