@@ -8006,14 +8006,14 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
   if(busq&&busq.trim()){
     const ql=busq.trim().toLowerCase();
     const qNum=busq.replace(/\D/g,"");
-    filtrados=filtrados.filter(p=>
-      (p.nombre||"").toLowerCase().includes(ql)||
-      (p.apellido||"").toLowerCase().includes(ql)||
-      (p.instagram||"").toLowerCase().includes(ql)||
-      (p.rut||"").replace(/\./g,"").toLowerCase().includes(ql.replace(/\./g,""))||
-      (p.email||"").toLowerCase().includes(ql)||
-      (qNum.length>=4&&(p.whatsapp||"").replace(/\D/g,"").includes(qNum))
-    );
+    filtrados=filtrados.filter(p=>{
+      const nombreCompleto=((p.nombre||"")+" "+(p.apellido||"")).toLowerCase();
+      return nombreCompleto.includes(ql)||
+        (p.instagram||"").toLowerCase().includes(ql)||
+        (p.rut||"").replace(/\./g,"").toLowerCase().includes(ql.replace(/\./g,""))||
+        (p.email||"").toLowerCase().includes(ql)||
+        (qNum.length>=4&&(p.whatsapp||"").replace(/\D/g,"").includes(qNum));
+    });
   }
   return filtrados.length?filtrados.map(p=>`
     <tr style="border-bottom:1px solid var(--line)">
