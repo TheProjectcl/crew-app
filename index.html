@@ -10243,8 +10243,8 @@ async function initBdayApp(){
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
         await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,patch);
         c.nombre=nombre;c.apellido=apellido;c.fecha_nacimiento=fecha_nacimiento;c.rut=rut;c.instagram=instagram;if(patch.email)c.email=patch.email;c.foto_carnet=foto_carnet;c.whatsapp=whatsapp;c.datos_completos=true;
-        toast("Perfil guardado ✅","ok");
-        render();
+        toast("¡Datos guardados correctamente! ✅","ok");
+        setTimeout(()=>render(),1500);
       }catch(e){
         if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
         toast("Error al guardar: "+e.message,"error");
