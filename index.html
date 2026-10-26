@@ -9549,10 +9549,10 @@ async function mostrarPanelBdayInv(token){
     prod=prodArr[0]||null;
     D.lista_bloqueo=(D.lista_bloqueo||[]).concat(bloqArr||[]);
 
-    // Verificar cierre
+    // Verificar cierre (hora local — "YYYY-MM-DD HH:MM" sin T ni Z es local en todos los navegadores)
     const ahora=new Date();
     const hCierre=ben?.hora_cierre||"16:00";
-    const fechaEv=ev?.date?new Date(ev.date+" "+hCierre):null;
+    const fechaEv=ev?.date?new Date(ev.date+" "+hCierre+":00"):null;
     const cerrada=fechaEv&&ahora>=fechaEv;
 
     const aprobados=invs.filter(i=>i.estado==="aprobado").length;
@@ -9665,7 +9665,7 @@ async function initBdayApp(){
   const maxInv=ben?.max_invitados||20;
   const hCierre=ben?.hora_cierre||"16:00";
   const ahora=new Date();
-  const fechaEv=ev?.date?new Date(ev.date+"T"+hCierre):null;
+  const fechaEv=ev?.date?new Date(ev.date+" "+hCierre+":00"):null;
   const cerrada=fechaEv&&ahora>=fechaEv;
   const aprobados=()=>invitados.filter(i=>i.estado==="aprobado").length;
   const pendientes=()=>invitados.filter(i=>i.estado==="pendiente").length;
@@ -9711,7 +9711,7 @@ async function initBdayApp(){
               <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
               <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
             </div>
-            ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra hoy a las <strong>${hCierre}</strong>${ev?.date?" ("+ev.date+")" :""}</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
+            ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra el <strong>${ev?.date?new Date(ev.date+" 12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"long"}):""}</strong> a las <strong>${hCierre}</strong> hrs</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
             ${ben?.premio_min_invitados?`
               <div style="margin-top:14px">
                 <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">🏆 Premio: ${ben.premio_descripcion||"—"} si ingresan ≥${ben.premio_min_invitados}</div>
