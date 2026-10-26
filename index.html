@@ -9814,8 +9814,23 @@ window.bdayGuardarCumple=async(id,prodId)=>{
       D.bday_cumpleaneros.push(nuevo||{...data,id:cumpleId});
       toast("Cumpleañero registrado","ok");
       // Agregar usuario con role cumpleanero (no-bloqueante, fallo no detiene el flujo)
-      const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true};
-      sbPost("users",[userBday]).then(u=>{D.users.push(userBday);toast("✅ Usuario cumpleañero creado","ok");}).catch(e=>{console.error("User bday error:",e.message);toast("⚠️ Error creando usuario: "+e.message,"warn");});
+      // Verificar si ya existe un usuario con ese email antes de crear
+      (async()=>{
+        try{
+          const existing=await sbGet("users",`email=eq.${encodeURIComponent(email)}`);
+          if(existing&&existing.length>0){
+            // Ya existe — actualizar bday_id si no lo tiene
+            const ex=existing[0];
+            if(!ex.bday_id){await sbPatch("users",`id=eq.${ex.id}`,{bday_id:cumpleId,role:"cumpleanero"});}
+            toast("✅ Usuario cumpleañero vinculado","ok");
+          }else{
+            const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true};
+            await sbPost("users",[userBday]);
+            D.users.push(userBday);
+            toast("✅ Usuario cumpleañero creado","ok");
+          }
+        }catch(e){console.error("User bday error:",e.message);toast("⚠️ Error creando usuario: "+e.message,"warn");}
+      })();
       // Correo bienvenida
       const linkPanel=`${APP_URL}?bday_panel=${token}`;
       const linkInv=bdayTokenLink(token);
