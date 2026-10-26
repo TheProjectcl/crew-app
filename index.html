@@ -782,10 +782,11 @@ const glMail={
   },
 
   // ── 2) Aprobado Close Friends (link de compra)
-  aprobado({nombre,mensaje,tipo,link}){
+  aprobado({nombre,mensaje,tipo,link,horas}){
+    const plazo=horas?`<p style="margin:12px 0 0;font-size:13px;color:#C05621;background:#FFF8F1;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;line-height:1.5"><strong>⏰ Tienes ${horas<48?`${horas} horas`:horas/24+" días"} para completar tu pago.</strong><br>Pasado ese plazo el link expirará y deberás contactarnos para reactivarlo.</p>`:"";
     return glMail.shell("#16C46B",
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
-      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada."),"20px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada.")+plazo,"20px 48px 0")+
       (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"28px 48px 0"):"")+
       glMail.row(glMail.button(link,"COMPRAR MI ENTRADA")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
@@ -7999,7 +8000,7 @@ window.cfReenviarCorreo=async(id)=>{
   if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
   const link=`${CF_APP_URL}?cf_buy=${token}`;
   try{
-    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link}));
+    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link,horas:cfg.horas_vencimiento||24}));
     toast(`📧 Correo reenviado a ${p.email}`,"ok");
     await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
   }catch(e){
@@ -8120,6 +8121,7 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
         ${p.estado==="aprobado"?`
           <div style="font-size:11px;color:var(--ink-3);margin-right:4px">${p.tipo_entrada||""}</div>
           <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfCopiarLink('${p.buy_token}')">🔗 Link</button>
+          <button class="btn" style="font-size:11px;padding:3px 8px" onclick="cfReenviarCorreo('${p.id}')" title="Reenviar email con link de compra">📧 Reenviar</button>
         `:`
           <button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfAprobarConTipo('${p.id}','${evId}')">✓ Aprobar</button>
           ${p.estado!=="rechazado"?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="cfRechazar('${p.id}')">✕ Rechazar</button>`:""}
@@ -8220,7 +8222,7 @@ VIEWS.cfPostulantes = async()=>{
       const link=`${CF_APP_URL}?cf_buy=${token}`;
       const tipoTexto=tipoEntrada||p.tipo_entrada||"";
       try{
-        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link}));
+        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link,horas:cfg.horas_vencimiento||24}));
         toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Email enviado.`,"ok");
       }catch(e){
         toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
@@ -8660,7 +8662,7 @@ VIEWS.cfConfig = async()=>{
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
         <div><label class="form-label">Cupos totales</label><input class="form-input" id="cfg-cupos" type="number" value="${cfg.cupos_total||100}"></div>
         <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
-        <div><label class="form-label">Vencimiento orden (horas)</label><input class="form-input" id="cfg-horas" type="number" value="${cfg.horas_vencimiento||24}"></div>
+        <div><label class="form-label">Plazo para pagar</label><select class="form-input" id="cfg-horas">${[24,48,72,96,120,144,168].map(h=>{const d=h/24;const label=h===24?"24 horas (1 día)":h===168?"7 días (máximo)":h<48?`${h} horas`:d===Math.floor(d)?`${d} días (${h} horas)`:`${h} horas`;return`<option value="${h}"${(cfg.horas_vencimiento||24)===h?" selected":""}>${label}</option>`;}).join("")}</select><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Tiempo que tiene la postulante para completar el pago desde que se aprueba.</div></div>
         <div><label class="form-label">Cierre de venta</label><input class="form-input" id="cfg-cierre" type="datetime-local" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,16):""}"></div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:20px"><input type="checkbox" id="cfg-activo" ${cfg.activo?"checked":""}><label style="font-size:13px">Módulo activo</label></div>
       </div>
