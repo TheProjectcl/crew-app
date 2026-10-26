@@ -9831,9 +9831,9 @@ async function initBdayApp(){
           <div style="background:#fff;border-radius:14px;padding:20px;border:1px solid #e8e8e8">
             <div style="font-size:13px;font-weight:700;color:#534AB7;margin-bottom:12px">🎁 ${ben?.nombre||"Tu beneficio"}</div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
-              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#534AB7">${ap}</div><div style="color:#888;font-size:11px">aprobados</div></div>
-              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
-              <div style="text-align:center;min-width:80px"><div style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
+              <div style="text-align:center;min-width:80px"><div id="bday-cnt-ap" style="font-size:28px;font-weight:800;color:#534AB7">${ap}</div><div style="color:#888;font-size:11px">aprobados</div></div>
+              <div style="text-align:center;min-width:80px"><div id="bday-cnt-pend" style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
+              <div style="text-align:center;min-width:80px"><div id="bday-cnt-libres" style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
             </div>
             ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra el <strong>${ev?.date?new Date(ev.date+" 12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"long"}):""}</strong> a las <strong>${hCierre}</strong> hrs</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
             ${ben?.premio_min_invitados?`
@@ -9867,13 +9867,23 @@ async function initBdayApp(){
     bindBdayApp();
   };
 
+  function updateContadores(){
+    const ap=aprobados();const pend=pendientes();
+    const elAp=document.getElementById("bday-cnt-ap");
+    const elPend=document.getElementById("bday-cnt-pend");
+    const elLibres=document.getElementById("bday-cnt-libres");
+    if(elAp)elAp.textContent=ap;
+    if(elPend)elPend.textContent=pend;
+    if(elLibres)elLibres.textContent=maxInv-ap;
+  }
+
   function renderInvList(){
     if(!invitados.length) return `<p style="color:#aaa;text-align:center;padding:16px;font-size:13px">Sin inscripciones aún.</p>`;
     return invitados.map(inv=>`
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;background:var(--line-2,#f8f8f8);margin-bottom:6px">
         <div>
           <div style="font-weight:600;font-size:13px">${inv.nombre} ${inv.apellido} <span style="font-size:11px;color:#aaa">${inv.genero==="m"?"♂":"♀"}</span></div>
-          <div style="font-size:11px;color:#aaa">${inv.email||""}</div>
+          <div style="font-size:11px;color:#aaa">${inv.email||""}${inv.whatsapp?` · <a href="https://wa.me/${inv.whatsapp.replace("+","")}" target="_blank" style="color:#25D366;font-weight:600;text-decoration:none">📱 ${inv.whatsapp}</a>`:""}</div>
         </div>
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
           ${badge(inv.estado==="aprobado"?"✓ Aprobado":inv.estado==="rechazado"?"✕ Rechazado":"⏳ Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
@@ -9895,6 +9905,7 @@ async function initBdayApp(){
       // Correo al invitado
       if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||""));
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      updateContadores();
       toast("Aprobado ✅","ok");
     };
     window.bdaySelfRechazar=async(invId)=>{
@@ -9902,12 +9913,14 @@ async function initBdayApp(){
       await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"rechazado"});
       if(inv)inv.estado="rechazado";
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      updateContadores();
       toast("Rechazado","warn");
     };
     window.bdaySelfEliminar=async(invId)=>{
       await sbDelete("bday_invitados",`id=eq.${invId}`);
       invitados=invitados.filter(i=>i.id!==invId);
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
+      updateContadores();
       toast("Eliminado","warn");
     };
     window.bdayPreviewCarnet=async(input)=>{
