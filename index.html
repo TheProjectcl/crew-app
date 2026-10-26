@@ -9667,7 +9667,7 @@ function bdayFormCumple(id, prodId, evs){
         <div><label class="form-label">Apellido</label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
       </div>
       <div class="form-row">
-        <div><label class="form-label">Fecha de nacimiento</label><input class="form-input" id="bc-fnac" type="date" min="1900-01-01" max="2008-12-31" value="${c?.fecha_nacimiento||""}" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(y<1900||y>2008){alert('Año inválido. Ingresa una fecha de nacimiento válida.');this.value='';}"></div>
+        <div><label class="form-label">Fecha de nacimiento</label><input class="form-input" id="bc-fnac" type="date" min="1900-01-01" max="2008-12-31" value="${c?.fecha_nacimiento||""}" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(this.value&&y.toString().length===4&&(y<1900||y>2008)){alert('Año inválido. Ingresa una fecha de nacimiento válida (entre 1900 y 2008).');this.value='';}"></div>
         <div><label class="form-label">Correo</label><input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com"></div>
       </div>
       <label class="form-label">Evento</label>
@@ -9863,7 +9863,7 @@ async function mostrarPanelBdayInv(token){
                     <option value="f">♀ Mujer</option>
                   </select>
                 </div>
-                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" style="width:100%;box-sizing:border-box" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(y<1900||y>2008){alert('Año inválido. Ingresa una fecha de nacimiento válida.');this.value='';}"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" style="width:100%;box-sizing:border-box" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(this.value&&y.toString().length===4&&(y<1900||y>2008)){alert('Año inválido. Ingresa una fecha de nacimiento válida (entre 1900 y 2008).');this.value='';}"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">RUT <span style="color:#dc2626">*</span></label><input id="binv-rut" class="form-input" placeholder="12.345.678-9" style="width:100%;box-sizing:border-box" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.')+'-'+v.slice(-1);this.value=v.toUpperCase()" maxlength="12"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
@@ -10007,7 +10007,7 @@ async function initBdayApp(){
                 <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nombre</label><input id="bpu-nom" class="form-input" value="${c.nombre||""}" style="width:100%;box-sizing:border-box"></div>
                 <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Apellido</label><input id="bpu-ape" class="form-input" value="${c.apellido||""}" style="width:100%;box-sizing:border-box"></div>
               </div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(y<1900||y>2008){alert('Año inválido. Ingresa una fecha de nacimiento válida.');this.value='';}"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box" onchange="const y=this.value?parseInt(this.value.split('-')[0]):0;if(this.value&&y.toString().length===4&&(y<1900||y>2008)){alert('Año inválido. Ingresa una fecha de nacimiento válida (entre 1900 y 2008).');this.value='';}"></div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
               <div>
                 <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">WhatsApp</label>
