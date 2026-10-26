@@ -9425,16 +9425,40 @@ VIEWS["bday-cumpleaneros"] = async()=>{
         const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id);
         const aprobados=invs.filter(i=>i.estado==="aprobado").length;
         const pendientes=invs.filter(i=>i.estado==="pendiente").length;
+        const ingresados=invs.filter(i=>i.llego).length;
         const maxInv=ben?.max_invitados||0;
-        return `<div class="card" style="padding:18px">
+        const minPremio=ben?.premio_min_invitados||0;
+        const ganoPremio=minPremio>0&&ingresados>=minPremio;
+        const botellaEntregada=!!c.botella_entregada;
+        return `<div class="card" style="padding:18px;${ganoPremio&&!botellaEntregada?"border-left:4px solid #16a34a":""}">
           <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-            <div>
+            <div style="flex:1;min-width:0">
               <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
               <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
-              <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Invitados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
-              ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:4px;display:inline-block">⚠ Datos incompletos</span>`}
+              <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Aprobados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
+              <!-- Barra de ingresados -->
+              <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                <div style="flex:1;min-width:120px;max-width:220px">
+                  <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:3px">
+                    <span>Ingresaron al evento</span>
+                    <span style="font-weight:700;color:${ganoPremio?"#16a34a":"#534AB7"}">${ingresados}${minPremio?" / "+minPremio:""}</span>
+                  </div>
+                  <div style="background:#e5e7eb;border-radius:99px;height:7px;overflow:hidden">
+                    <div style="background:${ganoPremio?"#16a34a":"#534AB7"};width:${minPremio?Math.min(100,Math.round(ingresados/minPremio*100)):100}%;height:100%;border-radius:99px;transition:width .3s"></div>
+                  </div>
+                </div>
+                ${ganoPremio
+                  ? botellaEntregada
+                    ? `<span style="font-size:12px;font-weight:700;color:#16a34a;background:#dcfce7;padding:4px 10px;border-radius:6px">🏆 Premio ganado · ✓ Botella entregada</span>`
+                    : `<span style="font-size:12px;font-weight:700;color:#16a34a;background:#dcfce7;padding:4px 10px;border-radius:6px;animation:pulse 1s infinite">🏆 ¡Premio ganado!</span>`
+                  : minPremio>0
+                    ? `<span style="font-size:11px;color:#888">Faltan ${minPremio-ingresados} para el premio</span>`
+                    : ""}
+              </div>
+              ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:6px;display:inline-block">⚠ Datos incompletos</span>`}
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+            <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
+              ${ganoPremio&&!botellaEntregada?`<button class="btn btn-success" style="font-size:12px;padding:5px 12px;font-weight:700" onclick="bdayEntregarBotella('${c.id}')">🍾 Canjear botella</button>`:""}
               <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
               <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
               <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
@@ -9475,6 +9499,17 @@ VIEWS["bday-cumpleaneros"] = async()=>{
   window.bdayCopiarLink=(token)=>{
     navigator.clipboard.writeText(bdayTokenLink(token));
     toast("Link copiado 🔗","ok");
+  };
+  window.bdayEntregarBotella=async(cid)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);
+    if(!c)return;
+    if(c.botella_entregada){toast("Ya fue marcada como entregada","warn");return;}
+    if(!confirm(`¿Confirmar entrega de botella para ${c.nombre} ${c.apellido}?\n\nEsta acción no se puede deshacer.`))return;
+    const at=now();
+    await sbPatch("bday_cumpleaneros",`id=eq.${cid}`,{botella_entregada:true,botella_entregada_at:at});
+    c.botella_entregada=true;c.botella_entregada_at=at;
+    toast(`🍾 Botella entregada a ${c.nombre} ${c.apellido}`,"success");
+    renderCumpleTabla();
   };
   window.bdayEliminarCumple=async(id)=>{
     if(!confirm("¿Eliminar este cumpleañero y todos sus invitados?"))return;
