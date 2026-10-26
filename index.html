@@ -7416,7 +7416,20 @@ function validarRUT(rut){
 
 function normRUT(r){ return (r||"").trim().replace(/[.\-\s]/g,"").toUpperCase(); }
 function normIG(ig){ return (ig||"").replace(/^@/,"").toLowerCase().trim(); }
-function parseFechaNac(v){ const p=(v||"").trim().split("/"); if(p.length===3&&p[2].length===4){ return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; } return v||""; }
+function parseFechaNac(v){
+  const s=(v||"").trim();
+  if(!s) return "";
+  // Ya viene en formato YYYY-MM-DD (desde Supabase)
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD/MM/AAAA o DD-MM-AAAA o DD.MM.AAAA
+  const p=s.split(/[\/\-\.]/);
+  if(p.length===3){
+    const [a,b,c]=p;
+    if(c.length===4) return `${c}-${b.padStart(2,"0")}-${a.padStart(2,"0")}`; // DD/MM/YYYY
+    if(a.length===4) return `${a}-${b.padStart(2,"0")}-${c.padStart(2,"0")}`; // YYYY/MM/DD
+  }
+  return s;
+}
 
 // Nombres típicamente masculinos para alerta (solo alerta, nunca rechazo)
 const NOMBRES_MASC = ["alejandro","alex","andres","carlos","claudio","cristian","daniel","david","diego","eduardo","emilio","enrique","esteban","fabian","felipe","fernando","francisco","gabriel","gonzalo","guillermo","gustavo","hector","hugo","ignacio","ivan","javier","jesus","joaquin","jorge","jose","juan","julio","kevin","leonardo","lucas","luis","manuel","marcelo","mario","martin","mateo","matias","mauricio","miguel","nicolas","pablo","patricio","paulo","pedro","rafael","raul","ricardo","roberto","rodrigo","sebastian","sergio","tomas","victor"];
