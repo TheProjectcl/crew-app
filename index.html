@@ -9504,8 +9504,8 @@ window.bdayGuardarCumple=async(id,prodId)=>{
       D.bday_cumpleaneros.push(nuevo||{...data,id:cumpleId});
       toast("Cumpleañero registrado","ok");
       // Agregar usuario con role cumpleanero (no-bloqueante, fallo no detiene el flujo)
-      const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,evento_ids:[evento_id],puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true,created_at:now()};
-      sbPost("users",[userBday]).then(u=>{D.users.push(userBday);}).catch(e=>console.warn("User bday no creado (no crítico):",e.message));
+      const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true,created_at:now()};
+      sbPost("users",[userBday]).then(u=>{D.users.push(userBday);toast("✅ Usuario cumpleañero creado","ok");}).catch(e=>{console.error("User bday error:",e.message);toast("⚠️ Error creando usuario: "+e.message,"warn");});
       // Correo bienvenida
       const linkPanel=`${APP_URL}?bday_panel=${token}`;
       const linkInv=bdayTokenLink(token);
