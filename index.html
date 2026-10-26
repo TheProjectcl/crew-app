@@ -8494,7 +8494,7 @@ VIEWS.cfOrdenes = async()=>{
   const ordenes = (D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
   const mc=$("main-content");
 
-  const estadoBadge=(e)=>badge(e, e==="conciliado"?"green":e==="pagado"?"blue":e==="pendiente"?"amber":e==="rechazado"?"red":"gray");
+  const estadoBadge=(e)=>badge(e==="conciliado"?"pagado":e, e==="conciliado"?"green":e==="pagado"?"green":e==="pendiente"?"amber":e==="rechazado"?"red":"gray");
 
   mc.innerHTML=`
     <div class="page-title">Close Friends — Órdenes</div>
@@ -8541,8 +8541,8 @@ VIEWS.cfConciliacion = async()=>{
     <div class="page-title">Close Friends — Conciliación</div>
     <div class="card" style="margin-bottom:16px">
       <div style="font-size:14px;font-weight:600;margin-bottom:12px">Subir cartola Santander</div>
-      <div style="font-size:12px;color:var(--ink-3);margin-bottom:12px">Sube el CSV/Excel de abonos de tu cuenta Santander para hacer el match automático.</div>
-      <input type="file" id="cartola-file" accept=".csv,.xlsx,.xls" style="margin-bottom:8px">
+      <div style="font-size:12px;color:var(--ink-3);margin-bottom:12px">Sube la cartola Santander en PDF, Excel o CSV para hacer el match automático.</div>
+      <input type="file" id="cartola-file" accept=".pdf,.csv,.xlsx,.xls" style="margin-bottom:8px">
       <button class="btn btn-primary" style="font-size:12px" onclick="procesarCartolaCF()">Procesar cartola</button>
     </div>
     <div id="cf-conc-resultado"></div>
@@ -8557,55 +8557,102 @@ VIEWS.cfConciliacion = async()=>{
     const res=document.getElementById("cf-conc-resultado");
     res.innerHTML=`<div style="color:var(--ink-3);font-size:13px;margin-bottom:12px">Procesando...</div>`;
     try{
-      const fr=new FileReader(); fr.readAsArrayBuffer(f);
-      fr.onload=async(ev)=>{
-        // Parsear CSV básico (Santander)
-        const text=new TextDecoder("latin1").decode(ev.target.result);
-        const lines=text.split("\n").filter(l=>l.trim());
-        const abonos=[];
+      const ext=f.name.split(".").pop().toLowerCase();
+      const abonos=[];
+
+      if(ext==="pdf"){
+        // Cargar pdf.js si no está
+        if(!window.pdfjsLib){
+          await new Promise((ok,fail)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";s.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";ok();};s.onerror=fail;document.head.appendChild(s);});
+        }
+        const arrayBuf=await f.arrayBuffer();
+        const pdf=await pdfjsLib.getDocument({data:arrayBuf}).promise;
+        let textoTotal="";
+        for(let p=1;p<=pdf.numPages;p++){
+          const page=await pdf.getPage(p);
+          const tc=await page.getTextContent();
+          textoTotal+=tc.items.map(i=>i.str).join(" ")+"\n";
+        }
+        // Parsear líneas del cartola Santander
+        // Formato típico: DD/MM/AAAA  Descripción  monto
+        const lines=textoTotal.split("\n");
+        const reDate=/\b(\d{2}\/\d{2}\/\d{4})\b/;
+        const reMonto=/\$?\s*([\d\.]+),?(\d{0,2})\s*(?:CR|crédito)?/gi;
         for(const line of lines){
-          const cols=line.split(";").map(c=>c.trim().replace(/"/g,""));
-          // Buscar columnas con monto positivo (abono)
-          const monto=parseFloat((cols[3]||cols[4]||"0").replace(/\./g,"").replace(",","."));
-          if(monto>0){
-            abonos.push({fecha:cols[0]||cols[1], descripcion:cols[1]||cols[2], monto, referencia:cols[5]||cols[6]||""});
+          const dateM=line.match(reDate);
+          if(!dateM) continue;
+          const fecha=dateM[1];
+          // Buscar montos en la línea (números con puntos de miles)
+          let m;
+          reMonto.lastIndex=0;
+          while((m=reMonto.exec(line))!==null){
+            const monto=parseFloat(m[1].replace(/\./g,"")+"."+( m[2]||"0"));
+            if(monto>=1000){
+              abonos.push({fecha, descripcion:line.trim().slice(0,80), monto, referencia:""});
+              break;
+            }
           }
         }
-        // Match automático
-        const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pendiente"&&o.comprobante_url);
-        const matches=[];
-        for(const ord of ordenesPend){
-          const match=abonos.find(a=>a.monto===ord.monto_total);
-          if(match) matches.push({orden:ord,abono:match,estado:"CONCILIADO"});
-          else matches.push({orden:ord,abono:null,estado:"REVISAR"});
+      } else {
+        // Cargar SheetJS para xlsx/csv
+        if(!window.XLSX){
+          await new Promise((ok,fail)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";s.onload=ok;s.onerror=fail;document.head.appendChild(s);});
         }
-        res.innerHTML=`
-          <div class="card" style="margin-bottom:16px">
-            <div style="font-size:14px;font-weight:600;margin-bottom:12px">Resultado match automático</div>
-            <div style="display:flex;gap:16px;margin-bottom:16px">
-              <div>${badge(`${matches.filter(m=>m.estado==="CONCILIADO").length} Conciliados`,"green")}</div>
-              <div>${badge(`${matches.filter(m=>m.estado==="REVISAR").length} Revisar`,"amber")}</div>
-            </div>
-            <div style="overflow-x:auto">
-            <table style="width:100%;border-collapse:collapse;font-size:12px">
-              <thead><tr style="background:var(--line-2)">
-                <th style="padding:8px">Código</th><th style="padding:8px">Monto</th>
-                <th style="padding:8px">Match cartola</th><th style="padding:8px">Estado</th><th style="padding:8px">Acción</th>
-              </tr></thead>
-              <tbody>
-              ${matches.map(m=>`<tr style="border-bottom:1px solid var(--line)">
+        const arrayBuf=await f.arrayBuffer();
+        const wb=XLSX.read(arrayBuf,{type:"array"});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
+        for(const cols of rows){
+          for(let ci=0;ci<cols.length;ci++){
+            const raw=(cols[ci]||"").toString().trim().replace(/\$/g,"").replace(/\./g,"").replace(",",".");
+            const monto=parseFloat(raw);
+            if(!isNaN(monto)&&monto>=1000){
+              abonos.push({fecha:(cols[0]||"").toString().trim(), descripcion:(cols[1]||cols[2]||"").toString().trim(), monto, referencia:(cols[5]||cols[6]||"").toString().trim()});
+              break;
+            }
+          }
+        }
+      }
+      // Match automático
+      const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pendiente"&&o.comprobante_url);
+      const matches=[];
+      const abonosUsados=new Set();
+      for(const ord of ordenesPend){
+        const idx=abonos.findIndex((a,i)=>!abonosUsados.has(i)&&a.monto===ord.monto_total);
+        if(idx>=0){abonosUsados.add(idx);matches.push({orden:ord,abono:abonos[idx],estado:"CONCILIADO"});}
+        else matches.push({orden:ord,abono:null,estado:"REVISAR"});
+      }
+      res.innerHTML=`
+        <div class="card" style="margin-bottom:16px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:12px">Resultado match automático</div>
+          <div style="display:flex;gap:16px;margin-bottom:16px">
+            <div>${badge(`${matches.filter(m=>m.estado==="CONCILIADO").length} Conciliados`,"green")}</div>
+            <div>${badge(`${matches.filter(m=>m.estado==="REVISAR").length} Revisar`,"amber")}</div>
+          </div>
+          ${!matches.length?`<div style="color:var(--ink-4);font-size:13px">No hay órdenes pendientes de conciliar.</div>`:`
+          <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead><tr style="background:var(--line-2)">
+              <th style="padding:8px">Código</th><th style="padding:8px">Postulante</th><th style="padding:8px">Monto</th>
+              <th style="padding:8px">Match cartola</th><th style="padding:8px">Estado</th><th style="padding:8px">Acción</th>
+            </tr></thead>
+            <tbody>
+            ${matches.map(m=>{
+              const post=(D.cf_postulantes||[]).find(p=>p.id===m.orden.postulante_id);
+              const nombre=post?`${post.nombre} ${post.apellido||""}`.trim():"—";
+              return `<tr style="border-bottom:1px solid var(--line)">
                 <td style="padding:8px;font-family:monospace;font-weight:600">${m.orden.codigo}</td>
+                <td style="padding:8px;font-size:11px">${nombre}</td>
                 <td style="padding:8px">$${(m.orden.monto_total||0).toLocaleString("es-CL")}</td>
-                <td style="padding:8px;font-size:11px">${m.abono?`${m.abono.fecha} — $${m.abono.monto.toLocaleString("es-CL")} — ${m.abono.descripcion.slice(0,30)}`:"Sin match"}</td>
-                <td style="padding:8px">${badge(m.estado, m.estado==="CONCILIADO"?"green":"amber")}</td>
+                <td style="padding:8px;font-size:11px">${m.abono?`${m.abono.fecha} — $${m.abono.monto.toLocaleString("es-CL")} — ${m.abono.descripcion.slice(0,30)}`:"Sin match en cartola"}</td>
+                <td style="padding:8px">${badge(m.estado==="CONCILIADO"?"pagado":m.estado, m.estado==="CONCILIADO"?"green":"amber")}</td>
                 <td style="padding:8px"><button class="btn btn-success" style="font-size:11px;padding:3px 8px" onclick="cfConciliar('${m.orden.id}')">✓ Confirmar</button></td>
-              </tr>`).join("")}
-              </tbody>
-            </table>
-            </div>
-          </div>`;
-      };
-    }catch(e){ res.innerHTML=`<div style="color:var(--bad)">Error: ${e.message}</div>`; }
+              </tr>`;}).join("")}
+            </tbody>
+          </table>
+          </div>`}
+        </div>`;
+    }catch(e){ res.innerHTML=`<div style="color:var(--bad)">Error al procesar: ${e.message}</div>`; }
   };
 
   window.cfConciliar=async(ordenId)=>{
@@ -8737,7 +8784,7 @@ function renderTablaPlanilla(ordenes,posts,q){
         <td style="padding:8px;font-family:monospace">${ord?.codigo||"—"}</td>
         <td style="padding:8px;text-align:center">${ord?.cantidad||"—"}</td>
         <td style="padding:8px">$${ord?(ord.monto_total||0).toLocaleString("es-CL"):"—"}</td>
-        <td style="padding:8px">${ord?badge(ord.estado,ord.estado==="conciliado"?"green":ord.estado==="pagado"?"blue":"amber"):"—"}</td>
+        <td style="padding:8px">${ord?badge(ord.estado==="conciliado"?"pagado":ord.estado,ord.estado==="conciliado"||ord.estado==="pagado"?"green":"amber"):"—"}</td>
         <td style="padding:8px;white-space:nowrap">
           ${p.estado==="aprobado"?`<button onclick="cfReenviarCorreo('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Reenviar correo de aprobación">📧 Reenviar</button>`:""}
           <button onclick="cfCambiarEmail('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Cambiar email">✏️ Email</button>
