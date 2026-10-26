@@ -7416,6 +7416,7 @@ function validarRUT(rut){
 
 function normRUT(r){ return (r||"").trim().replace(/[.\-\s]/g,"").toUpperCase(); }
 function normIG(ig){ return (ig||"").replace(/^@/,"").toLowerCase().trim(); }
+function parseFechaNac(v){ const p=(v||"").trim().split("/"); if(p.length===3&&p[2].length===4){ return `${p[2]}-${p[1].padStart(2,"0")}-${p[0].padStart(2,"0")}`; } return v||""; }
 
 // Nombres típicamente masculinos para alerta (solo alerta, nunca rechazo)
 const NOMBRES_MASC = ["alejandro","alex","andres","carlos","claudio","cristian","daniel","david","diego","eduardo","emilio","enrique","esteban","fabian","felipe","fernando","francisco","gabriel","gonzalo","guillermo","gustavo","hector","hugo","ignacio","ivan","javier","jesus","joaquin","jorge","jose","juan","julio","kevin","leonardo","lucas","luis","manuel","marcelo","mario","martin","mateo","matias","mauricio","miguel","nicolas","pablo","patricio","paulo","pedro","rafael","raul","ricardo","roberto","rodrigo","sebastian","sergio","tomas","victor"];
@@ -9667,7 +9668,7 @@ function bdayFormCumple(id, prodId, evs){
         <div><label class="form-label">Apellido</label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
       </div>
       <div class="form-row">
-        <div><label class="form-label">Fecha de nacimiento</label><input class="form-input" id="bc-fnac" type="date" min="1900-01-01" max="2008-12-31" value="${c?.fecha_nacimiento||""}"></div>
+        <div><label class="form-label">Fecha de nacimiento (DD/MM/AAAA)</label><input class="form-input" id="bc-fnac" type="text" placeholder="ej: 15/03/1995" maxlength="10" value="${c?.fecha_nacimiento?c.fecha_nacimiento.split('-').reverse().join('/'):''}"></div>
         <div><label class="form-label">Correo</label><input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com"></div>
       </div>
       <label class="form-label">Evento</label>
@@ -9717,7 +9718,7 @@ window.bdayGuardarCumple=async(id,prodId)=>{
 
   const nombre=($("bc-nom")?.value||"").trim();
   const apellido=($("bc-ape")?.value||"").trim();
-  const fecha_nacimiento=$("bc-fnac")?.value||"";
+  const fecha_nacimiento=parseFechaNac($("bc-fnac")?.value);
   const email=($("bc-email")?.value||"").trim().toLowerCase();
   const evento_id=$("bc-ev")?.value||"";
   const beneficio_id=$("bc-ben")?.value||null;
@@ -9863,7 +9864,7 @@ async function mostrarPanelBdayInv(token){
                     <option value="f">♀ Mujer</option>
                   </select>
                 </div>
-                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" style="width:100%;box-sizing:border-box"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento (DD/MM/AAAA)</label><input id="binv-fnac" class="form-input" type="text" placeholder="ej: 15/03/1995" maxlength="10" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">RUT <span style="color:#dc2626">*</span></label><input id="binv-rut" class="form-input" placeholder="12.345.678-9" style="width:100%;box-sizing:border-box" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.')+'-'+v.slice(-1);this.value=v.toUpperCase()" maxlength="12"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
@@ -9890,7 +9891,7 @@ async function mostrarPanelBdayInv(token){
       const nombre=($("binv-nom")?.value||"").trim();
       const apellido=($("binv-ape")?.value||"").trim();
       const genero=$("binv-gen")?.value||"m";
-      const fecha_nacimiento=$("binv-fnac")?.value||"";
+      const fecha_nacimiento=parseFechaNac($("binv-fnac")?.value);
       const rut=($("binv-rut")?.value||"").trim().toUpperCase();
       const emailInv=($("binv-email")?.value||"").trim().toLowerCase();
       const instagram=normIG($("binv-ig")?.value||"");
@@ -10007,7 +10008,7 @@ async function initBdayApp(){
                 <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nombre</label><input id="bpu-nom" class="form-input" value="${c.nombre||""}" style="width:100%;box-sizing:border-box"></div>
                 <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Apellido</label><input id="bpu-ape" class="form-input" value="${c.apellido||""}" style="width:100%;box-sizing:border-box"></div>
               </div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" min="1900-01-01" max="2008-12-31" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento (DD/MM/AAAA)</label><input id="bpu-fnac" class="form-input" type="text" placeholder="ej: 15/03/1995" maxlength="10" value="${c.fecha_nacimiento?c.fecha_nacimiento.split('-').reverse().join('/'):''}"></div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
               <div>
                 <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">WhatsApp</label>
@@ -10175,7 +10176,7 @@ async function initBdayApp(){
     window.bdayGuardarPerfil=async()=>{
       const nombre=($("bpu-nom")?.value||"").trim();
       const apellido=($("bpu-ape")?.value||"").trim();
-      const fecha_nacimiento=$("bpu-fnac")?.value||"";
+      const fecha_nacimiento=parseFechaNac($("bpu-fnac")?.value);
       const instagram=normIG($("bpu-ig")?.value||"");
       const foto_carnet=($("bpu-carnet")?.value||"").trim()||null;
       const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
