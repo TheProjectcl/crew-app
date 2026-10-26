@@ -8613,8 +8613,17 @@ VIEWS.cfConciliacion = async()=>{
           }
         }
       }
-      // Match automático
-      const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pendiente"&&o.comprobante_url);
+      // Debug: mostrar resumen de órdenes disponibles
+      const todasOrdenes=(D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
+      const debugInfo=`<div style="background:var(--line-2);padding:8px;border-radius:6px;font-size:11px;font-family:monospace;margin-bottom:12px">
+        <b>Debug:</b> ${todasOrdenes.length} órdenes totales |
+        ${todasOrdenes.filter(o=>o.estado==="pendiente").length} pendiente |
+        ${todasOrdenes.filter(o=>o.estado==="conciliado").length} conciliado |
+        ${todasOrdenes.filter(o=>o.estado==="pendiente"&&o.comprobante_url).length} pendiente+comprobante |
+        ${abonos.length} abonos en cartola
+      </div>`;
+      // Match automático — incluir pendientes con O sin comprobante
+      const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pendiente");
       const matches=[];
       const abonosUsados=new Set();
       for(const ord of ordenesPend){
@@ -8625,6 +8634,7 @@ VIEWS.cfConciliacion = async()=>{
       res.innerHTML=`
         <div class="card" style="margin-bottom:16px">
           <div style="font-size:14px;font-weight:600;margin-bottom:12px">Resultado match automático</div>
+          ${debugInfo}
           <div style="display:flex;gap:16px;margin-bottom:16px">
             <div>${badge(`${matches.filter(m=>m.estado==="CONCILIADO").length} Conciliados`,"green")}</div>
             <div>${badge(`${matches.filter(m=>m.estado==="REVISAR").length} Revisar`,"amber")}</div>
