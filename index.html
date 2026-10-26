@@ -10322,6 +10322,51 @@ window.bdayBuscarEnAcreditacion=(query, eventoId)=>{
 // ── Detectar acceso público bday en la URL ──
 const _bdayUrl = new URLSearchParams(window.location.search);
 if(_bdayUrl.has("bday_inv")){ mostrarPanelBdayInv(_bdayUrl.get("bday_inv")); }
+else if(_bdayUrl.has("bday_panel")){
+  // El cumpleañero entra por su link personal — login automático por token
+  (async()=>{
+    const token=_bdayUrl.get("bday_panel");
+    // Mostrar pantalla de carga mientras buscamos
+    document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
+      <div style="font-size:40px">🎂</div>
+      <p style="color:#fff;font-size:15px">Cargando tu panel...</p>
+    </div>`;
+    try{
+      // Buscar cumpleañero por token
+      const cumps=await sbGet("bday_cumpleaneros",`token_invitacion=eq.${token}`);
+      if(!cumps.length){
+        document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
+          <div style="font-size:40px">😕</div>
+          <p style="color:#fff;font-size:15px">Link no válido o expirado.</p>
+        </div>`;
+        return;
+      }
+      const c=cumps[0];
+      // Buscar usuario asociado
+      const users=await sbGet("users",`email=eq.${encodeURIComponent(c.email)}&role=eq.cumpleanero`);
+      if(!users.length){
+        // No tiene usuario aún — mostrar login normal con email pre-rellenado
+        window.history.replaceState({},"",window.location.pathname);
+        location.reload();
+        return;
+      }
+      const u=users[0];
+      // Login automático con credenciales del usuario
+      const ok=await intentarLogin(u.email,u.pass,true);
+      if(!ok){
+        // Falló — mostrar pantalla login con email pre-rellenado
+        window.history.replaceState({},"",window.location.pathname);
+        location.reload();
+      }
+    }catch(e){
+      document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
+        <div style="font-size:40px">⚠️</div>
+        <p style="color:#fff;font-size:15px">Error al cargar: ${e.message}</p>
+        <a href="${APP_URL}" style="color:#a78bfa;font-size:13px">Ir al inicio →</a>
+      </div>`;
+    }
+  })();
+}
 
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
