@@ -9234,10 +9234,10 @@ function emailBdayInvitacion(nombreCumple, eventoNombre, productoraNombre, linkI
 }
 
 function emailBdayAprobado(nombreInv, nombreCumple, eventoNombre, productoraNombre, opts={}){
-  const {precioH=0, precioM=0, genero="", horaCierre=""} = opts;
+  const {precioH=0, precioM=0, genero="", horaValidez=""} = opts;
   const precio = genero==="m" ? precioH : precioM;
   const precioTxt = precio>0 ? `$${precio.toLocaleString("es-CL")}` : "gratis";
-  const horaTxt = horaCierre ? `Este precio es válido hasta las <strong>${horaCierre} hrs</strong> — luego la lista queda cerrada tal como estaba.` : "";
+  const horaTxt = horaValidez ? `La lista cierra a las <strong>${horaValidez} hrs</strong> — asegúrate de llegar antes de esa hora.` : "";
   return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
     <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
       <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
@@ -9584,7 +9584,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
     // Correo al invitado
     const ev=(D.eventos||[]).find(e=>e.id===c?.evento_id);
     const prod=(D.productoras||[]).find(p=>p.id===c?.productora_id);
-    if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c?.nombre+" "+c?.apellido,ev?.name||"",prod?.nombre||"Guestly",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaCierre:ben?.hora_cierre||""}));
+    if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c?.nombre+" "+c?.apellido,ev?.name||"",prod?.nombre||"Guestly",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||""}));
     toast("Invitado aprobado ✅","ok");closeModal();bdayVerInvitados(cid);
   };
   window.bdayRechazarInv=async(invId,cid)=>{
@@ -10065,7 +10065,7 @@ async function initBdayApp(){
       await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"aprobado"});
       if(inv)inv.estado="aprobado";
       // Correo al invitado
-      if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||"",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaCierre:ben?.hora_cierre||""}));
+      if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||"",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||""}));
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
       updateContadores();
       toast("Aprobado ✅","ok");
