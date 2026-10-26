@@ -2611,7 +2611,7 @@ function filterAccType(type){
       const yaEntro=!!inv.llego;
       return `<tr style="background:#f5f3ff">
         <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${c?.nombre||""} ${c?.apellido||""}</span></td>
-        <td style="font-size:12px;color:#aaa">—</td>
+        <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
         <td><span style="font-size:11px;color:#bbb">— sin pulsera —</span></td>
         <td style="font-weight:600;text-align:center">1</td>
@@ -9558,7 +9558,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;background:var(--line-2)">
             <div>
               <div style="font-weight:600;font-size:13px">${inv.nombre} ${inv.apellido} <span style="font-weight:400;color:var(--ink-4);font-size:11px">${inv.genero==="m"?"♂ H":"♀ M"}</span></div>
-              <div style="font-size:11px;color:var(--ink-4)">${inv.email||""} ${inv.instagram?`· @${inv.instagram}`:""}</div>
+              <div style="font-size:11px;color:var(--ink-4)">${inv.rut?`<strong>${inv.rut}</strong> · `:""}${inv.email||""} ${inv.instagram?`· @${inv.instagram}`:""}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               ${badge(inv.estado==="aprobado"?"Aprobado":inv.estado==="rechazado"?"Rechazado":"Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
@@ -9801,6 +9801,7 @@ async function mostrarPanelBdayInv(token){
                   </select>
                 </div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" style="width:100%;box-sizing:border-box"></div>
+                <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">RUT <span style="color:#dc2626">*</span></label><input id="binv-rut" class="form-input" placeholder="12.345.678-9" style="width:100%;box-sizing:border-box" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/(\d)(?=(\d{3})+(?!\d))/g,'$1.')+'-'+v.slice(-1);this.value=v.toUpperCase()" maxlength="12"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
                 <div>
@@ -9827,13 +9828,14 @@ async function mostrarPanelBdayInv(token){
       const apellido=($("binv-ape")?.value||"").trim();
       const genero=$("binv-gen")?.value||"m";
       const fecha_nacimiento=$("binv-fnac")?.value||"";
+      const rut=($("binv-rut")?.value||"").trim().toUpperCase();
       const emailInv=($("binv-email")?.value||"").trim().toLowerCase();
       const instagram=normIG($("binv-ig")?.value||"");
       const wtspNum=($("binv-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
       const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
       const errEl=$("binv-err");
       const mostrarErr=(msg)=>{if(errEl){errEl.style.display="block";errEl.textContent=msg;}if(btn){btn.disabled=false;btn.textContent="Inscribirme 🎉";}};
-      if(!nombre||!apellido||!emailInv||!fecha_nacimiento||!instagram){
+      if(!nombre||!apellido||!rut||!emailInv||!fecha_nacimiento||!instagram){
         mostrarErr("Todos los campos son obligatorios.");return;
       }
       if(wtspNum.length!==8){
@@ -9849,7 +9851,7 @@ async function mostrarPanelBdayInv(token){
       const esBloq=bl.find(b=>norm(b.nombre)===norm(nombre+" "+apellido));
       if(esBloq){mostrarErr("No es posible inscribir a esta persona. Por favor reemplázala.");return;}
       // Guardar
-      const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,whatsapp:whatsapp||null,estado:"pendiente",created_at:now()};
+      const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,rut:rut||null,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,whatsapp:whatsapp||null,estado:"pendiente",created_at:now()};
       try{
         await sbPost("bday_invitados",[invData]);
         // Email invitación al cumpleañero (notificación)
