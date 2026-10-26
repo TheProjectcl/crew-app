@@ -2558,35 +2558,60 @@ function filterAccType(type){
   const lists=D.acc_lists.filter(l=>l.event_id===currentEvId&&(type==="all"||l.type===type));
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId&&(type==="all"||lists.map(l=>l.id).includes(e.list_id)));
   const ev=D.eventos.find(e=>e.id===currentEvId);
-  el.innerHTML=`<div class="table-wrap"><table class="data-table">
-    <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
-    <tbody>${entries.map(e=>{
-      const l=D.acc_lists.find(l=>l.id===e.list_id);
-      const puls=getPulsera(e,ev);
-      const rut=getRut(e);
-      // Diagnóstico interno: ¿de dónde viene el RUT? Útil mientras debuggeamos.
-      const _diag=e.rut?"campo_rut":(e.role&&typeof e.role==="string"&&e.role.toUpperCase().startsWith("RUT:")?"campo_role_legacy":"sin_rut");
-      const total=1+(e.companions||0);
-      const usadas=e.entradas_usadas||0;
-      const estadoBadge=usadas===0?badge("No validado","gray"):usadas>=total?badge("✓ Validado "+fmtT(e.checked_in_at),"green"):badge(`Parcial ${usadas}/${total}`,"amber");
-      const fueraTag=e.fuera_horario?` <span style="font-size:10px;color:#92400E;background:#fef3c7;padding:2px 6px;border-radius:6px;font-weight:600">⏰ fuera de horario</span>`:"";
-      const puedeValidar=usadas<total;
-      return `<tr>
-        <td><strong>${e.name}</strong>${e.notes?`<br><span style="font-size:11px;color:#aaa">${e.notes}</span>`:""}</td>
-        <td style="font-size:12px;color:#888">${rut?rut:`<span style="color:#9a3412;font-weight:600">— falta</span>${_diag==="sin_rut"?` <button class="btn" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="openEditEntry('${e.id}','${e.list_id||""}')">✏️ Completar</button>`:""}`}</td>
-        <td style="font-size:12px;color:#555">${l?.name||"—"}</td>
-        <td>${puls?`<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${puls.color}"></div><span style="font-size:12px;font-weight:600;color:${puls.color}">${puls.nombre}</span></div>`:`<span style="font-size:11px;color:#bbb">— sin pulsera —</span>`}</td>
-        <td style="font-weight:600;text-align:center">${total}${total>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${usadas} usadas</div>`:""}</td>
-        <td>${estadoBadge}${fueraTag}</td>
+
+  // Filas normales (acc_entries)
+  const rowsNormal=entries.map(e=>{
+    const l=D.acc_lists.find(l=>l.id===e.list_id);
+    const puls=getPulsera(e,ev);
+    const rut=getRut(e);
+    const _diag=e.rut?"campo_rut":(e.role&&typeof e.role==="string"&&e.role.toUpperCase().startsWith("RUT:")?"campo_role_legacy":"sin_rut");
+    const total=1+(e.companions||0);
+    const usadas=e.entradas_usadas||0;
+    const estadoBadge=usadas===0?badge("No validado","gray"):usadas>=total?badge("✓ Validado "+fmtT(e.checked_in_at),"green"):badge(`Parcial ${usadas}/${total}`,"amber");
+    const fueraTag=e.fuera_horario?` <span style="font-size:10px;color:#92400E;background:#fef3c7;padding:2px 6px;border-radius:6px;font-weight:600">⏰ fuera de horario</span>`:"";
+    const puedeValidar=usadas<total;
+    return `<tr>
+      <td><strong>${e.name}</strong>${e.notes?`<br><span style="font-size:11px;color:#aaa">${e.notes}</span>`:""}</td>
+      <td style="font-size:12px;color:#888">${rut?rut:`<span style="color:#9a3412;font-weight:600">— falta</span>${_diag==="sin_rut"?` <button class="btn" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="openEditEntry('${e.id}','${e.list_id||""}')">✏️ Completar</button>`:""}`}</td>
+      <td style="font-size:12px;color:#555">${l?.name||"—"}</td>
+      <td>${puls?`<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${puls.color}"></div><span style="font-size:12px;font-weight:600;color:${puls.color}">${puls.nombre}</span></div>`:`<span style="font-size:11px;color:#bbb">— sin pulsera —</span>`}</td>
+      <td style="font-weight:600;text-align:center">${total}${total>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${usadas} usadas</div>`:""}</td>
+      <td>${estadoBadge}${fueraTag}</td>
+      <td style="text-align:right">
+        <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+          ${puedeValidar?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Validar</button>`:""}
+          ${usadas>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')" title="Cancelar validación">🔓 Invalidar</button>`:""}
+          <button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${e.list_id||""}')" title="Editar">✏️</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Filas bday (solo en "Todos" o filtro "birthday")
+  let rowsBday="";
+  if(type==="all"||type==="birthday"){
+    const cumpleaneros=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
+    const bdayInvs=(D.bday_invitados||[]).filter(i=>cumpleaneros.some(c=>c.id===i.cumpleanero_id)&&i.estado==="aprobado");
+    rowsBday=bdayInvs.map(inv=>{
+      const c=cumpleaneros.find(c=>c.id===inv.cumpleanero_id);
+      const yaEntro=!!inv.llego;
+      return `<tr style="background:#f5f3ff">
+        <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${c?.nombre||""} ${c?.apellido||""}</span></td>
+        <td style="font-size:12px;color:#aaa">—</td>
+        <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
+        <td><span style="font-size:11px;color:#bbb">— sin pulsera —</span></td>
+        <td style="font-weight:600;text-align:center">1</td>
+        <td>${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):badge("No validado","gray")}</td>
         <td style="text-align:right">
-          <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
-            ${puedeValidar?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Validar</button>`:""}
-            ${usadas>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')" title="Cancelar validación">🔓 Invalidar</button>`:""}
-            <button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${e.list_id||""}')" title="Editar">✏️</button>
-          </div>
+          ${!yaEntro?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${inv.id}');setTimeout(()=>filterAccType('${type}'),500)">✓ Ingresar</button>`:""}
         </td>
       </tr>`;
-    }).join("")||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">Sin entradas.</td></tr>`}</tbody>
+    }).join("");
+  }
+
+  el.innerHTML=`<div class="table-wrap"><table class="data-table">
+    <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
+    <tbody>${rowsNormal+rowsBday||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">Sin entradas.</td></tr>`}</tbody>
   </table></div>`;
 }
 
