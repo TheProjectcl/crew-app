@@ -435,7 +435,7 @@ const sbDelete = async(t,m)=>{const r=await fetch(`${SB_URL}/rest/v1/${t}?${m}`,
 // ═══════════════════════════════════
 // STATE
 // ═══════════════════════════════════
-let D = {productoras:[],users:[],equipos:[],eventos:[],acc_lists:[],acc_entries:[],vip_tables:[],capacity_log:[],tareas:[],cumplimientos:[],recompensas:[],audit_log:[]};
+let D = {productoras:[],users:[],equipos:[],eventos:[],acc_lists:[],acc_entries:[],vip_tables:[],capacity_log:[],tareas:[],cumplimientos:[],recompensas:[],audit_log:[],bday_beneficios:[],bday_cumpleaneros:[],bday_invitados:[]};
 let CU = null;       // current user
 let CP = null;       // current productora
 let currentEvId = null;
@@ -2235,7 +2235,12 @@ VIEWS.dashboard=()=>{
 };
 
 // ── PUERTA ──
-VIEWS.puerta=()=>{
+VIEWS.puerta=async()=>{
+  // Cargar datos de cumpleaños si aún no están cargados
+  if(!D._bdayLoaded){
+    const pid=CU?.productora_id;
+    if(pid) await loadBday(pid).catch(()=>{});
+  }
   const evOp=asegurarEventoOperativo();
   if(!evOp){$("main-content").innerHTML=`<div class="page-title">Acreditación</div><div class="card" style="color:#999;padding:30px;text-align:center"><div style="font-size:32px;margin-bottom:10px">📅</div>No hay eventos activos en este momento.<br><span style="font-size:12px">Activa un evento desde la sección <strong>Eventos</strong> para empezar a acreditar.</span></div>`;return;}
   const ev=D.eventos.find(e=>e.id===currentEvId)||D.eventos[0];
@@ -9251,6 +9256,7 @@ async function loadBday(prodId){
   D.bday_beneficios  = beneficios||[];
   D.bday_cumpleaneros = cumpleaneros||[];
   D.bday_invitados   = invitados||[];
+  D._bdayLoaded = true;
 }
 
 // ── Sidebar CF: agregar sección Cumpleaños ──
