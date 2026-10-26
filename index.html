@@ -1081,6 +1081,7 @@ async function intentarLogin(email,pass,esRestauracion){
     else if(role==="cumpleanero") initBdayApp();
 
     iniciarRealtime();
+    iniciarInactividad();
     return true;
   }catch(e){
     showLoading(false);
@@ -1098,6 +1099,24 @@ async function restaurarSesion(){
     if(!email||!pass)return;
     await intentarLogin(email,pass,true);
   }catch(e){console.warn("No se pudo restaurar sesión:",e);}
+}
+
+// ── Auto-logout por inactividad (15 min) ──
+let _inactTimer=null;
+function iniciarInactividad(){
+  const MINS=15;
+  const resetTimer=()=>{
+    clearTimeout(_inactTimer);
+    _inactTimer=setTimeout(()=>{
+      if(!CU)return;
+      toast("Sesión cerrada por inactividad","warn");
+      setTimeout(()=>doLogout(),1500);
+    },MINS*60*1000);
+  };
+  ["mousemove","mousedown","keydown","touchstart","scroll","click"].forEach(ev=>{
+    document.addEventListener(ev,resetTimer,{passive:true});
+  });
+  resetTimer();
 }
 
 function doLogout(){
