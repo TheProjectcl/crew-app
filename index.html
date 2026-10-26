@@ -2077,8 +2077,8 @@ VIEWS["usuarios-global"]=()=>{
     </div>
 
     <div class="card" style="margin-bottom:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input class="form-input" id="ug-search" placeholder="🔍 Buscar por nombre o email…" value="${q}" style="flex:1;min-width:200px" oninput="window._uGlobalQ=this.value;VIEWS['usuarios-global']();setTimeout(()=>document.getElementById('ug-search')?.focus(),50)">
-      <select class="form-select" style="max-width:200px" onchange="window._uGlobalRol=this.value;VIEWS['usuarios-global']()">
+      <input class="form-input" id="ug-search" placeholder="🔍 Buscar por nombre o email…" value="${q}" style="flex:1;min-width:200px">
+      <select class="form-select" id="ug-rol-sel" style="max-width:200px">
         ${rolesOpts.map(([v,l])=>`<option value="${v}" ${filtroRol===v?"selected":""}>${l}</option>`).join("")}
       </select>
     </div>
@@ -2097,7 +2097,7 @@ VIEWS["usuarios-global"]=()=>{
         </div>
         <div class="table-wrap"><table class="data-table">
           <thead><tr><th>Nombre</th><th>Email</th><th>Rol</th><th>Pts</th><th></th></tr></thead>
-          <tbody>${usrs.map(u=>{
+          <tbody id="ug-tbody-${p.id}">${usrs.map(u=>{
             const esOwnerProd=u.id===p.owner_id;
             return `<tr ${esOwnerProd?'style="background:#fef3c7"':""}>
               <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><strong>${u.name}</strong>${esOwnerProd?` <span style="font-size:10px;font-weight:700;color:#92400E;background:#fde68a;padding:1px 6px;border-radius:4px;margin-left:4px">OWNER</span>`:""}</div></div></td>
@@ -2144,7 +2144,35 @@ VIEWS["usuarios-global"]=()=>{
       </div>`;
     })()}
   `;
+  // Vincular buscador sin re-renderizar (evita perder foco)
+  const ugInp=$("ug-search");
+  if(ugInp){ugInp.addEventListener("input",e=>{window._uGlobalQ=e.target.value;renderUGTabla();});}
+  const ugSel=$("ug-rol-sel");
+  if(ugSel){ugSel.value=window._uGlobalRol||"all";ugSel.addEventListener("change",e=>{window._uGlobalRol=e.target.value;VIEWS["usuarios-global"]();});}
 };
+// renderUGTabla: re-filtra y actualiza solo las filas sin tocar los controles
+function renderUGTabla(){
+  const q=(window._uGlobalQ||"").toLowerCase().trim();
+  const filtroRol=window._uGlobalRol||"all";
+  const filtra=arr=>arr.filter(u=>{
+    if(filtroRol!=="all"&&u.role!==filtroRol)return false;
+    if(!q)return true;
+    return(u.name||"").toLowerCase().includes(q)||(u.email||"").toLowerCase().includes(q);
+  });
+  // Actualizar cada tbody de productora directamente
+  (D.productoras||[]).forEach(p=>{
+    const tbody=document.getElementById("ug-tbody-"+p.id);
+    if(!tbody)return;
+    const usrs=filtra((D.users||[]).filter(u=>u.productora_id===p.id));
+    tbody.innerHTML=usrs.map(u=>`<tr>
+      <td style="padding:7px 8px"><strong>${u.name}</strong></td>
+      <td style="font-size:12px;color:#888">${u.email}</td>
+      <td style="padding:7px 8px">${badge(u.role||"staff","gray")}</td>
+      <td style="padding:7px 8px;color:#888">${u.puntos||0}</td>
+      <td style="text-align:right"><button class="btn" style="padding:3px 8px;font-size:11px" onclick="openEditUser('${u.id}','usuarios-global')">✏️ Editar</button></td>
+    </tr>`).join("")||`<tr><td colspan="5" style="text-align:center;color:#aaa;padding:12px;font-size:12px">Sin usuarios.</td></tr>`;
+  });
+}
 
 // ── DASHBOARD ──
 VIEWS.dashboard=()=>{
@@ -8910,7 +8938,8 @@ VIEWS["base-datos"]=async()=>{
   const evs=D.eventos||[];
   // Filtros
   let bdFiltroEv="todos", bdFiltroEstado="todos", bdBusqueda="";
-  const render=()=>{
+  // renderTabla: solo actualiza la tabla, sin tocar los controles (evita perder foco del input)
+  const renderTabla=()=>{
     let filtrados=posts;
     if(bdFiltroEv!=="todos") filtrados=filtrados.filter(p=>p.evento_id===bdFiltroEv);
     if(bdFiltroEstado!=="todos") filtrados=filtrados.filter(p=>p.estado===bdFiltroEstado);
@@ -8918,32 +8947,52 @@ VIEWS["base-datos"]=async()=>{
       const q=bdBusqueda.toLowerCase();
       filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q));
     }
+    window._bdFiltrados=filtrados;
+    const count=filtrados.length;
+    const el=$("bd-camp-count");if(el)el.textContent=count;
+    const countEl=$("bd-count");if(countEl)countEl.textContent=count+" contacto"+(count!==1?"s":"");
+    const campBtn=$("bd-camp-send-btn");if(campBtn)campBtn.textContent=`📨 Enviar a ${count} contacto${count!==1?"s":""}`;
+    const tbody=$("bd-tbody");
+    if(!tbody)return;
+    tbody.innerHTML=filtrados.length?filtrados.map(p=>{
+      const ev=evs.find(e=>e.id===p.evento_id);
+      return `<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut||""}</div></td>
+        <td style="padding:8px">${p.email||"—"}</td>
+        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+        <td style="padding:8px">${p.whatsapp||"—"}</td>
+        <td style="padding:8px;font-size:11px;color:var(--ink-3)">${ev?.name||"—"}</td>
+        <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
+      </tr>`;
+    }).join(""):`<tr><td colspan="6" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`;
+  };
+  const render=()=>{
     $("bd-content").innerHTML=`
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-        <input class="form-input" style="max-width:200px;margin:0" placeholder="🔍 Buscar..." oninput="window._bdBuscar(this.value)" value="${bdBusqueda}">
-        <select class="form-input" style="max-width:180px;margin:0" onchange="window._bdFiltroEv(this.value)">
+        <input class="form-input" id="bd-search-inp" style="max-width:200px;margin:0" placeholder="🔍 Buscar...">
+        <select class="form-input" id="bd-sel-ev" style="max-width:180px;margin:0">
           <option value="todos">Todos los eventos</option>
-          ${evs.map(e=>`<option value="${e.id}" ${bdFiltroEv===e.id?"selected":""}>${e.name}</option>`).join("")}
+          ${evs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}
         </select>
-        <select class="form-input" style="max-width:160px;margin:0" onchange="window._bdFiltroEstado(this.value)">
+        <select class="form-input" id="bd-sel-estado" style="max-width:160px;margin:0">
           <option value="todos">Todos los estados</option>
-          <option value="pendiente" ${bdFiltroEstado==="pendiente"?"selected":""}>Pendiente</option>
-          <option value="aprobado" ${bdFiltroEstado==="aprobado"?"selected":""}>Aprobado</option>
-          <option value="rechazado" ${bdFiltroEstado==="rechazado"?"selected":""}>Rechazado</option>
-          <option value="falta_info" ${bdFiltroEstado==="falta_info"?"selected":""}>Falta info</option>
-          <option value="docs_recibidos" ${bdFiltroEstado==="docs_recibidos"?"selected":""}>Docs recibidos</option>
+          <option value="pendiente">Pendiente</option>
+          <option value="aprobado">Aprobado</option>
+          <option value="rechazado">Rechazado</option>
+          <option value="falta_info">Falta info</option>
+          <option value="docs_recibidos">Docs recibidos</option>
         </select>
-        <span style="font-size:12px;color:var(--ink-4)">${filtrados.length} contacto${filtrados.length!==1?"s":""}</span>
+        <span id="bd-count" style="font-size:12px;color:var(--ink-4)"></span>
         <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar CSV</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px" onclick="window._bdCampana()">✉ Enviar campaña</button>
       </div>
       <div id="bd-campana-panel" style="display:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:12px">✉ Nueva campaña de email</div>
-        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">${filtrados.length}</strong> contacto${filtrados.length!==1?"s":""} con los filtros actuales.</div>
+        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">0</strong> contactos con los filtros actuales.</div>
         <div style="margin-bottom:10px"><label class="form-label">Asunto</label><input class="form-input" id="bd-camp-asunto" placeholder="Ej: ¡Te invitamos a nuestro próximo evento!"></div>
         <div style="margin-bottom:10px"><label class="form-label">Mensaje (HTML o texto)</label><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-primary" onclick="window._bdEnviarCampana()">📨 Enviar a ${filtrados.length} contacto${filtrados.length!==1?"s":""}</button>
+          <button id="bd-camp-send-btn" class="btn btn-primary" onclick="window._bdEnviarCampana()">📨 Enviar</button>
           <button class="btn" onclick="document.getElementById('bd-campana-panel').style.display='none'">Cancelar</button>
         </div>
       </div>
@@ -8957,28 +9006,21 @@ VIEWS["base-datos"]=async()=>{
           <th style="padding:8px;text-align:left">Evento</th>
           <th style="padding:8px;text-align:left">Estado</th>
         </tr></thead>
-        <tbody>
-        ${filtrados.length?filtrados.map(p=>{
-          const ev=evs.find(e=>e.id===p.evento_id);
-          return `<tr style="border-bottom:1px solid var(--line)">
-            <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut||""}</div></td>
-            <td style="padding:8px">${p.email||"—"}</td>
-            <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
-            <td style="padding:8px">${p.whatsapp||"—"}</td>
-            <td style="padding:8px;font-size:11px;color:var(--ink-3)">${ev?.name||"—"}</td>
-            <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
-          </tr>`;
-        }).join(""):`<tr><td colspan="6" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`}
-        </tbody>
+        <tbody id="bd-tbody"></tbody>
       </table></div>`;
+    // Vincular eventos sin re-renderizar controles
+    const inp=$("bd-search-inp");
+    if(inp){inp.value=bdBusqueda;inp.addEventListener("input",e=>{bdBusqueda=e.target.value;renderTabla();});}
+    const selEv=$("bd-sel-ev");
+    if(selEv){selEv.value=bdFiltroEv;selEv.addEventListener("change",e=>{bdFiltroEv=e.target.value;renderTabla();});}
+    const selEst=$("bd-sel-estado");
+    if(selEst){selEst.value=bdFiltroEstado;selEst.addEventListener("change",e=>{bdFiltroEstado=e.target.value;renderTabla();});}
     $("bd-loading").textContent="";
-    // Actualizar count en panel campaña si está abierto
-    const el=$("bd-camp-count");if(el)el.textContent=filtrados.length;
-    window._bdFiltrados=filtrados;
+    renderTabla();
   };
-  window._bdBuscar=(v)=>{ bdBusqueda=v; render(); };
-  window._bdFiltroEv=(v)=>{ bdFiltroEv=v; render(); };
-  window._bdFiltroEstado=(v)=>{ bdFiltroEstado=v; render(); };
+  window._bdBuscar=(v)=>{ bdBusqueda=v; renderTabla(); };
+  window._bdFiltroEv=(v)=>{ bdFiltroEv=v; renderTabla(); };
+  window._bdFiltroEstado=(v)=>{ bdFiltroEstado=v; renderTabla(); };
   window._bdCampana=()=>{ const p=$("bd-campana-panel"); if(p)p.style.display=p.style.display==="none"?"block":"none"; };
   window._bdExportar=()=>{
     const f=window._bdFiltrados||[];
@@ -9247,61 +9289,68 @@ VIEWS["bday-cumpleaneros"] = async()=>{
 
   window.bdaySetFiltro=(val)=>{window._bdayEvFiltro=val;window.renderCumple();};
 
-  const renderCumple=()=>{
+  let bdayBusq="";
+  const renderCumpleTabla=()=>{
     const fv=window._bdayEvFiltro||"todos";
     const cumps=(D.bday_cumpleaneros||[]);
-    const filtrados=fv==="todos"?cumps:cumps.filter(c=>c.evento_id===fv);
-    const busq=($("bday-busq")?.value||"").toLowerCase().trim();
-
+    let filtrados=fv==="todos"?cumps:cumps.filter(c=>c.evento_id===fv);
+    if(bdayBusq){
+      const q=bdayBusq.toLowerCase();
+      filtrados=filtrados.filter(c=>((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q));
+    }
+    const grid=$("bday-grid");if(!grid)return;
+    grid.innerHTML=(!filtrados.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:"")
+      +filtrados.map(c=>{
+        const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+        const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+        const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id);
+        const aprobados=invs.filter(i=>i.estado==="aprobado").length;
+        const pendientes=invs.filter(i=>i.estado==="pendiente").length;
+        const maxInv=ben?.max_invitados||0;
+        return `<div class="card" style="padding:18px">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div>
+              <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
+              <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Invitados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
+              ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:4px;display:inline-block">⚠ Datos incompletos</span>`}
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
+              <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
+              <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
+            </div>
+          </div>
+        </div>`;
+      }).join("");
+  };
+  const renderCumple=()=>{
+    const fv=window._bdayEvFiltro||"todos";
     mc.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
         <h1 style="font-size:22px;font-weight:700;margin:0">🎂 Cumpleañeros</h1>
         <button class="btn btn-primary" onclick="bdayNuevoCumple()">+ Registrar cumpleañero</button>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
-        <select class="form-input" style="max-width:260px;margin:0;font-size:13px;padding:6px 10px" onchange="bdaySetFiltro(this.value)">
-          <option value="todos"${fv==="todos"?' selected':''}>Todos los eventos</option>
-          ${evs.map(e=>`<option value="${e.id}"${fv===e.id?' selected':''}>${e.name}</option>`).join("")}
+        <select id="bday-ev-sel" class="form-input" style="max-width:260px;margin:0;font-size:13px;padding:6px 10px">
+          <option value="todos">Todos los eventos</option>
+          ${evs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}
         </select>
-        <input id="bday-busq" class="form-input" style="max-width:220px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email..." oninput="renderCumple()">
+        <input id="bday-busq" class="form-input" style="max-width:220px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email...">
       </div>
-      <div style="display:grid;gap:12px">
-        ${!filtrados.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:""}
-        ${filtrados.filter(c=>{
-          if(!busq)return true;
-          return ((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(busq)||(c.email||"").toLowerCase().includes(busq);
-        }).map(c=>{
-          const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
-          const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
-          const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id);
-          const aprobados=invs.filter(i=>i.estado==="aprobado").length;
-          const pendientes=invs.filter(i=>i.estado==="pendiente").length;
-          const maxInv=ben?.max_invitados||0;
-          return `
-            <div class="card" style="padding:18px">
-              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-                <div>
-                  <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
-                  <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
-                  <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Invitados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
-                  ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:4px;display:inline-block">⚠ Datos incompletos</span>`}
-                </div>
-                <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
-                  <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
-                  <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
-                  <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
-                  <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
-                </div>
-              </div>
-            </div>`;
-        }).join("")}
-      </div>`;
-
-    // re-bind closures after render
+      <div id="bday-grid" style="display:grid;gap:12px"></div>`;
+    // Vincular sin re-renderizar controles
+    const selEv=$("bday-ev-sel");
+    if(selEv){selEv.value=fv;selEv.addEventListener("change",e=>{window._bdayEvFiltro=e.target.value;renderCumpleTabla();});}
+    const busqInp=$("bday-busq");
+    if(busqInp){busqInp.value=bdayBusq;busqInp.addEventListener("input",e=>{bdayBusq=e.target.value;renderCumpleTabla();});}
+    renderCumpleTabla();
     window.renderCumple=renderCumple;
   };
   renderCumple();
-  window.renderCumple=renderCumple;
+  window.renderCumple=()=>renderCumpleTabla();
+  window._renderCumpleFull=renderCumple;
 
   window.bdayNuevoCumple=()=>bdayFormCumple(null,prodId,evs);
   window.bdayCopiarLink=(token)=>{
