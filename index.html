@@ -2496,9 +2496,11 @@ function searchAcc(q){
   if(!q.trim()){el.innerHTML="";return;}
   const qn=q.toLowerCase().trim(), qr=normRut(q);
   const res=D.acc_entries.filter(e=>e.event_id===currentEvId&&(e.name.toLowerCase().includes(qn)||(getRut(e)&&normRut(getRut(e)).includes(qr)&&qr.length>=2))).slice(0,6);
+  // Incluir invitados bday aprobados
+  const bdayRes=typeof bdayBuscarEnAcreditacion==="function"?bdayBuscarEnAcreditacion(q,currentEvId).slice(0,4):[];
   const ev=D.eventos.find(e=>e.id===currentEvId);
-  if(!res.length){el.innerHTML=`<div style="padding:12px;background:#FEE2E2;border-radius:10px;text-align:center;color:#991B1B;font-weight:600">❌ No encontrado en ninguna lista</div>`;return;}
-  el.innerHTML=res.map(e=>{
+  if(!res.length&&!bdayRes.length){el.innerHTML=`<div style="padding:12px;background:#FEE2E2;border-radius:10px;text-align:center;color:#991B1B;font-weight:600">❌ No encontrado en ninguna lista</div>`;return;}
+  const htmlNormal=res.map(e=>{
     const l=D.acc_lists.find(l=>l.id===e.list_id);
     const puls=getPulsera(e,ev);
     const total=1+(e.companions||0);
@@ -2517,6 +2519,38 @@ function searchAcc(q){
       </div>
     </div>`;
   }).join("");
+  const htmlBday=bdayRes.map(inv=>{
+    const yaEntro=!!inv.llego;
+    return `<div style="background:#f0eeff;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-left:3px solid #534AB7">
+      <div>
+        <div style="font-size:14px;font-weight:600">${inv.nombre} ${inv.apellido} <span style="font-size:11px;color:#534AB7;font-weight:600">${inv.genero==="m"?"♂":"♀"}</span></div>
+        <div style="font-size:11px;color:#534AB7;font-weight:600">${inv.info}</div>
+        ${inv.whatsapp?`<div style="font-size:11px;color:#25D366">📱 ${inv.whatsapp}</div>`:""}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+        ${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):`<button class="btn btn-success" style="padding:6px 12px;font-size:12px" onclick="bdayCheckinInv('${inv.id}')">✓ Ingresar</button>`}
+      </div>
+    </div>`;
+  }).join("");
+  el.innerHTML=htmlNormal+htmlBday;
+}
+
+async function bdayCheckinInv(invId){
+  const inv=(D.bday_invitados||[]).find(i=>i.id===invId);
+  if(!inv)return;
+  if(inv.llego){toast("Ya ingresó","warn");return;}
+  const at=now();
+  await sbPatch("bday_invitados",`id=eq.${invId}`,{llego:true,llego_at:at});
+  inv.llego=true;inv.llego_at=at;
+  // Sumar al aforo general del evento
+  const aforo=getAforo(),max=getMax();
+  if(aforo<max){
+    const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};
+    D.capacity_log.push(cap);
+    await sbPost("capacity_log",[cap]);
+  }
+  toast(`✓ ${inv.nombre} ${inv.apellido} ingresó 🎂`,"success");
+  searchAcc($("search-q")?.value||"");
 }
 
 function filterAccType(type){
@@ -9775,10 +9809,27 @@ async function initBdayApp(){
   const cerrada=fechaEv&&ahora>=fechaEv;
   const aprobados=()=>invitados.filter(i=>i.estado==="aprobado").length;
   const pendientes=()=>invitados.filter(i=>i.estado==="pendiente").length;
+  const ingresados=()=>invitados.filter(i=>i.llego).length;
+
+  // Polling cada 30s para actualizar ingresados en tiempo real
+  let _bdayPollTimer=null;
+  function startBdayPolling(){
+    if(_bdayPollTimer)clearInterval(_bdayPollTimer);
+    _bdayPollTimer=setInterval(async()=>{
+      try{
+        const fresh=await sbGet("bday_invitados",`cumpleanero_id=eq.${c.id}`);
+        if(fresh){
+          invitados=fresh;
+          updateContadores();
+          document.getElementById("bday-inv-list").innerHTML=renderInvList();
+        }
+      }catch(e){}
+    },30000);
+  }
 
   const render=()=>{
-    const ap=aprobados(); const pend=pendientes();
-    const progPremio=ben?.premio_min_invitados?Math.min(100,Math.round(ap/ben.premio_min_invitados*100)):0;
+    const ap=aprobados(); const pend=pendientes(); const ing=ingresados();
+    const progPremio=ben?.premio_min_invitados?Math.min(100,Math.round(ing/ben.premio_min_invitados*100)):0;
     document.body.innerHTML=`
       <div style="min-height:100vh;background:#f4f4f6;font-family:system-ui,sans-serif">
         <div style="background:#534AB7;color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between">
@@ -9834,15 +9885,16 @@ async function initBdayApp(){
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-ap" style="font-size:28px;font-weight:800;color:#534AB7">${ap}</div><div style="color:#888;font-size:11px">aprobados</div></div>
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-pend" style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-libres" style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
+              <div style="text-align:center;min-width:80px"><div id="bday-cnt-ing" style="font-size:28px;font-weight:800;color:#16a34a">${ing}</div><div style="color:#888;font-size:11px">ya entraron 🎉</div></div>
             </div>
             ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra el <strong>${ev?.date?new Date(ev.date+" 12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"long"}):""}</strong> a las <strong>${hCierre}</strong> hrs</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
             ${ben?.premio_min_invitados?`
               <div style="margin-top:14px">
-                <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">🏆 Premio: ${ben.premio_descripcion||"—"} si ingresan ≥${ben.premio_min_invitados}</div>
+                <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">🏆 Premio: ${ben.premio_descripcion||"—"} si entran ≥${ben.premio_min_invitados} al evento</div>
                 <div style="background:#e8e8e8;border-radius:99px;height:8px;overflow:hidden">
-                  <div style="background:#534AB7;width:${progPremio}%;height:100%;border-radius:99px;transition:width .3s"></div>
+                  <div id="bday-prog-bar" style="background:${progPremio>=100?"#16a34a":"#534AB7"};width:${progPremio}%;height:100%;border-radius:99px;transition:width .3s"></div>
                 </div>
-                <div style="font-size:11px;color:#888;margin-top:4px">${ap} de ${ben.premio_min_invitados} invitados aprobados en tu lista</div>
+                <div style="font-size:11px;color:#888;margin-top:4px" id="bday-prog-txt">${ing} de ${ben.premio_min_invitados} invitados ingresaron al evento${ing>=ben.premio_min_invitados?" 🏆 ¡Premio ganado!":""}</div>
               </div>`:""
             }
           </div>
@@ -9868,13 +9920,24 @@ async function initBdayApp(){
   };
 
   function updateContadores(){
-    const ap=aprobados();const pend=pendientes();
+    const ap=aprobados();const pend=pendientes();const ing=ingresados();
     const elAp=document.getElementById("bday-cnt-ap");
     const elPend=document.getElementById("bday-cnt-pend");
     const elLibres=document.getElementById("bday-cnt-libres");
+    const elIng=document.getElementById("bday-cnt-ing");
     if(elAp)elAp.textContent=ap;
     if(elPend)elPend.textContent=pend;
     if(elLibres)elLibres.textContent=maxInv-ap;
+    if(elIng)elIng.textContent=ing;
+    // update progress bar
+    const minInv=ben?.premio_min_invitados;
+    if(minInv){
+      const prog=Math.min(100,Math.round(ing/minInv*100));
+      const barEl=document.getElementById("bday-prog-bar");
+      const txtEl=document.getElementById("bday-prog-txt");
+      if(barEl){barEl.style.width=prog+"%";barEl.style.background=prog>=100?"#16a34a":"#534AB7";}
+      if(txtEl)txtEl.textContent=`${ing} de ${minInv} invitados ingresaron al evento${ing>=minInv?" 🏆 ¡Premio ganado!":""}`;
+    }
   }
 
   function renderInvList(){
@@ -9972,6 +10035,7 @@ async function initBdayApp(){
     };
   }
   render();
+  startBdayPolling();
 }
 
 // ── Hook en el flujo de login para cumpleañero ──
