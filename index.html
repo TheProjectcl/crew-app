@@ -9696,8 +9696,19 @@ async function initBdayApp(){
               </div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box"></div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Foto del carnet (URL o subir)</label>
-                <input id="bpu-carnet" class="form-input" value="${c.foto_carnet||""}" placeholder="https://... o sube una foto" style="width:100%;box-sizing:border-box">
+              <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Foto del carnet</label>
+                <input type="file" id="bpu-carnet-file" accept="image/*" capture="environment" style="display:none" onchange="bdayPreviewCarnet(this)">
+                <div id="bpu-carnet-preview" style="margin-bottom:8px;display:${c.foto_carnet?'block':'none'}">
+                  <img id="bpu-carnet-img" src="${c.foto_carnet||''}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
+                </div>
+                <div style="display:flex;gap:8px">
+                  <button type="button" onclick="document.getElementById('bpu-carnet-file').click()" style="flex:1;background:#f4f4f6;border:1.5px dashed #ccc;border-radius:8px;padding:10px;font-size:13px;cursor:pointer;color:#555;font-weight:500">
+                    📷 ${c.foto_carnet?'Cambiar foto':'Subir foto / Cámara'}
+                  </button>
+                  ${c.foto_carnet?`<button type="button" onclick="bdayQuitarCarnet()" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer">✕</button>`:''}
+                </div>
+                <input type="hidden" id="bpu-carnet" value="${c.foto_carnet||''}">
               </div>
               <button class="btn btn-primary" onclick="bdayGuardarPerfil()" style="width:100%">Guardar perfil →</button>
             </div>
@@ -9785,6 +9796,36 @@ async function initBdayApp(){
       invitados=invitados.filter(i=>i.id!==invId);
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
       toast("Eliminado","warn");
+    };
+    window.bdayPreviewCarnet=async(input)=>{
+      const file=input.files[0];if(!file)return;
+      // Preview local inmediato
+      const reader=new FileReader();
+      reader.onload=e=>{
+        const img=$("bpu-carnet-img");const prev=$("bpu-carnet-preview");
+        if(img){img.src=e.target.result;}
+        if(prev){prev.style.display="block";}
+      };
+      reader.readAsDataURL(file);
+      // Subir a Supabase Storage
+      toast("Subiendo foto...","info");
+      try{
+        const ext=file.name.split(".").pop()||"jpg";
+        const path=`bday-carnet/${c.id}_${Date.now()}.${ext}`;
+        const upRes=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{
+          method:"POST",
+          headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":file.type,"x-upsert":"true"},
+          body:file
+        });
+        if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
+        const url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+        const hidden=$("bpu-carnet");if(hidden)hidden.value=url;
+        toast("Foto lista ✅","ok");
+      }catch(e){toast("Error subiendo foto: "+e.message,"warn");}
+    };
+    window.bdayQuitarCarnet=()=>{
+      const img=$("bpu-carnet-img");const prev=$("bpu-carnet-preview");const hidden=$("bpu-carnet");
+      if(img)img.src="";if(prev)prev.style.display="none";if(hidden)hidden.value="";
     };
     window.bdayGuardarPerfil=async()=>{
       const nombre=($("bpu-nom")?.value||"").trim();
