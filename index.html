@@ -5334,8 +5334,8 @@ function openEditarEvento(evId){
       <div><label class="form-label">Aforo máximo</label><input class="form-input" id="ee-cap" type="number" value="${ev.max_capacity||500}"></div>
     </div>
     <div class="form-row">
-      <div><label class="form-label">Hora inicio</label><input class="form-input" id="ee-s" type="time" value="${ev.start_time||"23:00"}"></div>
-      <div><label class="form-label">Hora término</label><input class="form-input" id="ee-e" type="time" value="${ev.end_time||"06:00"}"></div>
+      <div><label class="form-label">Hora inicio (24h)</label><input class="form-input" id="ee-s" placeholder="22:00" maxlength="5" value="${ev.start_time||"23:00"}" oninput="this.value=this.value.replace(/[^0-9:]/g,'')"></div>
+      <div><label class="form-label">Hora término (24h)</label><input class="form-input" id="ee-e" placeholder="05:00" maxlength="5" value="${ev.end_time||"06:00"}" oninput="this.value=this.value.replace(/[^0-9:]/g,'')"></div>
     </div>
     <label class="form-label">Lugar (venue)</label>
     <input class="form-input" id="ee-v" value="${(ev.venue||"").replace(/"/g,'&quot;')}" placeholder="Club Fauna">
@@ -9277,8 +9277,8 @@ function bdayFormBeneficio(id, prodId, cb){
         <div><label class="form-label">Mujer ($)</label><input class="form-input" id="bb-prm" type="number" min="0" value="${b?.precio_invitado_m||0}"></div>
       </div>
       <div class="form-row">
-        <div><label class="form-label">Hora validez lista</label><input class="form-input" id="bb-hval" type="time" value="${b?.hora_validez||"23:30"}"></div>
-        <div><label class="form-label">Hora cierre lista</label><input class="form-input" id="bb-hcie" type="time" value="${b?.hora_cierre||"16:00"}"></div>
+        <div><label class="form-label">Hora validez lista (24h)</label><input class="form-input" id="bb-hval" placeholder="23:30" maxlength="5" value="${b?.hora_validez||"23:30"}" oninput="this.value=this.value.replace(/[^0-9:]/g,'')"></div>
+        <div><label class="form-label">Hora cierre lista (24h)</label><input class="form-input" id="bb-hcie" placeholder="16:00" maxlength="5" value="${b?.hora_cierre||"16:00"}" oninput="this.value=this.value.replace(/[^0-9:]/g,'')"></div>
       </div>
       <p style="font-size:12px;font-weight:600;color:var(--ink-2);margin:4px 0 0">Premio condicional (opcional)</p>
       <div class="form-row">
