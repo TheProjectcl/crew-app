@@ -8572,7 +8572,7 @@ VIEWS.cfConciliacion = async()=>{
           }
         }
         // Match automático
-        const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pagado");
+        const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&o.estado==="pendiente"&&o.comprobante_url);
         const matches=[];
         for(const ord of ordenesPend){
           const match=abonos.find(a=>a.monto===ord.monto_total);
