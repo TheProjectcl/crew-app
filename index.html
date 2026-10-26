@@ -9237,7 +9237,7 @@ function emailBdayAprobado(nombreInv, nombreCumple, eventoNombre, productoraNomb
   const {precioH=0, precioM=0, genero="", horaValidez=""} = opts;
   const precio = genero==="m" ? precioH : precioM;
   const precioTxt = precio>0 ? `$${precio.toLocaleString("es-CL")}` : "gratis";
-  const horaTxt = horaValidez ? `La lista cierra a las <strong>${horaValidez} hrs</strong> — asegúrate de llegar antes de esa hora.` : "";
+  const horaTxt = horaValidez ? `Tu entrada con este precio es válida hasta las <strong>${horaValidez} hrs</strong> — asegúrate de ingresar antes de esa hora.` : "";
   return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
     <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
       <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
@@ -9319,8 +9319,8 @@ VIEWS["bday-beneficios"] = async()=>{
                   <span>🎟 ${b.covers_cumple||0} cover(s) cumpleañero</span>
                   ${b.covers_adicionales?`<span>➕ ${b.covers_adicionales} covers adicionales</span>`:""}
                   ${b.precio_invitado_h||b.precio_invitado_m?`<span>💰 H: $${(b.precio_invitado_h||0).toLocaleString("es-CL")} / M: $${(b.precio_invitado_m||0).toLocaleString("es-CL")}</span>`:`<span>💰 Entrada gratis invitados</span>`}
-                  ${b.hora_validez?`<span>⏰ Válida hasta ${b.hora_validez}</span>`:""}
-                  ${b.hora_cierre?`<span>🔒 Cierre lista: ${b.hora_cierre}</span>`:""}
+                  ${b.hora_validez?`<span>⏰ Ingreso válido hasta ${b.hora_validez}</span>`:""}
+                  ${b.hora_cierre?`<span>🔒 Cierre inscripciones: ${b.hora_cierre}</span>`:""}
                   ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: ${b.premio_descripcion||"—"}</span>`:""}
                 </div>
               </div>
@@ -9364,8 +9364,8 @@ function bdayFormBeneficio(id, prodId, cb){
         <div><label class="form-label">Mujer ($)</label><input class="form-input" id="bb-prm" type="number" min="0" value="${b?.precio_invitado_m||0}"></div>
       </div>
       <div class="form-row">
-        <div><label class="form-label">Hora validez lista (formato 24h, ej: 23:30)</label><input class="form-input" id="bb-hval" type="text" autocomplete="off" inputmode="numeric" placeholder="23:30" maxlength="5" style="letter-spacing:2px" value="${b?.hora_validez||"23:30"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
-        <div><label class="form-label">Hora cierre lista (formato 24h, ej: 16:00)</label><input class="form-input" id="bb-hcie" type="text" autocomplete="off" inputmode="numeric" placeholder="16:00" maxlength="5" style="letter-spacing:2px" value="${b?.hora_cierre||"16:00"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
+        <div><label class="form-label">Ingreso válido hasta las (formato 24h, ej: 23:30)</label><input class="form-input" id="bb-hval" type="text" autocomplete="off" inputmode="numeric" placeholder="23:30" maxlength="5" style="letter-spacing:2px" value="${b?.hora_validez||"23:30"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
+        <div><label class="form-label">Cierre de inscripciones (formato 24h, ej: 16:00)</label><input class="form-input" id="bb-hcie" type="text" autocomplete="off" inputmode="numeric" placeholder="16:00" maxlength="5" style="letter-spacing:2px" value="${b?.hora_cierre||"16:00"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
       </div>
       <p style="font-size:12px;font-weight:600;color:var(--ink-2);margin:4px 0 0">Premio condicional (opcional)</p>
       <div class="form-row">
@@ -9647,8 +9647,8 @@ window.bdayMostrarBeneficio=(benId)=>{
       <span>🎟 <strong>${b.covers_cumple||0}</strong> cover(s) cumpleañero</span>
       ${b.covers_adicionales?`<span>➕ <strong>${b.covers_adicionales}</strong> covers adicionales</span>`:""}
       ${gratis?`<span>💸 Entrada <strong>gratis</strong> invitados</span>`:`<span>💰 H: <strong>$${(b.precio_invitado_h||0).toLocaleString("es-CL")}</strong> / M: <strong>$${(b.precio_invitado_m||0).toLocaleString("es-CL")}</strong></span>`}
-      ${b.hora_cierre?`<span>🔒 Cierre lista: <strong>${b.hora_cierre}</strong></span>`:""}
-      ${b.hora_validez?`<span>⏰ Válida hasta: <strong>${b.hora_validez}</strong></span>`:""}
+      ${b.hora_cierre?`<span>🔒 Cierre inscripciones: <strong>${b.hora_cierre}</strong></span>`:""}
+      ${b.hora_validez?`<span>⏰ Ingreso válido hasta: <strong>${b.hora_validez}</strong></span>`:""}
       ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: <strong>${b.premio_descripcion||"—"}</strong></span>`:""}
     </div>`;
 };
