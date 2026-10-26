@@ -9289,6 +9289,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
                 <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
                   <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
                   <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
+                  <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
                   <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
                 </div>
               </div>
@@ -9314,6 +9315,18 @@ VIEWS["bday-cumpleaneros"] = async()=>{
     D.bday_cumpleaneros=D.bday_cumpleaneros.filter(c=>c.id!==id);
     D.bday_invitados=D.bday_invitados.filter(i=>i.cumpleanero_id!==id);
     renderCumple();toast("Eliminado","warn");
+  };
+  window.bdayReenviarBienvenida=async(id)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===id);
+    if(!c)return toast("Cumpleañero no encontrado","warn");
+    const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+    const prod=(D.productoras||[]).find(p=>p.id===(c.productora_id||prodId));
+    const linkPanel=`${APP_URL}?bday_panel=${c.token_invitacion}`;
+    const linkInv=bdayTokenLink(c.token_invitacion);
+    toast("Enviando correo...","info");
+    const ok=await sendEmail(c.email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
+      emailBdayBienvenida(c.nombre,c.apellido,c.email,c.pass_hash||"—",ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+    if(ok)toast(`✅ Correo reenviado a ${c.email}`,"ok");
   };
   window.bdayVerInvitados=(cid)=>{
     const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);
