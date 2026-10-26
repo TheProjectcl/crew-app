@@ -9491,29 +9491,33 @@ window.bdayGuardarCumple=async(id,prodId)=>{
   };
 
   let cumpleId;
-  if(id){
-    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,data);
-    cumpleId=id;
-    const idx=D.bday_cumpleaneros.findIndex(c=>c.id===id);
-    if(idx>=0) D.bday_cumpleaneros[idx]={...D.bday_cumpleaneros[idx],...data};
-    toast("Cumpleañero actualizado","ok");
-  }else{
-    cumpleId=uid();
-    const [nuevo]=await sbPost("bday_cumpleaneros",[{...data,id:cumpleId}]);
-    D.bday_cumpleaneros.push(nuevo||{...data,id:cumpleId});
-    toast("Cumpleañero registrado","ok");
-    // Agregar usuario con role cumpleanero
-    const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,evento_ids:[evento_id],puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true,created_at:now()};
-    await sbPost("users",[userBday]);
-    D.users.push(userBday);
-    // Correo bienvenida
-    const linkPanel=`${APP_URL}?bday_panel=${token}`;
-    const linkInv=bdayTokenLink(token);
-    await sendEmail(email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
-      emailBdayBienvenida(nombre,apellido,email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+  try{
+    if(id){
+      await sbPatch("bday_cumpleaneros",`id=eq.${id}`,data);
+      cumpleId=id;
+      const idx=D.bday_cumpleaneros.findIndex(c=>c.id===id);
+      if(idx>=0) D.bday_cumpleaneros[idx]={...D.bday_cumpleaneros[idx],...data};
+      toast("Cumpleañero actualizado","ok");
+    }else{
+      cumpleId=uid();
+      const [nuevo]=await sbPost("bday_cumpleaneros",[{...data,id:cumpleId}]);
+      D.bday_cumpleaneros.push(nuevo||{...data,id:cumpleId});
+      toast("Cumpleañero registrado","ok");
+      // Agregar usuario con role cumpleanero (no-bloqueante, fallo no detiene el flujo)
+      const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,evento_ids:[evento_id],puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true,created_at:now()};
+      sbPost("users",[userBday]).then(u=>{D.users.push(userBday);}).catch(e=>console.warn("User bday no creado (no crítico):",e.message));
+      // Correo bienvenida
+      const linkPanel=`${APP_URL}?bday_panel=${token}`;
+      const linkInv=bdayTokenLink(token);
+      sendEmail(email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
+        emailBdayBienvenida(nombre,apellido,email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
+    return toast("Error al guardar: "+e.message,"error");
   }
   closeModal();
-  await log("bday_registro","bday_cumpleaneros",cumpleId,`Cumpleañero registrado: ${nombre} ${apellido} — ${ev?.name||""}`);
+  log("bday_registro","bday_cumpleaneros",cumpleId,`Cumpleañero registrado: ${nombre} ${apellido} — ${ev?.name||""}`).catch(()=>{});
   VIEWS["bday-cumpleaneros"]();
 };
 
