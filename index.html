@@ -2557,6 +2557,15 @@ async function bdayCheckinInv(invId){
   toast(`✓ ${inv.nombre} ${inv.apellido} ingresó 🎂`,"success");
   searchAcc($("search-q")?.value||"");
 }
+async function bdayAnularCheckin(invId, filterType){
+  const inv=(D.bday_invitados||[]).find(i=>i.id===invId);
+  if(!inv||!inv.llego)return;
+  if(!confirm(`¿Anular el ingreso de ${inv.nombre} ${inv.apellido}?\n\nQuedará disponible para ingresar nuevamente.`))return;
+  await sbPatch("bday_invitados",`id=eq.${invId}`,{llego:false,llego_at:null});
+  inv.llego=false;inv.llego_at=null;
+  toast(`🔓 Ingreso anulado — ${inv.nombre} ${inv.apellido}`,"warn");
+  filterAccType(filterType||"all");
+}
 
 function filterAccType(type){
   const el=$("acc-table");if(!el)return;
@@ -2608,7 +2617,10 @@ function filterAccType(type){
         <td style="font-weight:600;text-align:center">1</td>
         <td>${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):badge("No validado","gray")}</td>
         <td style="text-align:right">
-          ${!yaEntro?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${inv.id}');setTimeout(()=>filterAccType('${type}'),500)">✓ Ingresar</button>`:""}
+          <div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+            ${!yaEntro?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${inv.id}');setTimeout(()=>filterAccType('${type}'),500)">✓ Ingresar</button>`:""}
+            ${yaEntro&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${inv.id}','${type}')" title="Anular ingreso">🔓 Anular</button>`:""}
+          </div>
         </td>
       </tr>`;
     }).join("");
