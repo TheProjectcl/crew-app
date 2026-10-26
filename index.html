@@ -9402,16 +9402,40 @@ function bdayFormCumple(id, prodId, evs){
         ${evs.map(e=>`<option value="${e.id}"${c?.evento_id===e.id?" selected":""}>${e.name}${e.date?" — "+e.date:""}</option>`).join("")}
       </select>
       <label class="form-label">Beneficio asignado</label>
-      <select class="form-select" id="bc-ben">
+      <select class="form-select" id="bc-ben" onchange="bdayMostrarBeneficio(this.value)">
         <option value="">— Sin beneficio —</option>
         ${bens.map(b=>`<option value="${b.id}"${c?.beneficio_id===b.id?" selected":""}>${b.nombre}</option>`).join("")}
       </select>
+      <div id="bc-ben-preview" style="display:none;background:#f0edff;border:1px solid #c4b8ff;border-radius:10px;padding:12px 14px;font-size:12px;color:#3b2f8a;line-height:1.7"></div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="bdayGuardarCumple('${id||""}','${prodId||""}')">Guardar y enviar bienvenida</button>
     </div>`);
+  // Mostrar preview del beneficio ya seleccionado (al editar)
+  if(c?.beneficio_id) setTimeout(()=>window.bdayMostrarBeneficio(c.beneficio_id),50);
 }
+
+window.bdayMostrarBeneficio=(benId)=>{
+  const el=document.getElementById("bc-ben-preview");
+  if(!el)return;
+  if(!benId){el.style.display="none";el.innerHTML="";return;}
+  const b=(D.bday_beneficios||[]).find(x=>x.id===benId);
+  if(!b){el.style.display="none";return;}
+  const gratis=!b.precio_invitado_h&&!b.precio_invitado_m;
+  el.style.display="block";
+  el.innerHTML=`
+    <div style="font-weight:700;font-size:13px;margin-bottom:6px">🎂 ${b.nombre}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <span>👥 Máx. <strong>${b.max_invitados}</strong> invitados</span>
+      <span>🎟 <strong>${b.covers_cumple||0}</strong> cover(s) cumpleañero</span>
+      ${b.covers_adicionales?`<span>➕ <strong>${b.covers_adicionales}</strong> covers adicionales</span>`:""}
+      ${gratis?`<span>💸 Entrada <strong>gratis</strong> invitados</span>`:`<span>💰 H: <strong>$${(b.precio_invitado_h||0).toLocaleString("es-CL")}</strong> / M: <strong>$${(b.precio_invitado_m||0).toLocaleString("es-CL")}</strong></span>`}
+      ${b.hora_cierre?`<span>🔒 Cierre lista: <strong>${b.hora_cierre}</strong></span>`:""}
+      ${b.hora_validez?`<span>⏰ Válida hasta: <strong>${b.hora_validez}</strong></span>`:""}
+      ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: <strong>${b.premio_descripcion||"—"}</strong></span>`:""}
+    </div>`;
+};
 
 window.bdayGuardarCumple=async(id,prodId)=>{
   // Prevenir doble-click
