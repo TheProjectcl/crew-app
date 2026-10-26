@@ -8938,14 +8938,30 @@ VIEWS["base-datos"]=async()=>{
   const evs=D.eventos||[];
   // Filtros
   let bdFiltroEv="todos", bdFiltroEstado="todos", bdBusqueda="";
+  let bdFiltroGenero="todos", bdCumpleDesde="", bdCumpleHasta="";
   // renderTabla: solo actualiza la tabla, sin tocar los controles (evita perder foco del input)
   const renderTabla=()=>{
     let filtrados=posts;
     if(bdFiltroEv!=="todos") filtrados=filtrados.filter(p=>p.evento_id===bdFiltroEv);
     if(bdFiltroEstado!=="todos") filtrados=filtrados.filter(p=>p.estado===bdFiltroEstado);
+    if(bdFiltroGenero!=="todos") filtrados=filtrados.filter(p=>(p.genero||"")===bdFiltroGenero);
+    if(bdCumpleDesde||bdCumpleHasta){
+      // Filtrar por rango de mes-día de nacimiento (sin importar el año)
+      filtrados=filtrados.filter(p=>{
+        if(!p.fecha_nacimiento)return false;
+        const fn=p.fecha_nacimiento.slice(5); // "MM-DD"
+        if(bdCumpleDesde&&bdCumpleHasta){
+          if(bdCumpleDesde<=bdCumpleHasta) return fn>=bdCumpleDesde&&fn<=bdCumpleHasta;
+          else return fn>=bdCumpleDesde||fn<=bdCumpleHasta; // rango cruza año nuevo
+        }
+        if(bdCumpleDesde) return fn>=bdCumpleDesde;
+        if(bdCumpleHasta) return fn<=bdCumpleHasta;
+        return true;
+      });
+    }
     if(bdBusqueda){
       const q=bdBusqueda.toLowerCase();
-      filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q));
+      filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q)||(p.whatsapp||"").includes(q));
     }
     window._bdFiltrados=filtrados;
     const count=filtrados.length;
@@ -8956,25 +8972,29 @@ VIEWS["base-datos"]=async()=>{
     if(!tbody)return;
     tbody.innerHTML=filtrados.length?filtrados.map(p=>{
       const ev=evs.find(e=>e.id===p.evento_id);
+      const fnac=p.fecha_nacimiento?p.fecha_nacimiento.slice(5).replace("-","/")+` (${p.fecha_nacimiento.slice(0,4)})`:"—";
+      const genLbl=p.genero==="m"?"♂ H":p.genero==="f"?"♀ M":"—";
       return `<tr style="border-bottom:1px solid var(--line)">
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut||""}</div></td>
         <td style="padding:8px">${p.email||"—"}</td>
-        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+        <td style="padding:8px"><a href="https://instagram.com/${(p.instagram||"").replace("@","")}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
         <td style="padding:8px">${p.whatsapp||"—"}</td>
+        <td style="padding:8px;font-size:11px">${fnac}</td>
+        <td style="padding:8px;font-size:12px">${genLbl}</td>
         <td style="padding:8px;font-size:11px;color:var(--ink-3)">${ev?.name||"—"}</td>
         <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
       </tr>`;
-    }).join(""):`<tr><td colspan="6" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`;
+    }).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`;
   };
   const render=()=>{
     $("bd-content").innerHTML=`
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
-        <input class="form-input" id="bd-search-inp" style="max-width:200px;margin:0" placeholder="🔍 Buscar...">
-        <select class="form-input" id="bd-sel-ev" style="max-width:180px;margin:0">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+        <input class="form-input" id="bd-search-inp" style="max-width:190px;margin:0" placeholder="🔍 Nombre, email, WA...">
+        <select class="form-input" id="bd-sel-ev" style="max-width:170px;margin:0">
           <option value="todos">Todos los eventos</option>
           ${evs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}
         </select>
-        <select class="form-input" id="bd-sel-estado" style="max-width:160px;margin:0">
+        <select class="form-input" id="bd-sel-estado" style="max-width:150px;margin:0">
           <option value="todos">Todos los estados</option>
           <option value="pendiente">Pendiente</option>
           <option value="aprobado">Aprobado</option>
@@ -8982,6 +9002,20 @@ VIEWS["base-datos"]=async()=>{
           <option value="falta_info">Falta info</option>
           <option value="docs_recibidos">Docs recibidos</option>
         </select>
+        <select class="form-input" id="bd-sel-genero" style="max-width:130px;margin:0">
+          <option value="todos">♀♂ Todos</option>
+          <option value="m">♂ Hombres</option>
+          <option value="f">♀ Mujeres</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+        <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 10px">
+          <span style="font-size:11px;color:var(--ink-4);white-space:nowrap">🎂 Cumple entre</span>
+          <input type="date" id="bd-cumple-desde" class="form-input" style="margin:0;padding:4px 8px;font-size:12px;width:140px;border:none;background:transparent" placeholder="Desde">
+          <span style="font-size:11px;color:var(--ink-4)">y</span>
+          <input type="date" id="bd-cumple-hasta" class="form-input" style="margin:0;padding:4px 8px;font-size:12px;width:140px;border:none;background:transparent" placeholder="Hasta">
+          <button id="bd-cumple-clear" class="btn" style="font-size:11px;padding:2px 8px;display:none">✕</button>
+        </div>
         <span id="bd-count" style="font-size:12px;color:var(--ink-4)"></span>
         <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar CSV</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px" onclick="window._bdCampana()">✉ Enviar campaña</button>
@@ -9003,6 +9037,8 @@ VIEWS["base-datos"]=async()=>{
           <th style="padding:8px;text-align:left">Email</th>
           <th style="padding:8px;text-align:left">Instagram</th>
           <th style="padding:8px;text-align:left">WhatsApp</th>
+          <th style="padding:8px;text-align:left">Cumpleaños</th>
+          <th style="padding:8px;text-align:left">Género</th>
           <th style="padding:8px;text-align:left">Evento</th>
           <th style="padding:8px;text-align:left">Estado</th>
         </tr></thead>
@@ -9015,6 +9051,15 @@ VIEWS["base-datos"]=async()=>{
     if(selEv){selEv.value=bdFiltroEv;selEv.addEventListener("change",e=>{bdFiltroEv=e.target.value;renderTabla();});}
     const selEst=$("bd-sel-estado");
     if(selEst){selEst.value=bdFiltroEstado;selEst.addEventListener("change",e=>{bdFiltroEstado=e.target.value;renderTabla();});}
+    const selGen=$("bd-sel-genero");
+    if(selGen){selGen.value=bdFiltroGenero;selGen.addEventListener("change",e=>{bdFiltroGenero=e.target.value;renderTabla();});}
+    const desdInp=$("bd-cumple-desde");
+    const hastaInp=$("bd-cumple-hasta");
+    const clearBtn=$("bd-cumple-clear");
+    const actualizarClearBtn=()=>{if(clearBtn)clearBtn.style.display=(bdCumpleDesde||bdCumpleHasta)?"inline-flex":"none";};
+    if(desdInp){desdInp.value=bdCumpleDesde;desdInp.addEventListener("change",e=>{bdCumpleDesde=e.target.value;actualizarClearBtn();renderTabla();});}
+    if(hastaInp){hastaInp.value=bdCumpleHasta;hastaInp.addEventListener("change",e=>{bdCumpleHasta=e.target.value;actualizarClearBtn();renderTabla();});}
+    if(clearBtn){clearBtn.addEventListener("click",()=>{bdCumpleDesde="";bdCumpleHasta="";if(desdInp)desdInp.value="";if(hastaInp)hastaInp.value="";clearBtn.style.display="none";renderTabla();});actualizarClearBtn();}
     $("bd-loading").textContent="";
     renderTabla();
   };
@@ -9637,6 +9682,13 @@ async function mostrarPanelBdayInv(token){
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="binv-fnac" class="form-input" type="date" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Correo</label><input id="binv-email" class="form-input" type="email" placeholder="tu@email.com" style="width:100%;box-sizing:border-box"></div>
                 <div><label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="binv-ig" class="form-input" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+                <div>
+                  <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">WhatsApp <span style="color:#dc2626">*</span></label>
+                  <div style="display:flex;align-items:center">
+                    <span style="background:#f4f4f6;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;padding:10px 10px;font-size:13px;color:#555;font-weight:600;white-space:nowrap">+569</span>
+                    <input id="binv-wtsp" class="form-input" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 8px 8px 0;margin:0;width:100%;box-sizing:border-box" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+                  </div>
+                </div>
                 <div id="binv-err" style="color:#dc2626;font-size:12px;display:none"></div>
                 <button id="binv-btn" class="btn btn-primary" onclick="bdayEnviarInscripcion('${c.id}','${prod?.id||""}','${ev?.name||""}','${prod?.nombre||""}','${ben?.hora_cierre||"16:00"}')" style="width:100%">Inscribirme 🎉</button>
               </div>`)}
@@ -9656,10 +9708,15 @@ async function mostrarPanelBdayInv(token){
       const fecha_nacimiento=$("binv-fnac")?.value||"";
       const emailInv=($("binv-email")?.value||"").trim().toLowerCase();
       const instagram=normIG($("binv-ig")?.value||"");
+      const wtspNum=($("binv-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
+      const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
       const errEl=$("binv-err");
       const mostrarErr=(msg)=>{if(errEl){errEl.style.display="block";errEl.textContent=msg;}if(btn){btn.disabled=false;btn.textContent="Inscribirme 🎉";}};
       if(!nombre||!apellido||!emailInv||!fecha_nacimiento||!instagram){
         mostrarErr("Todos los campos son obligatorios.");return;
+      }
+      if(wtspNum.length!==8){
+        mostrarErr("Ingresa tu WhatsApp completo (8 dígitos después de +569).");return;
       }
       // Validar formato email básico
       if(!emailInv.includes("@")||!emailInv.includes(".")){
@@ -9671,7 +9728,7 @@ async function mostrarPanelBdayInv(token){
       const esBloq=bl.find(b=>norm(b.nombre)===norm(nombre+" "+apellido));
       if(esBloq){mostrarErr("No es posible inscribir a esta persona. Por favor reemplázala.");return;}
       // Guardar
-      const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,estado:"pendiente",created_at:now()};
+      const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,whatsapp:whatsapp||null,estado:"pendiente",created_at:now()};
       try{
         await sbPost("bday_invitados",[invData]);
         // Email invitación al cumpleañero (notificación)
@@ -9745,6 +9802,13 @@ async function initBdayApp(){
               </div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label><input id="bpu-fnac" class="form-input" type="date" value="${c.fecha_nacimiento||""}" style="width:100%;box-sizing:border-box"></div>
               <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+              <div>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">WhatsApp</label>
+                <div style="display:flex;align-items:center;gap:0">
+                  <span style="background:#f4f4f6;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;padding:10px 10px;font-size:13px;color:#555;font-weight:600;white-space:nowrap">+569</span>
+                  <input id="bpu-wtsp" class="form-input" inputmode="numeric" maxlength="8" value="${(c.whatsapp||"").replace("+569","")}" placeholder="12345678" style="border-radius:0 8px 8px 0;margin:0;width:100%;box-sizing:border-box" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
+                </div>
+              </div>
               <div>
                 <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Foto del carnet</label>
                 <input type="file" id="bpu-carnet-file" accept="image/*" capture="environment" style="display:none" onchange="bdayPreviewCarnet(this)">
@@ -9882,9 +9946,11 @@ async function initBdayApp(){
       const fecha_nacimiento=$("bpu-fnac")?.value||"";
       const instagram=normIG($("bpu-ig")?.value||"");
       const foto_carnet=($("bpu-carnet")?.value||"").trim()||null;
+      const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
+      const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
       if(!nombre||!apellido||!fecha_nacimiento)return toast("Nombre, apellido y fecha de nacimiento son requeridos","warn");
-      await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{nombre,apellido,fecha_nacimiento,instagram:instagram||null,foto_carnet,datos_completos:true});
-      c.nombre=nombre;c.apellido=apellido;c.fecha_nacimiento=fecha_nacimiento;c.instagram=instagram;c.foto_carnet=foto_carnet;c.datos_completos=true;
+      await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{nombre,apellido,fecha_nacimiento,instagram:instagram||null,foto_carnet,whatsapp,datos_completos:true});
+      c.nombre=nombre;c.apellido=apellido;c.fecha_nacimiento=fecha_nacimiento;c.instagram=instagram;c.foto_carnet=foto_carnet;c.whatsapp=whatsapp;c.datos_completos=true;
       toast("Perfil guardado ✅","ok");render();
     };
     window.logoutBday=()=>{
