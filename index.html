@@ -10565,15 +10565,16 @@ async function initBdayApp(){
         const foto_carnet=($("bpu-carnet")?.value||"").trim()||null;
         const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
         const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
-        if(!nombre||!apellido||!fecha_nacimiento){
+        if(!nombre||!apellido){
           if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
-          return toast("Nombre, apellido y fecha de nacimiento son requeridos","warn");
+          return toast("Nombre y apellido son requeridos","warn");
         }
         // No actualizar email si es el mismo que ya tiene (evita conflicto unique)
-        const patch={nombre,apellido,fecha_nacimiento,rut,instagram:instagram||null,foto_carnet,whatsapp,datos_completos:true};
+        const patch={nombre,apellido,rut,instagram:instagram||null,foto_carnet,whatsapp,datos_completos:true};
+        if(fecha_nacimiento) patch.fecha_nacimiento=fecha_nacimiento;
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
         await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,patch);
-        c.nombre=nombre;c.apellido=apellido;c.fecha_nacimiento=fecha_nacimiento;c.rut=rut;c.instagram=instagram;if(patch.email)c.email=patch.email;c.foto_carnet=foto_carnet;c.whatsapp=whatsapp;c.datos_completos=true;
+        c.nombre=nombre;c.apellido=apellido;if(fecha_nacimiento)c.fecha_nacimiento=fecha_nacimiento;c.rut=rut;c.instagram=instagram;if(patch.email)c.email=patch.email;c.foto_carnet=foto_carnet;c.whatsapp=whatsapp;c.datos_completos=true;
         toast("¡Datos guardados correctamente! ✅","ok");
         setTimeout(()=>render(),1500);
       }catch(e){
