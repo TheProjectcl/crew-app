@@ -9072,30 +9072,32 @@ VIEWS.cfPlanilla = async()=>{
       </div>`);
   };
 
-  window.cfEnviarRecordatorioSeleccion=async(evNom)=>{
-    const checks=[...document.querySelectorAll(".rcrd-chk:checked")];
-    if(!checks.length){toast("Selecciona al menos una persona","warn");return;}
-    const btn=document.getElementById("rcrd-send-btn");
-    if(btn){btn.disabled=true;btn.textContent="Enviando...";}
-    const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
-    let ok=0,err=0;
-    for(const chk of checks){
-      const ord=_ords.find(o=>o.id===chk.value);
-      const post=_posts.find(p=>p.id===chk.dataset.post);
-      if(!ord||!post?.email)continue;
-      const link=`${APP_URL}?cf_buy=${post.buy_token||post.token}`;
-      let horasRestantes=6;
-      if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
-      try{
-        await sendEmail(post.email,`⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
-          glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes}));
-        ok++;
-      }catch(e){err++;console.error("Recordatorio error",post.email,e);}
-      await new Promise(r=>setTimeout(r,300));
-    }
-    closeModal();
-    toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` · ${err} fallaron`:""}`,ok>0?"ok":"error");
-  };
+};
+
+// Global permanente — fuera del closure de VIEWS.cfPlanilla para que siempre exista
+window.cfEnviarRecordatorioSeleccion=async(evNom)=>{
+  const checks=[...document.querySelectorAll(".rcrd-chk:checked")];
+  if(!checks.length){toast("Selecciona al menos una persona","warn");return;}
+  const btn=document.getElementById("rcrd-send-btn");
+  if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+  const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
+  let ok=0,err=0;
+  for(const chk of checks){
+    const ord=_ords.find(o=>o.id===chk.value);
+    const post=_posts.find(p=>p.id===chk.dataset.post);
+    if(!ord||!post?.email)continue;
+    const link=`${CF_APP_URL}?cf_buy=${post.buy_token||post.token}`;
+    let horasRestantes=6;
+    if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
+    try{
+      await sendEmail(post.email,`⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
+        glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes}));
+      ok++;
+    }catch(e){err++;console.error("Recordatorio error",post.email,e);}
+    await new Promise(r=>setTimeout(r,300));
+  }
+  closeModal();
+  toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` · ${err} fallaron`:""}`,ok>0?"ok":"error");
 };
 
 function renderTablaPlanilla(ordenes,posts,q,filtroEstado="todos"){
