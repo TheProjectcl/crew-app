@@ -8607,44 +8607,88 @@ VIEWS.cfPostulantes = async()=>{
 VIEWS.cfOrdenes = async()=>{
   await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const ordenes = (D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
   const mc=$("main-content");
 
-  const estadoBadge=(e)=>badge(e==="conciliado"?"pagado":e, e==="conciliado"?"green":e==="pagado"?"green":e==="pendiente"?"amber":e==="rechazado"?"red":"gray");
+  const estadoBadge=(e)=>badge(e==="conciliado"?"Pagado":e==="pagado"?"Pagado":e==="pendiente"?"Pendiente":e==="rechazado"?"Rechazado":e, e==="conciliado"||e==="pagado"?"green":e==="pendiente"?"amber":e==="rechazado"?"red":"gray");
+
+  const renderTabla=(q="",filtroE="todos")=>{
+    const norm=s=>(s||"").toLowerCase();
+    let filas=(D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
+    if(filtroE!=="todos") filas=filas.filter(o=>filtroE==="pagados"?["pagado","conciliado"].includes(o.estado):o.estado===filtroE);
+    if(q){
+      filas=filas.filter(o=>{
+        const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
+        return norm(o.codigo).includes(norm(q))||norm(post?.nombre).includes(norm(q))||norm(post?.apellido).includes(norm(q))||norm(post?.email).includes(norm(q));
+      });
+    }
+    if(!filas.length) return `<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin resultados.</td></tr>`;
+    return filas.map(o=>{
+      const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
+      const ev=D.eventos.find(e=>e.id===o.evento_id);
+      const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL",{hour12:false}):"—";
+      return `<tr style="border-bottom:1px solid var(--line)">
+        <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</td>
+        <td style="padding:8px"><div style="font-weight:500">${post?`${post.nombre} ${post.apellido}`:"—"}</div>${post?.email?`<div style="font-size:11px;color:var(--ink-4)">${post.email}</div>`:""}</td>
+        <td style="padding:8px">${ev?.name||"—"}</td>
+        <td style="padding:8px;text-align:center">${o.cantidad||1}</td>
+        <td style="padding:8px;font-weight:600">$${(o.monto_total||0).toLocaleString("es-CL")}</td>
+        <td style="padding:8px">${estadoBadge(o.estado)}</td>
+        <td style="padding:8px">${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="color:var(--accent)">Ver</a>`:o.estado==="pagado"?"Procesando OCR":"—"}</td>
+        <td style="padding:8px;font-size:11px">${vence}</td>
+      </tr>`;
+    }).join("");
+  };
+
+  const total=(D.cf_ordenes||[]).filter(o=>prodId===null||o.productora_id===prodId);
+  const cPend=total.filter(o=>o.estado==="pendiente").length;
+  const cPag=total.filter(o=>["pagado","conciliado"].includes(o.estado)).length;
 
   mc.innerHTML=`
     <div class="page-title">Close Friends — Órdenes</div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="position:relative;flex:1;min-width:220px;max-width:360px">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--ink-4);font-size:14px;pointer-events:none">🔍</span>
+        <input id="cf-ord-buscar" class="form-input" placeholder="Buscar por nombre, email o código…" style="padding-left:32px;width:100%;box-sizing:border-box" autocomplete="off">
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${[["todos",`Todos (${total.length})`],["pendiente",`⏳ Pendientes (${cPend})`],["pagados",`✅ Pagados (${cPag})`],["rechazado","Rechazados"]].map(([v,l])=>
+          `<button data-ford="${v}" class="cf-ord-tab" style="font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--line);cursor:pointer;background:${v==="todos"?"var(--accent)":"var(--surface)"};color:${v==="todos"?"#fff":"var(--ink-3)"};font-weight:${v==="todos"?"700":"400"}">${l}</button>`
+        ).join("")}
+      </div>
+    </div>
     <div class="card" style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse;font-size:12px">
         <thead><tr style="background:var(--line-2)">
           <th style="padding:8px;text-align:left">Código</th>
           <th style="padding:8px;text-align:left">Postulante</th>
           <th style="padding:8px;text-align:left">Evento</th>
-          <th style="padding:8px;text-align:left">Tickets</th>
+          <th style="padding:8px;text-align:center">Tickets</th>
           <th style="padding:8px;text-align:left">Monto</th>
           <th style="padding:8px;text-align:left">Estado</th>
           <th style="padding:8px;text-align:left">Comprobante</th>
           <th style="padding:8px;text-align:left">Vence</th>
         </tr></thead>
-        <tbody>
-          ${ordenes.length?ordenes.map(o=>{
-            const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
-            const ev=D.eventos.find(e=>e.id===o.evento_id);
-            const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL",{hour12:false}):"—";
-            return `<tr style="border-bottom:1px solid var(--line)">
-              <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</td>
-              <td style="padding:8px">${post?`${post.nombre} ${post.apellido}`:"—"}</td>
-              <td style="padding:8px">${ev?.name||"—"}</td>
-              <td style="padding:8px">${o.cantidad||1}</td>
-              <td style="padding:8px;font-weight:600">$${(o.monto_total||0).toLocaleString("es-CL")}</td>
-              <td style="padding:8px">${estadoBadge(o.estado)}</td>
-              <td style="padding:8px">${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="color:var(--accent)">Ver</a>`:o.estado==="pagado"?"Procesando OCR":"—"}</td>
-              <td style="padding:8px;font-size:11px">${vence}</td>
-            </tr>`;
-          }).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin órdenes.</td></tr>`}
-        </tbody>
+        <tbody id="cf-ord-tbody">${renderTabla()}</tbody>
       </table>
     </div>`;
+
+  // Buscador con debounce 350ms
+  let _cfOrdTimer=null;
+  let _cfOrdFiltro="todos";
+  const tbody=document.getElementById("cf-ord-tbody");
+  const buscar=document.getElementById("cf-ord-buscar");
+  const tabs=[...document.querySelectorAll(".cf-ord-tab")];
+
+  const aplicar=()=>{ tbody.innerHTML=renderTabla(buscar?.value||"",_cfOrdFiltro); };
+
+  buscar?.addEventListener("input",()=>{ clearTimeout(_cfOrdTimer); _cfOrdTimer=setTimeout(aplicar,350); });
+
+  tabs.forEach(btn=>btn.addEventListener("click",()=>{
+    _cfOrdFiltro=btn.dataset.ford;
+    tabs.forEach(b=>{b.style.background="var(--surface)";b.style.color="var(--ink-3)";b.style.fontWeight="400";});
+    btn.style.background="var(--accent)";btn.style.color="#fff";btn.style.fontWeight="700";
+    aplicar();
+  }));
 };
 
 // ── Vista: Conciliación ──
