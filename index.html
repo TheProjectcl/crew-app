@@ -10648,6 +10648,7 @@ async function initBdayApp(){
     };
     window.logoutBday=()=>{
       CU=null;CP=null;D={};
+      try{localStorage.removeItem("crew-session");}catch(e){}
       location.reload();
     };
   }
