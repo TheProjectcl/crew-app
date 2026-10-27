@@ -9058,6 +9058,7 @@ VIEWS.cfPlanilla = async()=>{
       </label>`;
     }).join("");
 
+    window._cfRcrdEvNom=evNom;
     openModal("⏰ Recordatorio de pago",`
       <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
         <div style="font-size:13px;color:var(--ink-3)">${pendientes.length} persona${pendientes.length===1?"":"s"} sin pagar · <strong>${evNom}</strong></div>
@@ -9068,7 +9069,7 @@ VIEWS.cfPlanilla = async()=>{
       <div style="max-height:340px;overflow-y:auto;padding-right:4px">${filas}</div>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(${JSON.stringify(evNom)})">📧 Enviar recordatorio</button>
+        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar recordatorio</button>
       </div>`);
   };
 
