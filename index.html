@@ -7466,6 +7466,16 @@ function validarRUT(rut){
 
 function normRUT(r){ return (r||"").trim().replace(/[.\-\s]/g,"").toUpperCase(); }
 function normIG(ig){ return (ig||"").replace(/^@/,"").toLowerCase().trim(); }
+// Formatea fecha+hora de beneficio: "viernes 31 de octubre a las 16:00 hrs". fecha cae al día del evento si no hay.
+function bdayFmtFechaHora(fecha, hora, evDate){
+  const f=fecha||evDate||"";
+  const h=hora||"";
+  if(!f&&!h)return "";
+  if(!f)return `las ${h} hrs del día del evento`;
+  const d=new Date(f+" 12:00:00");
+  const fTxt=isNaN(d)?f:d.toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"});
+  return h?`el ${fTxt} a las ${h} hrs`:`el ${fTxt}`;
+}
 function fechaSelectHTML(idPrefix, valorISO=""){
   const meses=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const [ay,am,ad]=(valorISO||"").split("-");
@@ -9760,8 +9770,8 @@ VIEWS["bday-beneficios"] = async()=>{
                   <span>🎟 ${b.covers_cumple||0} cover(s) cumpleañero</span>
                   ${b.covers_adicionales?`<span>➕ ${b.covers_adicionales} covers adicionales</span>`:""}
                   ${b.precio_invitado_h||b.precio_invitado_m?`<span>💰 H: $${(b.precio_invitado_h||0).toLocaleString("es-CL")} / M: $${(b.precio_invitado_m||0).toLocaleString("es-CL")}</span>`:`<span>💰 Entrada gratis invitados</span>`}
-                  ${b.hora_validez?`<span>⏰ Ingreso válido hasta ${b.hora_validez}</span>`:""}
-                  ${b.hora_cierre?`<span>🔒 Cierre inscripciones: ${b.hora_cierre}</span>`:""}
+                  ${b.hora_validez||b.fecha_validez?`<span>⏰ Ingreso válido hasta ${b.fecha_validez?bdayFmtFechaHora(b.fecha_validez,b.hora_validez,""):"las "+b.hora_validez+" hrs (día del evento)"}</span>`:""}
+                  ${b.hora_cierre||b.fecha_cierre?`<span>🔒 Cierre inscripciones: ${b.fecha_cierre?bdayFmtFechaHora(b.fecha_cierre,b.hora_cierre,""):b.hora_cierre+" hrs (día del evento)"}</span>`:""}
                   ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: ${b.premio_descripcion||"—"}</span>`:""}
                 </div>
               </div>
@@ -9805,8 +9815,22 @@ function bdayFormBeneficio(id, prodId, cb){
         <div><label class="form-label">Mujer ($)</label><input class="form-input" id="bb-prm" type="number" min="0" value="${b?.precio_invitado_m||0}"></div>
       </div>
       <div class="form-row">
-        <div><label class="form-label">Ingreso válido hasta las (formato 24h, ej: 23:30)</label><input class="form-input" id="bb-hval" type="text" autocomplete="off" inputmode="numeric" placeholder="23:30" maxlength="5" style="letter-spacing:2px" value="${b?.hora_validez||"23:30"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
-        <div><label class="form-label">Cierre de inscripciones (formato 24h, ej: 16:00)</label><input class="form-input" id="bb-hcie" type="text" autocomplete="off" inputmode="numeric" placeholder="16:00" maxlength="5" style="letter-spacing:2px" value="${b?.hora_cierre||"16:00"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v"></div>
+        <div>
+          <label class="form-label">⏰ Ingreso válido hasta</label>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="bb-fval" type="date" value="${b?.fecha_validez||""}" style="flex:3" title="Fecha (vacío = día del evento)">
+            <input class="form-input" id="bb-hval" type="text" autocomplete="off" inputmode="numeric" placeholder="23:30" maxlength="5" style="flex:2;letter-spacing:2px" value="${b?.hora_validez||"23:30"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v">
+          </div>
+          <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Fecha y hora (24h). Si dejas la fecha vacía, se usa el día del evento.</div>
+        </div>
+        <div>
+          <label class="form-label">🔒 Cierre de inscripciones</label>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="bb-fcie" type="date" value="${b?.fecha_cierre||""}" style="flex:3" title="Fecha (vacío = día del evento)">
+            <input class="form-input" id="bb-hcie" type="text" autocomplete="off" inputmode="numeric" placeholder="16:00" maxlength="5" style="flex:2;letter-spacing:2px" value="${b?.hora_cierre||"16:00"}" oninput="let v=this.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+':'+v.slice(2);this.value=v">
+          </div>
+          <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Después de esta fecha y hora nadie más se puede inscribir.</div>
+        </div>
       </div>
       <p style="font-size:12px;font-weight:600;color:var(--ink-2);margin:4px 0 0">Premio condicional (opcional)</p>
       <div class="form-row">
@@ -9835,6 +9859,8 @@ window.bdayGuardarBeneficio=async(id,prodId)=>{
     precio_invitado_m:parseInt($("bb-prm")?.value)||0,
     hora_validez:$("bb-hval")?.value||"23:30",
     hora_cierre:$("bb-hcie")?.value||"16:00",
+    fecha_validez:$("bb-fval")?.value||null,
+    fecha_cierre:$("bb-fcie")?.value||null,
     premio_min_invitados:parseInt($("bb-pmin")?.value)||null,
     premio_descripcion:($("bb-pdesc")?.value||"").trim()||null,
   };
@@ -10109,8 +10135,8 @@ window.bdayMostrarBeneficio=(benId)=>{
       <span>🎟 <strong>${b.covers_cumple||0}</strong> cover(s) cumpleañero</span>
       ${b.covers_adicionales?`<span>➕ <strong>${b.covers_adicionales}</strong> covers adicionales</span>`:""}
       ${gratis?`<span>💸 Entrada <strong>gratis</strong> invitados</span>`:`<span>💰 H: <strong>$${(b.precio_invitado_h||0).toLocaleString("es-CL")}</strong> / M: <strong>$${(b.precio_invitado_m||0).toLocaleString("es-CL")}</strong></span>`}
-      ${b.hora_cierre?`<span>🔒 Cierre inscripciones: <strong>${b.hora_cierre}</strong></span>`:""}
-      ${b.hora_validez?`<span>⏰ Ingreso válido hasta: <strong>${b.hora_validez}</strong></span>`:""}
+      ${b.hora_cierre||b.fecha_cierre?`<span>🔒 Cierre inscripciones: <strong>${b.fecha_cierre?bdayFmtFechaHora(b.fecha_cierre,b.hora_cierre,""):b.hora_cierre+" hrs (día del evento)"}</strong></span>`:""}
+      ${b.hora_validez||b.fecha_validez?`<span>⏰ Ingreso válido hasta: <strong>${b.fecha_validez?bdayFmtFechaHora(b.fecha_validez,b.hora_validez,""):b.hora_validez+" hrs (día del evento)"}</strong></span>`:""}
       ${b.premio_min_invitados?`<span>🏆 Premio si ingresan ≥${b.premio_min_invitados}: <strong>${b.premio_descripcion||"—"}</strong></span>`:""}
     </div>`;
 };
@@ -10261,7 +10287,10 @@ async function mostrarPanelBdayInv(token){
     // Verificar cierre (hora local — "YYYY-MM-DD HH:MM" sin T ni Z es local en todos los navegadores)
     const ahora=new Date();
     const hCierre=ben?.hora_cierre||"16:00";
-    const fechaEv=ev?.date?new Date(ev.date+" "+hCierre+":00"):null;
+    const fCierre=ben?.fecha_cierre||ev?.date||"";
+    const cierreTxt=bdayFmtFechaHora(fCierre,hCierre,"");
+    const validezTxt=bdayFmtFechaHora(ben?.fecha_validez||ev?.date||"",ben?.hora_validez||"","");
+    const fechaEv=fCierre?new Date(fCierre+" "+hCierre+":00"):null;
     const cerrada=fechaEv&&ahora>=fechaEv;
 
     const aprobados=invs.filter(i=>i.estado==="aprobado").length;
@@ -10278,7 +10307,7 @@ async function mostrarPanelBdayInv(token){
               <h2 style="font-size:20px;font-weight:700;margin:8px 0 4px">¡Cumpleaños de ${c.nombre}!</h2>
               <p style="color:#666;font-size:13px">${ev?.name||""} · ${prod?.nombre||""}</p>
               ${cerrada?`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:10px;font-size:13px;font-weight:600;margin-top:10px">🔒 La lista está cerrada.</div>`
-              :`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px;font-size:12px;margin-top:10px">⏰ Lista se cierra a las ${hCierre} del día del evento</div>`}
+              :`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px;font-size:12px;margin-top:10px">⏰ Las inscripciones cierran <strong>${cierreTxt}</strong></div>`}
             </div>
             ${llena||cerrada?"":(`
               <h3 style="font-size:15px;font-weight:600;margin-bottom:12px">Inscríbete 👇</h3>
@@ -10391,8 +10420,11 @@ async function initBdayApp(){
   const prod=prodArr[0]||null;
   const maxInv=ben?.max_invitados||20;
   const hCierre=ben?.hora_cierre||"16:00";
+  const fCierre=ben?.fecha_cierre||ev?.date||"";
+  const cierreTxt=bdayFmtFechaHora(fCierre,hCierre,"");
+  const validezTxt=bdayFmtFechaHora(ben?.fecha_validez||ev?.date||"",ben?.hora_validez||"","");
   const ahora=new Date();
-  const fechaEv=ev?.date?new Date(ev.date+" "+hCierre+":00"):null;
+  const fechaEv=fCierre?new Date(fCierre+" "+hCierre+":00"):null;
   const cerrada=fechaEv&&ahora>=fechaEv;
   const aprobados=()=>invitados.filter(i=>i.estado==="aprobado").length;
   const pendientes=()=>invitados.filter(i=>i.estado==="pendiente").length;
@@ -10479,7 +10511,26 @@ async function initBdayApp(){
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-libres" style="font-size:28px;font-weight:800;color:#888">${maxInv-ap}</div><div style="color:#888;font-size:11px">cupos libres</div></div>
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-ing" style="font-size:28px;font-weight:800;color:#16a34a">${ing}</div><div style="color:#888;font-size:11px">ya entraron 🎉</div></div>
             </div>
-            ${!cerrada?`<div style="background:#fef3c7;color:#92400e;border-radius:8px;padding:8px 12px;font-size:12px;margin-top:12px">⏰ Tu lista se cierra el <strong>${ev?.date?new Date(ev.date+" 12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"long"}):""}</strong> a las <strong>${hCierre}</strong> hrs</div>`:`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada</div>`}
+            ${!cerrada?(()=>{
+              const msLeft=fechaEv?fechaEv-ahora:0;
+              const hLeft=Math.max(0,Math.floor(msLeft/36e5));const dLeft=Math.floor(hLeft/24);
+              const urgente=hLeft<=24;
+              const restan=dLeft>=1?`${dLeft} día${dLeft>1?"s":""} y ${hLeft%24} h`:hLeft>=1?`${hLeft} hora${hLeft>1?"s":""}`:`${Math.max(1,Math.floor(msLeft/6e4))} min`;
+              const bg=urgente?"linear-gradient(135deg,#7f1d1d,#b91c1c)":"linear-gradient(135deg,#92400e,#d97706)";
+              return `<div style="background:${bg};color:#fff;border-radius:12px;padding:14px 16px;margin-top:14px">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <span style="font-size:26px">${urgente?"🚨":"⏰"}</span>
+                  <div>
+                    <div style="font-size:15px;font-weight:800;line-height:1.2">Tu lista cierra en <span style="font-size:19px">${restan}</span></div>
+                    <div style="font-size:12px;opacity:.92;margin-top:2px">${cierreTxt.charAt(0).toUpperCase()+cierreTxt.slice(1)}. Después nadie más podrá inscribirse.</div>
+                  </div>
+                </div>
+                <div style="margin-top:10px;background:rgba(255,255,255,.15);border-radius:8px;padding:8px 10px;font-size:12px;line-height:1.6">
+                  ${pend>0?`✅ Tienes <strong>${pend} invitado${pend>1?"s":""} pendiente${pend>1?"s":""}</strong> esperando que los apruebes — hazlo ahora o se quedan afuera.<br>`:""}
+                  ${maxInv-ap>0?`📣 Aún tienes <strong>${maxInv-ap} cupo${maxInv-ap>1?"s":""} libre${maxInv-ap>1?"s":""}</strong>: comparte tu link y apura a tus amigos antes del cierre.`:`🎉 ¡Lista llena! Tus ${ap} invitados ya están confirmados.`}
+                  ${validezTxt?`<br>🎟 Ingreso de tus invitados con beneficio válido hasta <strong>${validezTxt}</strong>.`:""}
+                </div>
+              </div>`;})():`<div style="background:#fee2e2;color:#991b1b;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:600;margin-top:12px">🔒 Lista cerrada — ya no se pueden inscribir ni aprobar invitados.</div>`}
             ${ben?.premio_min_invitados?`
               <div style="margin-top:14px">
                 <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px">🏆 Premio: ${ben.premio_descripcion||"—"} si entran ≥${ben.premio_min_invitados} al evento</div>
