@@ -9874,6 +9874,11 @@ VIEWS["bday-cumpleaneros"] = async()=>{
               <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
               <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
               <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Aprobados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
+                ${c.instagram?`<a href="https://instagram.com/${c.instagram.replace('@','')}" target="_blank" style="font-size:12px;color:#E1306C;font-weight:600;text-decoration:none">📸 ${c.instagram}</a>`:""}
+                ${c.whatsapp?`<a href="https://wa.me/${c.whatsapp.replace('+','')}" target="_blank" style="font-size:12px;color:#25D366;font-weight:600;text-decoration:none">💬 ${c.whatsapp}</a>`:""}
+                ${c.rut?`<span style="font-size:12px;color:var(--ink-3)">🪪 ${c.rut}</span>`:""}
+              </div>
               <!-- Barra de ingresados -->
               <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
                 <div style="flex:1;min-width:120px;max-width:220px">
@@ -10410,7 +10415,8 @@ async function initBdayApp(){
                 </div>
                 <input type="hidden" id="bpu-carnet" value="${c.foto_carnet||''}">
               </div>
-              <button class="btn btn-primary" onclick="bdayGuardarPerfil()" style="width:100%">Guardar perfil →</button>
+              <button class="btn btn-primary" id="bpu-guardar-btn" onclick="if(typeof window.bdayGuardarPerfil==='function'){window.bdayGuardarPerfil();}else{alert('Error: función no disponible. Recarga la página.');}" style="width:100%">Guardar perfil →</button>
+              <div id="bpu-status" style="font-size:12px;color:#6b7280;text-align:center;margin-top:4px;min-height:16px"></div>
             </div>
           </div>`:""
           }
@@ -10553,8 +10559,11 @@ async function initBdayApp(){
       if(img)img.src="";if(prev)prev.style.display="none";if(hidden)hidden.value="";
     };
     window.bdayGuardarPerfil=async()=>{
-      const btn=document.querySelector("[onclick='bdayGuardarPerfil()']");
-      if(btn){btn.disabled=true;btn.textContent="Guardando...";}
+      const btn=$("bpu-guardar-btn")||document.querySelector("[id='bpu-guardar-btn']");
+      const statusDiv=$("bpu-status");
+      const setStatus=(txt,color)=>{if(statusDiv){statusDiv.textContent=txt;statusDiv.style.color=color||"#6b7280";}};
+      if(btn){btn.disabled=true;btn.textContent="⏳ Guardando...";}
+      setStatus("Conectando con el servidor...","#6b7280");
       try{
         const nombre=($("bpu-nom")?.value||"").trim();
         const apellido=($("bpu-ape")?.value||"").trim();
@@ -10563,14 +10572,14 @@ async function initBdayApp(){
         const instagram=normIG($("bpu-ig")?.value||"");
         const emailVal=($("bpu-email")?.value||"").trim().toLowerCase()||null;
         const _carnetRaw=($("bpu-carnet")?.value||"").trim();
-        const foto_carnet=(_carnetRaw.startsWith("http"))?_carnetRaw:null; // ignorar base64
+        const foto_carnet=(_carnetRaw.startsWith("http"))?_carnetRaw:null;
         const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
         const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
         if(!nombre||!apellido){
           if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
+          setStatus("Nombre y apellido son requeridos","#dc2626");
           return toast("Nombre y apellido son requeridos","warn");
         }
-        // Construir patch solo con campos que existen (evitar error por columnas inexistentes)
         const patch={nombre,apellido,datos_completos:true};
         if(rut) patch.rut=rut;
         if(instagram) patch.instagram=instagram;
@@ -10578,9 +10587,9 @@ async function initBdayApp(){
         if(whatsapp) patch.whatsapp=whatsapp;
         if(fecha_nacimiento) patch.fecha_nacimiento=fecha_nacimiento;
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
-        // Fetch directo con timeout y logging completo
+        setStatus("Guardando datos...","#6b7280");
         const ctrl=new AbortController();
-        const toid=setTimeout(()=>ctrl.abort(),10000);
+        const toid=setTimeout(()=>{ctrl.abort();setStatus("Tiempo de espera agotado (10s)","#dc2626");},10000);
         let patchRes;
         try{
           patchRes=await fetch(`${SB_URL}/rest/v1/bday_cumpleaneros?id=eq.${c.id}`,{
@@ -10594,7 +10603,7 @@ async function initBdayApp(){
           const errTxt=await patchRes.text();
           throw new Error(`HTTP ${patchRes.status}: ${errTxt}`);
         }
-        // Actualizar objeto local
+        setStatus("✅ ¡Guardado!","#16a34a");
         c.nombre=nombre;c.apellido=apellido;
         if(fecha_nacimiento)c.fecha_nacimiento=fecha_nacimiento;
         if(rut)c.rut=rut;
@@ -10604,13 +10613,14 @@ async function initBdayApp(){
         if(whatsapp)c.whatsapp=whatsapp;
         c.datos_completos=true;
         toast("¡Datos guardados correctamente! ✅","ok");
-        setTimeout(()=>render(),1500);
+        setTimeout(()=>render(),1800);
       }catch(e){
         if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
         const msg=e.message||JSON.stringify(e)||"Error desconocido";
+        setStatus("Error: "+msg,"#dc2626");
         toast("Error al guardar: "+msg,"error");
         console.error("bdayGuardarPerfil error:",e);
-        alert("Error al guardar perfil:\n"+msg); // visible aunque el toast no aparezca
+        alert("Error al guardar perfil:\n"+msg);
       }
     };
     window.logoutBday=()=>{
