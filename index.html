@@ -8168,22 +8168,50 @@ buildSidebar = function(){
   }
 };
 
-// ── Auto-refresh CF cada 30 segundos ──
+// ── Auto-refresh CF cada 30 segundos — SIN re-renderizar la página completa ──
 let _cfAutoRefreshTimer = null;
 async function cfAutoRefresh(){
   const cfViews=["cf-postulantes","cf-ordenes","cf-conciliacion","cf-planilla"];
   const activeNav = document.querySelector(".nav-item.active");
   const currentView = activeNav?.dataset?.v;
   if(!currentView||!cfViews.includes(currentView)) return;
-  // Recargar datos silenciosamente
   try{
     const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+    // Solo recargar datos en memoria, sin tocar el DOM principal
     await loadCF(prodId);
-    // Refrescar vista actual sin scroll ni ruido
-    if(currentView==="cf-postulantes") VIEWS.cfPostulantes();
-    else if(currentView==="cf-ordenes") VIEWS.cfOrdenes();
-    else if(currentView==="cf-conciliacion") VIEWS.cfConciliacion();
-    else if(currentView==="cf-planilla") VIEWS.cfPlanilla();
+    // Actualizar solo elementos puntuales que no interrumpen al usuario
+    if(currentView==="cf-planilla"){
+      // Actualizar métricas y tabla preservando búsqueda/filtro activos
+      const busq=document.querySelector(".cf-buscar")?.value||"";
+      const filtro=window._cfFiltroEstado||"todos";
+      const evSel=document.getElementById("cf-plan-ev")?.value||null;
+      const _ords=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(!evSel||o.evento_id===evSel));
+      const _posts=(D.cf_postulantes||[]).filter(p=>(prodId===null||p.productora_id===prodId)&&(!evSel||p.evento_id===evSel));
+      window._cfOrdenes=_ords; window._cfPosts=_posts;
+      // Actualizar métricas
+      const metricsEl=document.getElementById("cf-plan-metrics");
+      if(metricsEl){
+        const total=_posts.length, aprobadas=_posts.filter(p=>p.estado==="aprobado").length;
+        const conciliadas=_ords.filter(o=>o.estado==="conciliado").length;
+        const recaudado=_ords.filter(o=>["pagado","conciliado"].includes(o.estado)).reduce((s,o)=>s+(o.monto_total||0),0);
+        metricsEl.innerHTML=`<div class="metrics" style="grid-template-columns:repeat(5,1fr);margin-bottom:20px">
+          <div class="metric"><div class="metric-label">Registradas</div><div class="metric-val">${total}</div></div>
+          <div class="metric"><div class="metric-label">Aprobadas</div><div class="metric-val">${aprobadas}</div></div>
+          <div class="metric"><div class="metric-label">Con orden</div><div class="metric-val">${_ords.length}</div></div>
+          <div class="metric"><div class="metric-label">Confirmadas</div><div class="metric-val">${conciliadas}</div></div>
+          <div class="metric"><div class="metric-label">Recaudado</div><div class="metric-val">$${(recaudado/1000).toFixed(0)}k</div></div>
+        </div>`;
+      }
+      // Actualizar tabla solo si el usuario no está con el cursor dentro de un input
+      const focused=document.activeElement;
+      const userTyping=focused&&(focused.tagName==="INPUT"||focused.tagName==="TEXTAREA"||focused.tagName==="SELECT");
+      if(!userTyping){
+        const tablaEl=document.getElementById("cf-tabla-planilla");
+        if(tablaEl) tablaEl.innerHTML=renderTablaPlanilla(_ords,_posts,busq,filtro);
+      }
+    }
+    // Para las otras vistas CF, solo actualizar datos en memoria sin re-renderizar
+    // El usuario verá los datos frescos la próxima vez que interactúe con filtros/búsqueda
   }catch(e){ console.warn("CF auto-refresh error:",e); }
 }
 function iniciarCFAutoRefresh(){
