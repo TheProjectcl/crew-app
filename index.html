@@ -9605,10 +9605,10 @@ VIEWS["base-datos"]=async()=>{
 
 // ── Helpers ──
 function bdayPassInicial(nombre, apellido, fechaNac){
-  // fturu10  → 1ª letra nombre + apellido + día nacimiento, minúscula
+  // Si hay fecha de nacimiento, usar día; si no, número random 10-99
   const n=(nombre||"").trim()[0]||"";
   const a=(apellido||"").trim().toLowerCase().replace(/\s+/g,"");
-  const d=String(new Date(fechaNac).getUTCDate());
+  const d=fechaNac?String(new Date(fechaNac).getUTCDate()):String(Math.floor(Math.random()*90)+10);
   return (n+a+d).toLowerCase();
 }
 
@@ -10034,9 +10034,9 @@ function bdayFormCumple(id, prodId, evs){
         <div><label class="form-label">Nombre</label><input class="form-input" id="bc-nom" value="${c?.nombre||""}" placeholder="Felipe"></div>
         <div><label class="form-label">Apellido</label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
       </div>
-      <div class="form-row">
-        <div><label class="form-label">Fecha de nacimiento</label>${fechaSelectHTML("bc-fnac",c?.fecha_nacimiento||"")}</div>
-        <div><label class="form-label">Correo</label><input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com"></div>
+      <div>
+        <label class="form-label">Correo</label>
+        <input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com">
       </div>
       <label class="form-label">Evento</label>
       <select class="form-select" id="bc-ev">
@@ -10085,18 +10085,13 @@ window.bdayGuardarCumple=async(id,prodId)=>{
 
   const nombre=($("bc-nom")?.value||"").trim();
   const apellido=($("bc-ape")?.value||"").trim();
-  const fecha_nacimiento=leerFechaSelect("bc-fnac");
+  const fecha_nacimiento=null; // El cumpleañero la ingresa en su propio panel
   const email=($("bc-email")?.value||"").trim().toLowerCase();
   const evento_id=$("bc-ev")?.value||"";
   const beneficio_id=$("bc-ben")?.value||null;
-  if(!nombre||!apellido||!email||!fecha_nacimiento||!evento_id){
+  if(!nombre||!apellido||!email||!evento_id){
     if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
     return toast("Completa todos los campos requeridos","warn");
-  }
-  const bcFnacYear=parseInt((fecha_nacimiento||"").slice(0,4));
-  if(!bcFnacYear||bcFnacYear<1900||bcFnacYear>2008){
-    if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
-    return toast("Fecha de nacimiento inválida (año debe ser 1900–2008)","warn");
   }
 
   // Validar duplicado (mismo email o mismo nombre+apellido en el mismo evento)
