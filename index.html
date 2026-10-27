@@ -10383,16 +10383,7 @@ async function mostrarPanelBdayInv(token){
       const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,rut:rut||null,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,whatsapp:whatsapp||null,estado:"pendiente",created_at:now()};
       try{
         await sbPost("bday_invitados",[invData]);
-        // Email invitación al cumpleañero (notificación)
-        const linkInv=bdayTokenLink(c.token_invitacion);
-        await sendEmail(c.email,`Nueva inscripción en tu lista — ${evNom}`,
-          `<div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
-            <div style="text-align:center;margin-bottom:16px">${GL_EMAIL_LOGO}</div>
-            <h3 style="font-size:16px;font-weight:700;margin-bottom:8px">Nueva inscripción 🎉</h3>
-            <p style="color:#555;font-size:14px"><strong>${nombre} ${apellido}</strong> quiere unirse a tu lista en <strong>${evNom}</strong>.</p>
-            <p style="color:#555;font-size:13px">Ingresa a tu panel para aprobar o rechazar.</p>
-            <div style="text-align:center;margin-top:20px"><a href="${APP_URL}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Ver mi lista →</a></div>
-            ${GL_POWERED}</div></div>`);
+        // (Sin correo al cumpleañero: ve las inscripciones pendientes en su panel)
         show(`<div style="max-width:400px;text-align:center"><div style="font-size:56px;margin-bottom:16px">🎉</div><h2 style="font-size:20px;font-weight:700;color:#1a1a1a">¡Inscripción enviada!</h2><p style="color:#666;font-size:14px;margin-top:8px">${c.nombre} revisará tu solicitud y te avisaremos por correo si quedas aprobado/a.</p>${GL_POWERED}</div>`);
       }catch(e){
         if(errEl){errEl.style.display="block";errEl.textContent="Error al inscribirse: "+e.message;}
