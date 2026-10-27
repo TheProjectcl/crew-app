@@ -8838,39 +8838,65 @@ VIEWS.cfPlanilla = async()=>{
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="close_friends.csv";a.click();
   };
 
-  window.cfReenviarRecordatorio=async()=>{
-    // Órdenes pendientes (sin pago) que aún no han vencido
+  window.cfReenviarRecordatorio=()=>{
     const pendientes=ordenes.filter(o=>o.estado==="pendiente");
     if(!pendientes.length){toast("No hay pagos pendientes","warn");return;}
     const ev=D.eventos?.find(e=>e.id===pendientes[0]?.evento_id);
     const evNom=ev?.name||"el evento";
-    const confirmar=confirm(`¿Enviar recordatorio a ${pendientes.length} persona${pendientes.length===1?"":"s"} que aún no han pagado?`);
-    if(!confirmar)return;
-    const btn=document.querySelector("[onclick='cfReenviarRecordatorio()']");
+
+    // Construir filas del modal
+    const filas=pendientes.map(ord=>{
+      const post=posts.find(p=>p.id===ord.postulante_id);
+      if(!post)return "";
+      let horasRestantes=6;
+      if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
+      const venceLabel=ord.vence_at?`vence en ${horasRestantes}h`:"sin vencimiento";
+      return `<label style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;cursor:pointer;border:1px solid var(--line);margin-bottom:6px;background:var(--surface)">
+        <input type="checkbox" class="rcrd-chk" value="${ord.id}" data-post="${post.id}" checked style="width:16px;height:16px;cursor:pointer;accent-color:#534AB7">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:600">${post.nombre} ${post.apellido||""}</div>
+          <div style="font-size:11px;color:var(--ink-4)">${post.email} · ${venceLabel}</div>
+        </div>
+        <span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;white-space:nowrap">⏰ Pendiente</span>
+      </label>`;
+    }).join("");
+
+    openModal("⏰ Recordatorio de pago",`
+      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:13px;color:var(--ink-3)">${pendientes.length} persona${pendientes.length===1?"":"s"} sin pagar · <strong>${evNom}</strong></div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)">
+          <input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todos
+        </label>
+      </div>
+      <div style="max-height:340px;overflow-y:auto;padding-right:4px">${filas}</div>
+      <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(${JSON.stringify(evNom)})">📧 Enviar recordatorio</button>
+      </div>`);
+  };
+
+  window.cfEnviarRecordatorioSeleccion=async(evNom)=>{
+    const checks=[...document.querySelectorAll(".rcrd-chk:checked")];
+    if(!checks.length){toast("Selecciona al menos una persona","warn");return;}
+    const btn=document.getElementById("rcrd-send-btn");
     if(btn){btn.disabled=true;btn.textContent="Enviando...";}
     let ok=0,err=0;
-    for(const ord of pendientes){
-      const post=posts.find(p=>p.id===ord.postulante_id);
-      if(!post?.email)continue;
+    for(const chk of checks){
+      const ord=ordenes.find(o=>o.id===chk.value);
+      const post=posts.find(p=>p.id===chk.dataset.post);
+      if(!ord||!post?.email)continue;
       const link=`${APP_URL}?cf_buy=${post.buy_token||post.token}`;
-      // Calcular horas restantes si hay vence_at
       let horasRestantes=6;
-      if(ord.vence_at){
-        const diff=(new Date(ord.vence_at)-new Date())/3600000;
-        horasRestantes=Math.max(1,Math.round(diff));
-      }
+      if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
       try{
-        await sendEmail(
-          post.email,
-          `⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
-          glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes})
-        );
+        await sendEmail(post.email,`⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
+          glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes}));
         ok++;
       }catch(e){err++;console.error("Recordatorio error",post.email,e);}
-      await new Promise(r=>setTimeout(r,300)); // pequeña pausa entre envíos
+      await new Promise(r=>setTimeout(r,300));
     }
-    if(btn){btn.disabled=false;btn.textContent="⏰ Recordatorio pagos";}
-    toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` (${err} fallaron)`:""}`, ok>0?"ok":"error");
+    closeModal();
+    toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` · ${err} fallaron`:""}`,ok>0?"ok":"error");
   };
 };
 
