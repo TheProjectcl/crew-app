@@ -7790,7 +7790,18 @@ function mostrarCompraCF(token){
       ]);
       const ev = evArr[0]; const cfg = cfgArr[0];
       if(!ev||!cfg){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Evento no disponible.</p></div>`; return; }
-      if(!cfg.activo||( cfg.cierre_venta&&new Date()>new Date(cfg.cierre_venta))){ cont.innerHTML=`<div class="cf-ok"><div class="icon">🔒</div><p style="color:#aaa">Venta cerrada.</p></div>`; return; }
+      if(!cfg.activo||( cfg.cierre_venta&&new Date()>new Date(cfg.cierre_venta))){
+        const wtsp=cfg.wtsp_cierre||"";
+        const wtspLink=wtsp?`https://wa.me/${wtsp.replace(/\D/g,"")}`:"";
+        cont.innerHTML=`<div class="cf-ok" style="text-align:center;padding:40px 24px">
+          <div style="font-size:52px;margin-bottom:16px">🔒</div>
+          <div style="font-size:20px;font-weight:700;color:#fff;margin-bottom:10px">Se acabaron los cupos</div>
+          <p style="color:#999;font-size:14px;margin-bottom:24px;line-height:1.5">Los cupos disponibles para Close Friends de <strong style="color:#EC4899">${ev?.name||"este evento"}</strong> se han agotado.<br>Para más información contáctanos:</p>
+          ${wtspLink?`<a href="${wtspLink}" target="_blank" style="display:inline-flex;align-items:center;gap:10px;background:#25D366;color:#fff;padding:14px 28px;border-radius:12px;font-weight:700;font-size:15px;text-decoration:none">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+            Escribir por WhatsApp
+          </a>`:`<p style="color:#666;font-size:13px">Contacta a los organizadores para más información.</p>`}
+        </div>`; return; }
 
       const tope = cfg.tope_persona||2;
       // Usar precio específico del tipo de entrada asignado, o el precio global como fallback
@@ -7799,13 +7810,37 @@ function mostrarCompraCF(token){
       const precio = (tipoAsignado && preciosPorTipo[tipoAsignado]) ? preciosPorTipo[tipoAsignado] : (cfg.precio||15000);
       const evDate = ev.date ? new Date(ev.date.includes("T")?ev.date:ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
 
+      // Cupos falsos: cupos_display_inicio - pagados_reales - factor_por_persona (0-3)
+      const pagadosReales=(await sbGet("cf_ordenes",`evento_id=eq.${post.evento_id}&estado=in.(pagado,conciliado)`)||[]).length;
+      const cuposInicio=cfg.cupos_display_inicio||15;
+      const factorPersona=(post.id||"").split("").reduce((a,c)=>a+c.charCodeAt(0),0)%4; // 0-3 según ID
+      const cuposDisplay=Math.max(3,cuposInicio-pagadosReales-factorPersona);
+
+      // Timer visual desde aprobacion_at (no bloquea la compra)
+      const aprobadoAt=post.aprobado_at?new Date(post.aprobado_at):null;
+      const horasTimer=cfg.horas_vencimiento||24;
+      const fineTimer=aprobadoAt?new Date(aprobadoAt.getTime()+horasTimer*3600*1000):null;
+      const timerHtml=fineTimer&&fineTimer>new Date()?`
+        <div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:12px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px">
+          <span style="font-size:20px">⏰</span>
+          <div>
+            <div style="font-size:11px;color:#888;margin-bottom:2px">Tu descuento CF vence en:</div>
+            <div id="cf-timer" style="font-size:18px;font-weight:700;color:#F59E0B;font-variant-numeric:tabular-nums">--:--:--</div>
+          </div>
+        </div>`:aprobadoAt?`<div style="background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:10px 16px;margin-bottom:14px;font-size:12px;color:#999">⚡ Accede ahora — quedan cupos disponibles</div>`:"";
+
       cont.innerHTML=`
         <div class="cf-card">
           <div style="text-align:center;margin-bottom:16px">
             <div style="font-size:16px;font-weight:700;color:#fff">${ev.name}</div>
             <div style="font-size:12px;color:#888;margin-top:4px">${evDate} · ${ev.venue||""}</div>
           </div>
-          <div style="font-size:13px;color:#ccc;margin-bottom:8px">Hola, <strong style="color:#fff">${post.nombre}</strong> 👋</div>
+          <div style="font-size:13px;color:#ccc;margin-bottom:12px">Hola, <strong style="color:#fff">${post.nombre}</strong> 👋</div>
+          ${timerHtml}
+          <div style="background:#FEF3C7;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:12px;display:flex;align-items:center;gap:8px">
+            <span style="font-size:18px">🔥</span>
+            <div style="font-size:13px;color:#92400E;font-weight:600">¡Solo quedan <span style="font-size:16px;color:#DC2626">${cuposDisplay}</span> cupos con precio Close Friends!</div>
+          </div>
           ${tipoAsignado?`<div style="font-size:12px;color:#888;margin-bottom:4px">Tipo de entrada: <strong style="color:#EC4899">${tipoAsignado}</strong></div>`:""}
           <div style="font-size:12px;color:#888">Precio por entrada: <strong style="color:#EC4899">$${precio.toLocaleString("es-CL")}</strong></div>
         </div>
@@ -7826,6 +7861,20 @@ function mostrarCompraCF(token){
         </div>`;
 
       actualizarTotalCF(precio);
+
+      // Iniciar countdown timer si aplica
+      if(fineTimer&&fineTimer>new Date()){
+        const timerEl=document.getElementById("cf-timer");
+        if(timerEl){
+          const tick=()=>{
+            const diff=fineTimer-new Date();
+            if(diff<=0){timerEl.textContent="¡Apúrate!";timerEl.style.color="#DC2626";return;}
+            const h=Math.floor(diff/3600000);const m=Math.floor((diff%3600000)/60000);const s=Math.floor((diff%60000)/1000);
+            timerEl.textContent=`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+          };
+          tick();setInterval(tick,1000);
+        }
+      }
     }catch(e){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Error: ${e.message}</p></div>`; }
   })();
 }
@@ -8380,11 +8429,12 @@ VIEWS.cfPostulantes = async()=>{
 
   window.cfAprobar=async(id, tipoEntrada)=>{
     const token=cfToken();
-    const patchData={estado:"aprobado",buy_token:token,aprobado_por:CU.id};
+    const aprobado_at=new Date().toISOString();
+    const patchData={estado:"aprobado",buy_token:token,aprobado_por:CU.id,aprobado_at};
     if(tipoEntrada!==undefined) patchData.tipo_entrada=tipoEntrada;
     await sbPatch("cf_postulantes",`id=eq.${id}`,patchData);
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);
-    if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;if(tipoEntrada!==undefined)p.tipo_entrada=tipoEntrada;}
+    if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;p.aprobado_at=aprobado_at;if(tipoEntrada!==undefined)p.tipo_entrada=tipoEntrada;}
     // Enviar email
     if(p){
       const cfg=getCFConfig(p.evento_id);
@@ -8971,6 +9021,16 @@ VIEWS.cfConfig = async()=>{
         <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
         <div><label class="form-label">Plazo para pagar</label><select class="form-input" id="cfg-horas">${[24,48,72,96,120,144,168].map(h=>{const d=h/24;const label=h===24?"24 horas (1 día)":h===168?"7 días (máximo)":h<48?`${h} horas`:d===Math.floor(d)?`${d} días (${h} horas)`:`${h} horas`;return`<option value="${h}"${(cfg.horas_vencimiento||24)===h?" selected":""}>${label}</option>`;}).join("")}</select><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Tiempo que tiene la postulante para completar el pago desde que se aprueba.</div></div>
         <div><label class="form-label">Cierre de venta</label><input class="form-input" id="cfg-cierre" type="datetime-local" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,16):""}"></div>
+        <div>
+          <label class="form-label">Cupos visibles al comprador</label>
+          <input class="form-input" id="cfg-cupos-display" type="number" value="${cfg.cupos_display_inicio||15}" min="3" max="999">
+          <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Número de partida que ve el comprador (ej: 15). Baja automáticamente según pagos reales. Solo visible para ellos, no afecta el stock real.</div>
+        </div>
+        <div>
+          <label class="form-label">WhatsApp de contacto (venta cerrada)</label>
+          <input class="form-input" id="cfg-wtsp-cierre" value="${cfg.wtsp_cierre||""}" placeholder="+56912345678">
+          <div style="font-size:11px;color:var(--ink-4);margin-top:4px">Cuando la venta está cerrada, aparece un botón "Escribir por WhatsApp" con este número.</div>
+        </div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:20px"><input type="checkbox" id="cfg-activo" ${cfg.activo?"checked":""}><label style="font-size:13px">Módulo activo</label></div>
       </div>
       <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
@@ -9048,6 +9108,8 @@ VIEWS.cfConfig = async()=>{
       cuenta_rut:document.getElementById("cfg-cta-rut")?.value||"",
       msg_aprobacion:document.getElementById("cfg-msg-apr")?.value||"",
       msg_confirmacion:document.getElementById("cfg-msg-conf")?.value||"",
+      cupos_display_inicio:parseInt(document.getElementById("cfg-cupos-display")?.value||15),
+      wtsp_cierre:document.getElementById("cfg-wtsp-cierre")?.value||"",
       tipos_entrada:[...document.querySelectorAll(".cfg-tipo-cb:checked")].map(cb=>cb.value),
       precios_entrada:Object.fromEntries([...document.querySelectorAll(".cfg-precio-cb")].map(inp=>[inp.dataset.nombre,parseInt(inp.value)||0])),
       updated_at:new Date().toISOString()
