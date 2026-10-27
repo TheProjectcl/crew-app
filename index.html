@@ -533,6 +533,19 @@ const toast=(msg,type="info")=>{
   setTimeout(()=>{el.classList.remove("show");setTimeout(()=>el.remove(),400);},3200);
 };
 
+// Marca un campo como faltante (borde rojo + texto bajo el campo). Se limpia al escribir.
+const markFieldError=(id,msg="Falta rellenar este campo")=>{
+  const el=$(id);if(!el)return;
+  el.style.borderColor="#dc2626";el.style.background="#fef2f2";
+  const wrap=el.closest("[data-field-wrap]")||el.parentElement;
+  let hint=wrap?.querySelector(".field-err");
+  if(!hint){hint=document.createElement("div");hint.className="field-err";hint.style.cssText="font-size:11px;color:#dc2626;font-weight:600;margin-top:4px";wrap?.appendChild(hint);}
+  hint.textContent="⚠ "+msg;
+  const clear=()=>{el.style.borderColor="";el.style.background="";hint.remove();};
+  el.addEventListener("input",clear,{once:true});el.addEventListener("change",clear,{once:true});
+};
+const clearFieldErrors=(root=document)=>{root.querySelectorAll(".field-err").forEach(h=>h.remove());root.querySelectorAll("[style*='border-color: rgb(220, 38, 38)']").forEach(el=>{el.style.borderColor="";el.style.background="";});};
+
 const showLoading=(show)=>{
   let el=$("loading-overlay");
   if(show&&!el){el=document.createElement("div");el.id="loading-overlay";el.style.cssText="position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px";el.innerHTML=`<div style="font-size:32px">⏳</div><div style="font-size:14px;color:#666">Cargando...</div>`;document.body.appendChild(el);}
@@ -10054,13 +10067,14 @@ function bdayFormCumple(id, prodId, evs){
   openModal(c?"Editar cumpleañero":"Registrar cumpleañero",`
     <div style="display:grid;gap:10px">
       <div class="form-row">
-        <div><label class="form-label">Nombre</label><input class="form-input" id="bc-nom" value="${c?.nombre||""}" placeholder="Felipe"></div>
-        <div><label class="form-label">Apellido</label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
+        <div data-field-wrap><label class="form-label">Nombre <span style="color:#dc2626">*</span></label><input class="form-input" id="bc-nom" value="${c?.nombre||""}" placeholder="Felipe"></div>
+        <div data-field-wrap><label class="form-label">Apellido <span style="color:#dc2626">*</span></label><input class="form-input" id="bc-ape" value="${c?.apellido||""}" placeholder="Turu"></div>
       </div>
-      <div>
-        <label class="form-label">Correo</label>
+      <div data-field-wrap>
+        <label class="form-label">Correo <span style="color:#dc2626">*</span></label>
         <input class="form-input" id="bc-email" type="email" value="${c?.email||""}" placeholder="cumple@mail.com">
       </div>
+      <div id="bc-status" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;font-weight:600"></div>
       <label class="form-label">Evento</label>
       <select class="form-select" id="bc-ev">
         ${evs.map(e=>`<option value="${e.id}"${c?.evento_id===e.id?" selected":""}>${e.name}${e.date?" — "+e.date:""}</option>`).join("")}
@@ -10112,8 +10126,17 @@ window.bdayGuardarCumple=async(id,prodId)=>{
   const email=($("bc-email")?.value||"").trim().toLowerCase();
   const evento_id=$("bc-ev")?.value||"";
   const beneficio_id=$("bc-ben")?.value||null;
-  if(!nombre||!apellido||!email||!evento_id){
+  const bcStatus=(msg)=>{const s=$("bc-status");if(s){s.textContent=msg;s.style.display=msg?"block":"none";}};
+  bcStatus("");clearFieldErrors($("modal")||document);
+  let faltan=0;
+  if(!nombre){markFieldError("bc-nom");faltan++;}
+  if(!apellido){markFieldError("bc-ape");faltan++;}
+  if(!email){markFieldError("bc-email");faltan++;}
+  else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){markFieldError("bc-email","Correo inválido");faltan++;}
+  if(!evento_id){markFieldError("bc-ev","Selecciona un evento");faltan++;}
+  if(faltan){
     if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
+    bcStatus("⚠ Completa los campos marcados en rojo");
     return toast("Completa todos los campos requeridos","warn");
   }
 
@@ -10125,7 +10148,14 @@ window.bdayGuardarCumple=async(id,prodId)=>{
   );
   if(duplicado){
     if(btn){btn.disabled=false;btn.textContent="Guardar y enviar bienvenida";}
-    return toast(`⚠️ Ya existe un cumpleañero con ese nombre o correo en este evento`,"warn");
+    const evDup=(D.eventos||[]).find(e=>e.id===evento_id);
+    const porEmail=duplicado.email?.toLowerCase()===email;
+    const msg=porEmail
+      ?`Este cumpleañero ya está creado: el correo ${email} ya está registrado en "${evDup?.name||"este evento"}" (${duplicado.nombre} ${duplicado.apellido}).`
+      :`Este cumpleañero ya está creado: ${duplicado.nombre} ${duplicado.apellido} ya está registrado en "${evDup?.name||"este evento"}".`;
+    bcStatus("⚠ "+msg);
+    markFieldError(porEmail?"bc-email":"bc-nom","Ya existe en este evento");
+    return toast("Ya existe un cumpleañero con ese nombre o correo en este evento","warn");
   }
 
   // Validar contra bloqueados
@@ -10403,24 +10433,25 @@ async function initBdayApp(){
           ${!c.datos_completos?`
           <div style="background:#fff;border-radius:14px;padding:24px;border:2px solid #fbbf24">
             <h3 style="font-size:15px;font-weight:700;margin-bottom:14px;color:#92400e">⚠️ Completa tu perfil para activar tu lista</h3>
+            <div style="font-size:12px;color:#6b7280;margin:-8px 0 12px">Todos los campos marcados con <span style="color:#dc2626">*</span> son obligatorios.</div>
             <div style="display:grid;gap:10px">
               <div style="display:flex;gap:10px;flex-wrap:wrap">
-                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nombre</label><input id="bpu-nom" class="form-input" value="${c.nombre||""}" style="width:100%;box-sizing:border-box"></div>
-                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Apellido</label><input id="bpu-ape" class="form-input" value="${c.apellido||""}" style="width:100%;box-sizing:border-box"></div>
+                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Nombre <span style="color:#dc2626">*</span></label><input id="bpu-nom" class="form-input" value="${c.nombre||""}" style="width:100%;box-sizing:border-box"></div>
+                <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Apellido <span style="color:#dc2626">*</span></label><input id="bpu-ape" class="form-input" value="${c.apellido||""}" style="width:100%;box-sizing:border-box"></div>
               </div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento</label>${fechaSelectHTML("bpu-fnac",c.fecha_nacimiento||"")}</div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">RUT</label><input id="bpu-rut" class="form-input" value="${c.rut||""}" placeholder="12.345.678-9" style="width:100%;box-sizing:border-box" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/(\\d)(?=(\\d{3})+(?!\\d))/g,'$1.')+'-'+v.slice(-1);this.value=v.toUpperCase()" maxlength="12"></div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram</label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
-              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Correo</label><input id="bpu-email" class="form-input" type="email" value="${c.email||""}" placeholder="tu@correo.com" style="width:100%;box-sizing:border-box"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Fecha de nacimiento <span style="color:#dc2626">*</span></label>${fechaSelectHTML("bpu-fnac",c.fecha_nacimiento||"")}</div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">RUT <span style="color:#dc2626">*</span></label><input id="bpu-rut" class="form-input" value="${c.rut||""}" placeholder="12.345.678-9" style="width:100%;box-sizing:border-box" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/(\\d)(?=(\\d{3})+(?!\\d))/g,'$1.')+'-'+v.slice(-1);this.value=v.toUpperCase()" maxlength="12"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Instagram <span style="color:#dc2626">*</span></label><input id="bpu-ig" class="form-input" value="${c.instagram||""}" placeholder="@tuinstagram" style="width:100%;box-sizing:border-box"></div>
+              <div><label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">Correo <span style="color:#dc2626">*</span></label><input id="bpu-email" class="form-input" type="email" value="${c.email||""}" placeholder="tu@correo.com" style="width:100%;box-sizing:border-box"></div>
               <div>
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">WhatsApp</label>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:4px">WhatsApp <span style="color:#dc2626">*</span></label>
                 <div style="display:flex;align-items:center;gap:0">
                   <span style="background:#f4f4f6;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;padding:10px 10px;font-size:13px;color:#555;font-weight:600;white-space:nowrap">+569</span>
                   <input id="bpu-wtsp" class="form-input" inputmode="numeric" maxlength="8" value="${(c.whatsapp||"").replace("+569","")}" placeholder="12345678" style="border-radius:0 8px 8px 0;margin:0;width:100%;box-sizing:border-box" oninput="this.value=this.value.replace(/\D/g,'').slice(0,8)">
                 </div>
               </div>
               <div>
-                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Foto del carnet</label>
+                <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Foto del carnet <span style="color:#dc2626">*</span></label>
                 <input type="file" id="bpu-carnet-file" accept="image/*" capture="environment" style="display:none" onchange="bdayPreviewCarnet(this)">
                 <div id="bpu-carnet-preview" style="margin-bottom:8px;display:${c.foto_carnet?'block':'none'}">
                   <img id="bpu-carnet-img" src="${c.foto_carnet||''}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
@@ -10432,6 +10463,7 @@ async function initBdayApp(){
                   ${c.foto_carnet?`<button type="button" onclick="bdayQuitarCarnet()" style="background:#fee2e2;color:#991b1b;border:none;border-radius:8px;padding:10px 14px;font-size:13px;cursor:pointer">✕</button>`:''}
                 </div>
                 <input type="hidden" id="bpu-carnet" value="${c.foto_carnet||''}">
+                <div id="bpu-carnet-err"></div>
               </div>
               <button class="btn btn-primary" id="bpu-guardar-btn" onclick="if(typeof window.bdayGuardarPerfil==='function'){window.bdayGuardarPerfil();}else{alert('Error: función no disponible. Recarga la página.');}" style="width:100%;font-size:15px;padding:12px">Guardar perfil →</button>
               <div id="bpu-status" style="font-size:13px;text-align:center;margin-top:6px;min-height:18px;font-weight:600"></div>
@@ -10569,6 +10601,7 @@ async function initBdayApp(){
         if(!upRes.ok){const t=await upRes.text();throw new Error(t);}
         const url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
         const hidden=$("bpu-carnet");if(hidden)hidden.value=url;
+        const ce=$("bpu-carnet-err");if(ce)ce.innerHTML="";
         toast("Foto lista ✅","ok");
       }catch(e){toast("Error subiendo foto: "+e.message,"warn");}
     };
@@ -10593,19 +10626,28 @@ async function initBdayApp(){
         const foto_carnet=(_carnetRaw.startsWith("http"))?_carnetRaw:null;
         const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
         const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
+        clearFieldErrors();
         const faltantes=[];
-        if(!nombre) faltantes.push("nombre");
-        if(!apellido) faltantes.push("apellido");
-        if(!fecha_nacimiento) faltantes.push("fecha de nacimiento");
-        if(!rut) faltantes.push("RUT");
-        if(!instagram) faltantes.push("Instagram");
-        if(!whatsapp) faltantes.push("WhatsApp (8 dígitos)");
-        if(!emailVal&&!c.email) faltantes.push("correo");
-        if(!foto_carnet) faltantes.push("foto del carnet");
+        if(!nombre){faltantes.push("nombre");markFieldError("bpu-nom");}
+        if(!apellido){faltantes.push("apellido");markFieldError("bpu-ape");}
+        if(!fecha_nacimiento){faltantes.push("fecha de nacimiento");["bpu-fnac-d","bpu-fnac-m","bpu-fnac-y"].forEach(i=>{const e=$(i);if(e){e.style.borderColor="#dc2626";e.style.background="#fef2f2";e.addEventListener("change",()=>{e.style.borderColor="";e.style.background="";},{once:true});}});}
+        if(!rut){faltantes.push("RUT");markFieldError("bpu-rut");}
+        else if(rut.replace(/[^0-9K]/g,"").length<8){faltantes.push("RUT válido");markFieldError("bpu-rut","RUT inválido");}
+        if(!instagram){faltantes.push("Instagram");markFieldError("bpu-ig");}
+        if(!emailVal&&!c.email){faltantes.push("correo");markFieldError("bpu-email");}
+        else if(emailVal&&!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailVal)){faltantes.push("correo válido");markFieldError("bpu-email","Correo inválido");}
+        if(!whatsapp){faltantes.push("WhatsApp");markFieldError("bpu-wtsp",wtspNum.length?"Deben ser 8 dígitos":"Falta rellenar este campo");}
+        if(!foto_carnet){
+          faltantes.push("foto del carnet");
+          const ce=$("bpu-carnet-err");if(ce){ce.innerHTML='<div style="font-size:11px;color:#dc2626;font-weight:600;margin-top:6px">⚠ Debes subir una foto de tu carnet</div>';}
+        }
         if(faltantes.length){
           if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
-          const msg="Faltan campos obligatorios: "+faltantes.join(", ");
-          setStatus("⚠ "+msg,"#dc2626");
+          const msg=faltantes.length===1?`Falta: ${faltantes[0]}`:`Faltan ${faltantes.length} campos obligatorios`;
+          setStatus("⚠ "+msg+" — revisa los campos marcados en rojo","#dc2626");
+          // Scroll al primer campo con error
+          const first=document.querySelector(".field-err, #bpu-carnet-err div, [style*='border-color: rgb(220, 38, 38)']");
+          if(first)first.scrollIntoView({behavior:"smooth",block:"center"});
           return toast(msg,"warn");
         }
         const patch={nombre,apellido,datos_completos:true};
