@@ -8900,20 +8900,38 @@ VIEWS.cfPlanilla = async()=>{
   };
 };
 
-function renderTablaPlanilla(ordenes,posts,q){
+function renderTablaPlanilla(ordenes,posts,q,filtroEstado="todos"){
   const norm=s=>(s||"").toLowerCase();
-  const filtrados=q?posts.filter(p=>norm(p.nombre).includes(norm(q))||norm(p.apellido).includes(norm(q))||norm(p.rut).includes(norm(q))||norm(p.instagram).includes(norm(q))):posts;
-  return `<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
+  const ahora=new Date();
+  let filtrados=q?posts.filter(p=>norm(p.nombre).includes(norm(q))||norm(p.apellido).includes(norm(q))||norm(p.rut).includes(norm(q))||norm(p.instagram).includes(norm(q))):posts;
+  if(filtroEstado==="vencidos") filtrados=filtrados.filter(p=>{const ord=ordenes.find(o=>o.postulante_id===p.id);return ord&&ord.estado==="pendiente"&&ord.vence_at&&new Date(ord.vence_at)<ahora;});
+  else if(filtroEstado==="pendientes") filtrados=filtrados.filter(p=>{const ord=ordenes.find(o=>o.postulante_id===p.id);return ord&&ord.estado==="pendiente"&&(!ord.vence_at||new Date(ord.vence_at)>=ahora);});
+  else if(filtroEstado==="pagados") filtrados=filtrados.filter(p=>{const ord=ordenes.find(o=>o.postulante_id===p.id);return ord&&["pagado","conciliado"].includes(ord.estado);});
+
+  const vencidos=posts.filter(p=>{const ord=ordenes.find(o=>o.postulante_id===p.id);return ord&&ord.estado==="pendiente"&&ord.vence_at&&new Date(ord.vence_at)<ahora;}).length;
+  const pendientesVivos=posts.filter(p=>{const ord=ordenes.find(o=>o.postulante_id===p.id);return ord&&ord.estado==="pendiente"&&(!ord.vence_at||new Date(ord.vence_at)>=ahora);}).length;
+
+  const tabs=`<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+    ${[["todos","Todos"],["pendientes",`⏳ Sin pagar (${pendientesVivos})`],["vencidos",`🔴 Vencidos (${vencidos})`],["pagados","✅ Pagados"]].map(([v,l])=>
+      `<button onclick="window._cfFiltroEstado='${v}';document.getElementById('cf-tabla-planilla').innerHTML=renderTablaPlanilla(window._cfOrdenes,window._cfPosts,document.querySelector('.cf-buscar')?.value||'','${v}')" style="font-size:12px;padding:5px 12px;border-radius:20px;border:1px solid var(--line);cursor:pointer;font-weight:${filtroEstado===v?"700":"400"};background:${filtroEstado===v?(v==="vencidos"?"#FEE2E2":v==="pendientes"?"#FEF3C7":"var(--accent-light,#ede9fe)"):"var(--surface)"};color:${filtroEstado===v&&v==="vencidos"?"#991B1B":filtroEstado===v&&v==="pendientes"?"#92400E":filtroEstado===v?"var(--accent)":"var(--ink-3)"}">${l}</button>`
+    ).join("")}
+    ${vencidos>0?`<span style="font-size:11px;color:#DC2626;font-weight:600;align-self:center">⚠ ${vencidos} vencido${vencidos===1?"":"s"} — considera reenviar el link con nueva fecha</span>`:""}
+  </div>`;
+
+  return tabs+`<table style="width:100%;border-collapse:collapse;font-size:12px;min-width:700px">
     <thead><tr style="background:var(--line-2)">
       <th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px">RUT</th>
       <th style="padding:8px">IG</th><th style="padding:8px">WA</th>
       <th style="padding:8px">Estado</th><th style="padding:8px">Orden</th>
-      <th style="padding:8px">Tickets</th><th style="padding:8px">Monto</th><th style="padding:8px">Pago</th><th style="padding:8px">Acciones</th>
+      <th style="padding:8px">Tickets</th><th style="padding:8px">Monto</th><th style="padding:8px">Pago / Vence</th><th style="padding:8px">Acciones</th>
     </tr></thead>
     <tbody>
     ${filtrados.map(p=>{
       const ord=ordenes.find(o=>o.postulante_id===p.id);
-      return `<tr style="border-bottom:1px solid var(--line)">
+      const vencida=ord&&ord.vence_at&&new Date(ord.vence_at)<ahora&&ord.estado==="pendiente";
+      const diff=ord?.vence_at?(new Date(ord.vence_at)-ahora)/3600000:null;
+      const venceLabel=vencida?`<span style="color:#DC2626;font-weight:600">⛔ Vencida</span>`:diff!==null&&diff<24?`<span style="color:#D97706;font-weight:600">⏰ ${Math.round(diff)}h</span>`:"";
+      return `<tr style="border-bottom:1px solid var(--line);background:${vencida?"#FFF5F5":""}">
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.email}</div></td>
         <td style="padding:8px;font-family:monospace">${p.rut}</td>
         <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram}</a></td>
@@ -8922,7 +8940,7 @@ function renderTablaPlanilla(ordenes,posts,q){
         <td style="padding:8px;font-family:monospace">${ord?.codigo||"—"}</td>
         <td style="padding:8px;text-align:center">${ord?.cantidad||"—"}</td>
         <td style="padding:8px">$${ord?(ord.monto_total||0).toLocaleString("es-CL"):"—"}</td>
-        <td style="padding:8px">${ord?badge(ord.estado==="conciliado"?"pagado":ord.estado,ord.estado==="conciliado"||ord.estado==="pagado"?"green":"amber"):"—"}</td>
+        <td style="padding:8px">${ord?badge(ord.estado==="conciliado"?"Pagado":ord.estado==="pagado"?"Pagado":"Pendiente",ord.estado==="conciliado"||ord.estado==="pagado"?"green":"amber"):"—"} ${venceLabel}</td>
         <td style="padding:8px;white-space:nowrap">
           ${p.estado==="aprobado"?`<button onclick="cfReenviarCorreo('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Reenviar correo de aprobación">📧 Reenviar</button>`:""}
           <button onclick="cfCambiarEmail('${p.id}')" style="font-size:11px;padding:4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);cursor:pointer;color:var(--ink)" title="Cambiar email">✏️ Email</button>
