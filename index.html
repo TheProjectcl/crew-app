@@ -524,8 +524,11 @@ const log = async(action,entity_type,entity_id,notes="")=>{
 
 const toast=(msg,type="info")=>{
   const el=document.createElement("div");el.className="toast-item";
-  el.style.background=type==="success"?"#166534":type==="error"?"#991B1B":type==="warn"?"#92400E":"#1a1a1a";
-  el.textContent=msg;$("toast").appendChild(el);
+  el.style.background=(type==="success"||type==="ok")?"#166534":type==="error"?"#991B1B":type==="warn"?"#92400E":"#1a1a1a";
+  el.textContent=msg;
+  let cont=$("toast");
+  if(!cont){cont=document.createElement("div");cont.id="toast";document.body.appendChild(cont);}
+  cont.appendChild(el);
   setTimeout(()=>el.classList.add("show"),10);
   setTimeout(()=>{el.classList.remove("show");setTimeout(()=>el.remove(),400);},3200);
 };
