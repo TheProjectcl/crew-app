@@ -10578,7 +10578,10 @@ async function initBdayApp(){
         if(whatsapp) patch.whatsapp=whatsapp;
         if(fecha_nacimiento) patch.fecha_nacimiento=fecha_nacimiento;
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
-        await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,patch);
+        // Timeout de 10s para evitar que se quede colgado
+        const patchPromise=sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,patch);
+        const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timeout: sin respuesta del servidor (10s)")),10000));
+        await Promise.race([patchPromise,timeoutPromise]);
         // Actualizar objeto local
         c.nombre=nombre;c.apellido=apellido;
         if(fecha_nacimiento)c.fecha_nacimiento=fecha_nacimiento;
