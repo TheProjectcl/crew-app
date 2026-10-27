@@ -8911,7 +8911,7 @@ VIEWS.cfPlanilla = async()=>{
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <div style="font-size:14px;font-weight:600">Listado completo</div>
         <div style="display:flex;gap:8px">
-          <input class="form-input" placeholder="Buscar..." style="width:200px;font-size:12px" oninput="cfFiltrarPlanilla(this.value)">
+          <input class="form-input cf-buscar" placeholder="Buscar..." style="width:200px;font-size:12px" autocomplete="off">
           <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">Exportar CSV</button>
           <button class="btn" style="font-size:12px;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio()">⏰ Recordatorio pagos</button>
         </div>
@@ -8919,7 +8919,21 @@ VIEWS.cfPlanilla = async()=>{
       <div id="cf-tabla-planilla" style="overflow-x:auto">${renderTablaPlanilla(ordenes,posts,"")}</div>
     </div>`;
 
-  window.cfFiltrarPlanilla=(q)=>{ document.getElementById("cf-tabla-planilla").innerHTML=renderTablaPlanilla(ordenes,posts,q); };
+  // Exponer datos para que los tabs puedan re-renderizar
+  window._cfOrdenes=ordenes;
+  window._cfPosts=posts;
+  window._cfFiltroEstado="todos";
+
+  // Buscador con debounce 350ms
+  let _planTimer=null;
+  document.querySelector(".cf-buscar")?.addEventListener("input",function(){
+    clearTimeout(_planTimer);
+    _planTimer=setTimeout(()=>{
+      document.getElementById("cf-tabla-planilla").innerHTML=renderTablaPlanilla(window._cfOrdenes,window._cfPosts,this.value,window._cfFiltroEstado||"todos");
+    },350);
+  });
+
+  window.cfFiltrarPlanilla=(q)=>{ document.getElementById("cf-tabla-planilla").innerHTML=renderTablaPlanilla(ordenes,posts,q,window._cfFiltroEstado||"todos"); };
 
   window.cfExportarCSV=()=>{
     const rows=[["Nombre","Apellido","RUT","Instagram","WhatsApp","Email","Estado Post.","Código Orden","Tickets","Monto","Estado Pago","Aprobado por","Fecha"]];
