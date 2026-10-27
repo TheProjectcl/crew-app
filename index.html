@@ -1080,7 +1080,7 @@ async function intentarLogin(email,pass,esRestauracion){
         try{localStorage.removeItem("crew-session");}catch(e){}
         return false;
       }
-      $("li-err").classList.remove("hidden");return false;
+      $("li-err")?.classList.remove("hidden");return false;
     }
     $("li-err")?.classList.add("hidden");
     CU={...res[0],equipoId:res[0].equipo_id};
@@ -1102,7 +1102,7 @@ async function intentarLogin(email,pass,esRestauracion){
     showLoading(false);
     if(!esRestauracion)await log("login","user",CU.id,`Login desde ${navigator.userAgent.slice(0,40)}`);
 
-    $("login-screen").classList.add("hidden");
+    $("login-screen")?.classList.add("hidden");
     const role=CU.role;
     if(["superadmin","owner","coordinator"].includes(role)) initAdminApp();
     else if(["door_chief","door_staff","vip_staff","cashier"].includes(role)) initMobApp();
@@ -1158,8 +1158,10 @@ function doLogout(){
   CU=null;CP=null;currentEvId=null;
   ["app","mob-app","emb-app","jefe-app"].forEach(id=>$(id)?.classList.add("hidden"));
   const compApp=$("comp-app");if(compApp)compApp.classList.add("hidden");
-  $("login-screen").classList.remove("hidden");
-  $("li-email").value="";$("li-pass").value="";
+  const ls=$("login-screen");
+  if(!ls){ location.href=window.location.pathname; return; } // body reemplazado (panel cumpleañero, etc.)
+  ls.classList.remove("hidden");
+  if($("li-email"))$("li-email").value="";if($("li-pass"))$("li-pass").value="";
 }
 
 // ═══════════════════════════════════
@@ -10755,7 +10757,7 @@ async function initBdayApp(){
     window.logoutBday=()=>{
       CU=null;CP=null;D={};
       try{localStorage.removeItem("crew-session");}catch(e){}
-      location.reload();
+      location.href=window.location.pathname; // sin ?bday_panel=… para que no vuelva a entrar solo
     };
   }
   render();
@@ -10828,6 +10830,9 @@ else if(_bdayUrl.has("bday_panel")){
   // El cumpleañero entra por su link personal — login automático por token
   (async()=>{
     const token=_bdayUrl.get("bday_panel");
+    // Cerrar cualquier sesión previa (p.ej. productor) para que no se pise con la del cumpleañero
+    try{localStorage.removeItem("crew-session");}catch(e){}
+    CU=null;CP=null;currentEvId=null;
     // Mostrar pantalla de carga mientras buscamos
     document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
       <div style="font-size:40px">🎂</div>
@@ -10847,18 +10852,22 @@ else if(_bdayUrl.has("bday_panel")){
       // Buscar usuario asociado
       const users=await sbGet("users",`email=eq.${encodeURIComponent(c.email)}&role=eq.cumpleanero`);
       if(!users.length){
-        // No tiene usuario aún — mostrar login normal con email pre-rellenado
-        window.history.replaceState({},"",window.location.pathname);
-        location.reload();
+        document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui;padding:24px;text-align:center">
+          <div style="font-size:40px">😕</div>
+          <p style="color:#fff;font-size:15px">Tu usuario aún no está activo.<br><span style="color:#aaa;font-size:13px">Pídele al productor que reenvíe tu correo de bienvenida.</span></p>
+          <a href="${window.location.pathname}" style="color:#a78bfa;font-size:13px">Ir al inicio →</a>
+        </div>`;
         return;
       }
       const u=users[0];
       // Login automático con credenciales del usuario
       const ok=await intentarLogin(u.email,u.pass,true);
       if(!ok){
-        // Falló — mostrar pantalla login con email pre-rellenado
-        window.history.replaceState({},"",window.location.pathname);
-        location.reload();
+        document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui;padding:24px;text-align:center">
+          <div style="font-size:40px">⚠️</div>
+          <p style="color:#fff;font-size:15px">No pudimos abrir tu panel.</p>
+          <a href="${window.location.pathname}" style="background:#534AB7;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-size:13px">Ingresar con mi correo y contraseña →</a>
+        </div>`;
       }
     }catch(e){
       document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
@@ -10889,8 +10898,10 @@ else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
       showLoading(false);
     }
   }catch(e){console.error("Init check failed",e);}
-  // Intentar restaurar sesión guardada (auto-login)
-  await restaurarSesion();
+  // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
+  const _pub=new URLSearchParams(window.location.search);
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload"].some(k=>_pub.has(k));
+  if(!_esLinkPublico) await restaurarSesion();
 })();
 </script>
 </body>
