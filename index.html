@@ -9805,7 +9805,7 @@ function bdayFormBeneficio(id, prodId, cb){
       <input class="form-input" id="bb-nom" value="${b?.nombre||""}" placeholder="Ej: Cumpleaños Halloween 1">
       <div class="form-row">
         <div><label class="form-label">Máx. invitados</label><input class="form-input" id="bb-maxinv" type="number" min="1" value="${b?.max_invitados||20}"></div>
-        <div><label class="form-label">Covers cumpleañero</label><input class="form-input" id="bb-covc" type="number" min="0" value="${b?.covers_cumple||1}"></div>
+        <div><label class="form-label">Covers cumpleañero</label><input class="form-input" id="bb-covc" type="number" min="0" value="${b?.covers_cumple??1}"></div>
       </div>
       <div class="form-row">
         <div><label class="form-label">Covers adicionales</label><input class="form-input" id="bb-covad" type="number" min="0" value="${b?.covers_adicionales||0}"></div>
@@ -9855,7 +9855,7 @@ window.bdayGuardarBeneficio=async(id,prodId)=>{
     productora_id:prodId||null,
     nombre,
     max_invitados:parseInt($("bb-maxinv")?.value)||20,
-    covers_cumple:parseInt($("bb-covc")?.value)||1,
+    covers_cumple:(()=>{const v=parseInt($("bb-covc")?.value);return isNaN(v)||v<0?1:v;})(),
     covers_adicionales:parseInt($("bb-covad")?.value)||0,
     precio_invitado_h:parseInt($("bb-prh")?.value)||0,
     precio_invitado_m:parseInt($("bb-prm")?.value)||0,
