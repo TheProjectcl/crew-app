@@ -808,6 +808,21 @@ const glMail={
       glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(`Tu amiga te reservó una entrada para <strong style="color:#0B0B0C">${glEsc(evento)}</strong>. Completa tu pago para confirmar tu lugar.`),"20px 48px 0")+
       glMail.row(glMail.button(link,"PAGAR MI ENTRADA")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
+  },
+
+  // ── 5) Recordatorio últimas horas para pagar
+  recordatorio({nombre,evento,link,horasRestantes}){
+    const urgente=horasRestantes<=3;
+    const color=urgente?"#DC2626":"#D97706";
+    const badge=urgente?"⏰ ¡Últimas horas!":"⚡ Quedan pocas horas";
+    const msg=urgente
+      ? `Solo te quedan <strong>${horasRestantes} hora${horasRestantes===1?"":"s"}</strong> para completar tu compra con descuento Close Friends en <strong style="color:#0B0B0C">${glEsc(evento)}</strong>. Después de eso, tu lugar queda liberado.`
+      : `Tu lugar en <strong style="color:#0B0B0C">${glEsc(evento)}</strong> sigue reservado, ¡pero quedan pocas horas para completar el pago con precio Close Friends!`;
+    return glMail.shell(color,
+      glMail.row(glMail.badge(badge,"warn"),"36px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#9203;`)+glMail.p(msg),"20px 48px 0")+
+      glMail.row(glMail.button(link,"COMPLETAR MI PAGO")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
+      glMail.row(glMail.fallback(link),"28px 48px 40px"));
   }
 };
 
@@ -8804,6 +8819,7 @@ VIEWS.cfPlanilla = async()=>{
         <div style="display:flex;gap:8px">
           <input class="form-input" placeholder="Buscar..." style="width:200px;font-size:12px" oninput="cfFiltrarPlanilla(this.value)">
           <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">Exportar CSV</button>
+          <button class="btn" style="font-size:12px;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio()">⏰ Recordatorio pagos</button>
         </div>
       </div>
       <div id="cf-tabla-planilla" style="overflow-x:auto">${renderTablaPlanilla(ordenes,posts,"")}</div>
@@ -8820,6 +8836,41 @@ VIEWS.cfPlanilla = async()=>{
     }
     const csv=rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="close_friends.csv";a.click();
+  };
+
+  window.cfReenviarRecordatorio=async()=>{
+    // Órdenes pendientes (sin pago) que aún no han vencido
+    const pendientes=ordenes.filter(o=>o.estado==="pendiente");
+    if(!pendientes.length){toast("No hay pagos pendientes","warn");return;}
+    const ev=D.eventos?.find(e=>e.id===pendientes[0]?.evento_id);
+    const evNom=ev?.name||"el evento";
+    const confirmar=confirm(`¿Enviar recordatorio a ${pendientes.length} persona${pendientes.length===1?"":"s"} que aún no han pagado?`);
+    if(!confirmar)return;
+    const btn=document.querySelector("[onclick='cfReenviarRecordatorio()']");
+    if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+    let ok=0,err=0;
+    for(const ord of pendientes){
+      const post=posts.find(p=>p.id===ord.postulante_id);
+      if(!post?.email)continue;
+      const link=`${APP_URL}?cf_buy=${post.buy_token||post.token}`;
+      // Calcular horas restantes si hay vence_at
+      let horasRestantes=6;
+      if(ord.vence_at){
+        const diff=(new Date(ord.vence_at)-new Date())/3600000;
+        horasRestantes=Math.max(1,Math.round(diff));
+      }
+      try{
+        await sendEmail(
+          post.email,
+          `⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
+          glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes})
+        );
+        ok++;
+      }catch(e){err++;console.error("Recordatorio error",post.email,e);}
+      await new Promise(r=>setTimeout(r,300)); // pequeña pausa entre envíos
+    }
+    if(btn){btn.disabled=false;btn.textContent="⏰ Recordatorio pagos";}
+    toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` (${err} fallaron)`:""}`, ok>0?"ok":"error");
   };
 };
 
