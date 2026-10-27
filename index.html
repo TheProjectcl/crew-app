@@ -10562,7 +10562,8 @@ async function initBdayApp(){
         const rut=($("bpu-rut")?.value||"").trim().toUpperCase()||null;
         const instagram=normIG($("bpu-ig")?.value||"");
         const emailVal=($("bpu-email")?.value||"").trim().toLowerCase()||null;
-        const foto_carnet=($("bpu-carnet")?.value||"").trim()||null;
+        const _carnetRaw=($("bpu-carnet")?.value||"").trim();
+        const foto_carnet=(_carnetRaw.startsWith("http"))?_carnetRaw:null; // ignorar base64
         const wtspNum=($("bpu-wtsp")?.value||"").replace(/\D/g,"").slice(0,8);
         const whatsapp=wtspNum.length===8?"+569"+wtspNum:null;
         if(!nombre||!apellido){
@@ -10591,8 +10592,10 @@ async function initBdayApp(){
         setTimeout(()=>render(),1500);
       }catch(e){
         if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
-        toast("Error al guardar: "+e.message,"error");
+        const msg=e.message||JSON.stringify(e)||"Error desconocido";
+        toast("Error al guardar: "+msg,"error");
         console.error("bdayGuardarPerfil error:",e);
+        alert("Error al guardar perfil:\n"+msg); // visible aunque el toast no aparezca
       }
     };
     window.logoutBday=()=>{
