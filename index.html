@@ -9903,7 +9903,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
             <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
               ${ganoPremio&&!botellaEntregada?`<button class="btn btn-success" style="font-size:12px;padding:5px 12px;font-weight:700" onclick="bdayEntregarBotella('${c.id}')">🍾 Canjear botella</button>`:""}
               <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
-              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}')">🔗 Link</button>
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}',this)">🔗 Link</button>
               <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
               <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
             </div>
@@ -9939,9 +9939,24 @@ VIEWS["bday-cumpleaneros"] = async()=>{
   window._renderCumpleFull=renderCumple;
 
   window.bdayNuevoCumple=()=>bdayFormCumple(null,prodId,evs);
-  window.bdayCopiarLink=(token)=>{
-    navigator.clipboard.writeText(bdayTokenLink(token));
-    toast("Link copiado 🔗","ok");
+  window.bdayCopiarLink=(token,btnEl)=>{
+    navigator.clipboard.writeText(bdayTokenLink(token)).then(()=>{
+      toast("✅ Link copiado","ok");
+      if(btnEl){
+        const orig=btnEl.textContent;
+        btnEl.textContent="✅ Copiado!";
+        btnEl.style.background="#16a34a";
+        btnEl.style.color="#fff";
+        setTimeout(()=>{btnEl.textContent=orig;btnEl.style.background="";btnEl.style.color="";},2000);
+      }
+    }).catch(()=>{
+      // fallback
+      const ta=document.createElement("textarea");
+      ta.value=bdayTokenLink(token);
+      document.body.appendChild(ta);ta.select();document.execCommand("copy");document.body.removeChild(ta);
+      toast("✅ Link copiado","ok");
+      if(btnEl){const orig=btnEl.textContent;btnEl.textContent="✅ Copiado!";setTimeout(()=>{btnEl.textContent=orig;},2000);}
+    });
   };
   window.bdayEntregarBotella=async(cid)=>{
     const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);
@@ -10415,8 +10430,8 @@ async function initBdayApp(){
                 </div>
                 <input type="hidden" id="bpu-carnet" value="${c.foto_carnet||''}">
               </div>
-              <button class="btn btn-primary" id="bpu-guardar-btn" onclick="if(typeof window.bdayGuardarPerfil==='function'){window.bdayGuardarPerfil();}else{alert('Error: función no disponible. Recarga la página.');}" style="width:100%">Guardar perfil →</button>
-              <div id="bpu-status" style="font-size:12px;color:#6b7280;text-align:center;margin-top:4px;min-height:16px"></div>
+              <button class="btn btn-primary" id="bpu-guardar-btn" onclick="if(typeof window.bdayGuardarPerfil==='function'){window.bdayGuardarPerfil();}else{alert('Error: función no disponible. Recarga la página.');}" style="width:100%;font-size:15px;padding:12px">Guardar perfil →</button>
+              <div id="bpu-status" style="font-size:13px;text-align:center;margin-top:6px;min-height:18px;font-weight:600"></div>
             </div>
           </div>`:""
           }
@@ -10562,8 +10577,8 @@ async function initBdayApp(){
       const btn=$("bpu-guardar-btn")||document.querySelector("[id='bpu-guardar-btn']");
       const statusDiv=$("bpu-status");
       const setStatus=(txt,color)=>{if(statusDiv){statusDiv.textContent=txt;statusDiv.style.color=color||"#6b7280";}};
-      if(btn){btn.disabled=true;btn.textContent="⏳ Guardando...";}
-      setStatus("Conectando con el servidor...","#6b7280");
+      if(btn){btn.disabled=true;btn.textContent="⏳ Guardando datos...";}
+      setStatus("","");
       try{
         const nombre=($("bpu-nom")?.value||"").trim();
         const apellido=($("bpu-ape")?.value||"").trim();
@@ -10587,9 +10602,8 @@ async function initBdayApp(){
         if(whatsapp) patch.whatsapp=whatsapp;
         if(fecha_nacimiento) patch.fecha_nacimiento=fecha_nacimiento;
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
-        setStatus("Guardando datos...","#6b7280");
         const ctrl=new AbortController();
-        const toid=setTimeout(()=>{ctrl.abort();setStatus("Tiempo de espera agotado (10s)","#dc2626");},10000);
+        const toid=setTimeout(()=>{ctrl.abort();setStatus("⚠ Tiempo de espera agotado (10s)","#dc2626");},10000);
         let patchRes;
         try{
           patchRes=await fetch(`${SB_URL}/rest/v1/bday_cumpleaneros?id=eq.${c.id}`,{
@@ -10603,7 +10617,7 @@ async function initBdayApp(){
           const errTxt=await patchRes.text();
           throw new Error(`HTTP ${patchRes.status}: ${errTxt}`);
         }
-        setStatus("✅ ¡Guardado!","#16a34a");
+        // Actualizar objeto local
         c.nombre=nombre;c.apellido=apellido;
         if(fecha_nacimiento)c.fecha_nacimiento=fecha_nacimiento;
         if(rut)c.rut=rut;
@@ -10612,8 +10626,17 @@ async function initBdayApp(){
         if(foto_carnet)c.foto_carnet=foto_carnet;
         if(whatsapp)c.whatsapp=whatsapp;
         c.datos_completos=true;
-        toast("¡Datos guardados correctamente! ✅","ok");
-        setTimeout(()=>render(),1800);
+        // Mostrar banner de éxito visible antes de redibujar
+        if(btn){btn.textContent="✅ ¡Guardado!";}
+        setStatus("Datos guardados correctamente ✅","#16a34a");
+        // Reemplazar el formulario con un mensaje de éxito grande
+        const formCard=document.querySelector("[style*='border:2px solid #fbbf24']");
+        if(formCard){
+          formCard.style.border="2px solid #16a34a";
+          formCard.style.background="#f0fdf4";
+          formCard.innerHTML=`<div style="text-align:center;padding:24px"><div style="font-size:48px">✅</div><div style="font-size:18px;font-weight:800;color:#15803d;margin-top:8px">¡Perfil guardado!</div><div style="font-size:14px;color:#166534;margin-top:4px">Ya puedes compartir tu link de invitaciones.</div></div>`;
+        }
+        setTimeout(()=>render(),2500);
       }catch(e){
         if(btn){btn.disabled=false;btn.textContent="Guardar perfil →";}
         const msg=e.message||JSON.stringify(e)||"Error desconocido";
