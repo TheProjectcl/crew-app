@@ -10578,10 +10578,22 @@ async function initBdayApp(){
         if(whatsapp) patch.whatsapp=whatsapp;
         if(fecha_nacimiento) patch.fecha_nacimiento=fecha_nacimiento;
         if(emailVal&&emailVal!==c.email) patch.email=emailVal;
-        // Timeout de 10s para evitar que se quede colgado
-        const patchPromise=sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,patch);
-        const timeoutPromise=new Promise((_,rej)=>setTimeout(()=>rej(new Error("Timeout: sin respuesta del servidor (10s)")),10000));
-        await Promise.race([patchPromise,timeoutPromise]);
+        // Fetch directo con timeout y logging completo
+        const ctrl=new AbortController();
+        const toid=setTimeout(()=>ctrl.abort(),10000);
+        let patchRes;
+        try{
+          patchRes=await fetch(`${SB_URL}/rest/v1/bday_cumpleaneros?id=eq.${c.id}`,{
+            method:"PATCH",
+            headers:{...HDR,"Prefer":"return=representation"},
+            body:JSON.stringify(patch),
+            signal:ctrl.signal
+          });
+        }finally{clearTimeout(toid);}
+        if(!patchRes.ok){
+          const errTxt=await patchRes.text();
+          throw new Error(`HTTP ${patchRes.status}: ${errTxt}`);
+        }
         // Actualizar objeto local
         c.nombre=nombre;c.apellido=apellido;
         if(fecha_nacimiento)c.fecha_nacimiento=fecha_nacimiento;
