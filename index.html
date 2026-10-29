@@ -10378,7 +10378,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
                     ? `<span style="font-size:11px;color:#888">Faltan ${minPremio-ingresados} para el premio</span>`
                     : ""}
               </div>
-              ${c.datos_completos?"":`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:6px;display:inline-block">⚠ Datos incompletos</span>`}
+              ${c.datos_completos?`<span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;margin-top:6px;display:inline-block;font-weight:600">✓ Activo · en acreditación</span>`:`<span style="font-size:11px;background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:5px;margin-top:6px;display:inline-block;font-weight:600">⚠ Sin activar · falta completar perfil (no aparece en acreditación)</span>`}
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
               ${ganoPremio&&!botellaEntregada?`<button class="btn btn-success" style="font-size:12px;padding:5px 12px;font-weight:700" onclick="bdayEntregarBotella('${c.id}')">🍾 Canjear botella</button>`:""}
