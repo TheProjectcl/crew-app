@@ -2375,7 +2375,7 @@ async function exportarAcreditacionCompleta(){
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
     .map(e=>({e,l:D.acc_lists.find(l=>l.id===e.list_id)}))
     .sort((a,b)=>((a.l?.name||"")+a.e.name).localeCompare((b.l?.name||"")+b.e.name,"es"));
-  const pulsTxt=v=>v||"No asignado";
+  const pulsTxt=v=>v||PULSERA_DEFAULT; // sin pulsera asignada => General
   const hListas=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa","Lista"]];
   entries.forEach(({e,l})=>hListas.push([e.name||"",getRut(e)||"",pulsTxt(getPulsera(e,ev)?.nombre),1+(e.companions||0),0,l?.name||""]));
 
@@ -2484,11 +2484,13 @@ function setAcrTab(tab){
 }
 
 // Celda de pulsera a partir del nombre (usa el color configurado en el evento)
+// Regla: si está en alguna lista y no tiene pulsera asignada, la pulsera es GENERAL
+const PULSERA_DEFAULT="General";
 function pulseraCellPorNombre(nombre){
-  if(!nombre)return `<span style="font-size:11px;color:#9a3412;font-weight:600">No asignado</span>`;
+  nombre=nombre||PULSERA_DEFAULT;
   const ev=D.eventos.find(e=>e.id===currentEvId);
   const p=(ev?.pulseras||[]).find(x=>(x.nombre||"").toLowerCase()===String(nombre).toLowerCase());
-  const color=p?.color||"#534AB7";
+  const color=p?.color||"#6b7280";
   return `<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${color}"></div><span style="font-size:12px;font-weight:600;color:${color}">${nombre}</span></div>`;
 }
 // ── Acreditación: Close Friends ──
@@ -2955,7 +2957,7 @@ function filterAccType(type){
       <td><strong>${e.name}</strong>${e.notes?`<br><span style="font-size:11px;color:#aaa">${e.notes}</span>`:""}</td>
       <td style="font-size:12px;color:#888">${rut?rut:`<span style="color:#9a3412;font-weight:600">— falta</span>${_diag==="sin_rut"?` <button class="btn" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="openEditEntry('${e.id}','${e.list_id||""}')">✏️ Completar</button>`:""}`}</td>
       <td style="font-size:12px;color:#555">${l?.name||"—"}</td>
-      <td>${puls?`<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${puls.color}"></div><span style="font-size:12px;font-weight:600;color:${puls.color}">${puls.nombre}</span></div>`:`<span style="font-size:11px;color:#bbb">— sin pulsera —</span>`}</td>
+      <td>${puls?`<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${puls.color}"></div><span style="font-size:12px;font-weight:600;color:${puls.color}">${puls.nombre}</span></div>`:pulseraCellPorNombre("")}</td>
       <td style="font-weight:600;text-align:center">${total}${total>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${usadas} usadas</div>`:""}</td>
       <td>${estadoBadge}${fueraTag}</td>
       <td style="text-align:right">
@@ -2981,7 +2983,7 @@ function filterAccType(type){
         <td><strong>🎂 ${c.nombre} ${c.apellido}</strong><br><span style="font-size:11px;color:#854d0e;font-weight:600">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}</span></td>
         <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#854d0e;font-weight:600">Lista cumpleaños</td>
-        <td><span style="font-size:11px;color:#bbb">— sin pulsera —</span></td>
+        <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
         <td style="font-weight:600;text-align:center">${Math.max(1,covers)}</td>
         <td>${c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray")}</td>
         <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
@@ -2996,7 +2998,7 @@ function filterAccType(type){
         <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${c?.nombre||""} ${c?.apellido||""}</span></td>
         <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
-        <td><span style="font-size:11px;color:#bbb">— sin pulsera —</span></td>
+        <td>${pulseraCellPorNombre((D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id)?.pulsera||"")}</td>
         <td style="font-weight:600;text-align:center">1</td>
         <td>${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):badge("No validado","gray")}</td>
         <td style="text-align:right">
