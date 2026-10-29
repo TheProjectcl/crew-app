@@ -2481,6 +2481,14 @@ function setAcrTab(tab){
   if(tab==="bday")renderAcrBday();
 }
 
+// Celda de pulsera a partir del nombre (usa el color configurado en el evento)
+function pulseraCellPorNombre(nombre){
+  if(!nombre)return `<span style="font-size:11px;color:#bbb">— sin pulsera —</span>`;
+  const ev=D.eventos.find(e=>e.id===currentEvId);
+  const p=(ev?.pulseras||[]).find(x=>(x.nombre||"").toLowerCase()===String(nombre).toLowerCase());
+  const color=p?.color||"#534AB7";
+  return `<div style="display:flex;align-items:center;gap:5px"><div style="width:9px;height:9px;border-radius:50%;background:${color}"></div><span style="font-size:12px;font-weight:600;color:${color}">${nombre}</span></div>`;
+}
 // ── Acreditación: Close Friends ──
 let _acrCfQ="";
 function renderAcrCF(q){
@@ -2507,16 +2515,16 @@ function renderAcrCF(q){
     <div class="card">
       <div class="sec-header"><div class="sec-title">Close Friends — ${vis.length} de ${total}</div></div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Código</th><th>Instagram</th><th>Pago</th><th>Estado</th><th></th></tr></thead>
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
         <tbody>${vis.map(f=>{
           const ya=!!f.o.ingreso_at;
           const conc=f.o.estado==="conciliado";
           return `<tr style="background:${ya?"#f0fdf4":"#fff"}">
-            <td><strong>${f.nombre}</strong>${f.p.whatsapp?`<br><span style="font-size:11px;color:#aaa">${f.p.whatsapp}</span>`:""}</td>
+            <td><strong>${f.nombre}</strong><br><span style="font-size:11px;color:#EC4899;font-weight:600">🌸 ${f.codigo}</span>${f.p.instagram?` <span style="font-size:11px;color:#aaa">· @${String(f.p.instagram).replace("@","")}</span>`:""}</td>
             <td style="font-size:12px;color:#555">${f.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
-            <td style="font-family:monospace;font-size:12px;font-weight:700;color:#EC4899">${f.codigo}</td>
-            <td style="font-size:12px;color:#555">${f.p.instagram?`@${String(f.p.instagram).replace("@","")}`:"—"}</td>
-            <td>${conc?badge("✓ Conciliado","green"):badge("Por conciliar","amber")}</td>
+            <td style="font-size:12px;color:#EC4899;font-weight:600">Close Friends${conc?"":`<br>${badge("Pago por conciliar","amber")}`}</td>
+            <td>${pulseraCellPorNombre(f.p.tipo_entrada)}</td>
+            <td style="font-weight:600;text-align:center">${f.o.cantidad||1}</td>
             <td>${ya?badge("✓ Ingresó "+fmtT(f.o.ingreso_at),"green"):badge("No validado","gray")}</td>
             <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
               ${!ya?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="cfCheckinOrden('${f.o.id}')">✓ Ingresar</button>`:""}
@@ -2573,19 +2581,23 @@ function renderAcrBday(q){
     const invVis=invs.filter(i=>cMatch||match(`${i.nombre} ${i.apellido}`,i.rut));
     if(nq&&!cMatch&&!invVis.length)return "";
     const covers=ben?.covers_cumple??1;
-    const filaCumple=`<tr style="background:#f5f3ff">
-      <td><strong>🎂 ${cNom}</strong><br><span style="font-size:11px;color:#534AB7">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}${c.instagram?` · @${String(c.instagram).replace("@","")}`:""}</span></td>
+    const filaCumple=`<tr style="background:#FEF9C3">
+      <td><strong>🎂 ${cNom}</strong><br><span style="font-size:11px;color:#854d0e;font-weight:600">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}${c.instagram?` · @${String(c.instagram).replace("@","")}`:""}</span></td>
       <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
-      <td style="font-size:12px;color:#555">${c.whatsapp||"—"}</td>
+      <td style="font-size:12px;color:#854d0e;font-weight:600">Lista cumpleaños</td>
+      <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
+      <td style="font-weight:600;text-align:center">1</td>
       <td>${c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray")}</td>
       <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
         ${!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}')">✓ Ingresar cumpleañero</button>`:""}
         ${c.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}')">🔓 Anular</button>`:""}
       </div></td></tr>`;
     const filasInv=invVis.map(inv=>`<tr style="background:${inv.llego?"#f0fdf4":"#fff"}">
-      <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong>${inv.instagram?`<br><span style="font-size:11px;color:#aaa">@${String(inv.instagram).replace("@","")}</span>`:""}</td>
+      <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${cNom}</span>${inv.instagram?` <span style="font-size:11px;color:#aaa">· @${String(inv.instagram).replace("@","")}</span>`:""}</td>
       <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
-      <td style="font-size:12px;color:#555">${inv.whatsapp||"—"}</td>
+      <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
+      <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
+      <td style="font-weight:600;text-align:center">1</td>
       <td>${inv.llego?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):badge("No validado","gray")}</td>
       <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
         ${!inv.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${inv.id}').then(()=>renderAcrBday())">✓ Ingresar</button>`:""}
@@ -2601,8 +2613,8 @@ function renderAcrBday(q){
         </div>
       </div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Nombre completo</th><th>RUT</th><th>WhatsApp</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${filaCumple}${filasInv||(invs.length?"":`<tr><td colspan="5" style="text-align:center;color:#aaa;padding:12px">Sin invitados aprobados aún.</td></tr>`)}</tbody>
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${filaCumple}${filasInv||(invs.length?"":`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:12px">Sin invitados aprobados aún.</td></tr>`)}</tbody>
       </table></div>
     </div>`;
   }).join("");
