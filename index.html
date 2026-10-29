@@ -2371,53 +2371,55 @@ async function exportarAcreditacionCompleta(){
   const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
   const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
 
-  // 1) Listas y entradas (acc_entries; los invitados de cumpleaños van en su propia hoja)
+  // 1) Listas y entradas
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
     .map(e=>({e,l:D.acc_lists.find(l=>l.id===e.list_id)}))
     .sort((a,b)=>((a.l?.name||"")+a.e.name).localeCompare((b.l?.name||"")+b.e.name,"es"));
-  const hListas=[["Nombre completo","RUT","Lista (origen)","Tipo de lista","Pulsera","Entradas","Usadas","Estado","Validado a las","Fuera de horario","Notas"]];
-  entries.forEach(({e,l})=>{const total=1+(e.companions||0),usadas=e.entradas_usadas||0;const puls=getPulsera(e,ev);
-    hListas.push([e.name||"",getRut(e)||"",l?.name||"",{staff:"Staff",vip_table:"VIP",birthday:"Cumpleaños",friends_list:"Lista"}[l?.type]||l?.type||"",puls?.nombre||"",total,usadas,usadas===0?"No validado":usadas>=total?"Validado":`Parcial ${usadas}/${total}`,usadas?fechaHora(e.checked_in_at):"",e.fuera_horario?"Sí":"",e.notes||""]);});
+  const hListas=[["Nombre completo","RUT","Cantidad","Ingresa"]];
+  entries.forEach(({e})=>hListas.push([e.name||"",getRut(e)||"",1+(e.companions||0),0]));
 
-  // 2) Mesas VIP (una fila por invitado; mesa sin invitados = una fila)
+  // 2) Mesas VIP (una fila por invitado)
   const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").sort((a,b)=>String(a.table_num).localeCompare(String(b.table_num),"es",{numeric:true}));
-  const hMesas=[["Mesa","Sector","Responsable","Teléfono","Invitado","RUT","Instagram","Tipo","Estado invitado","Llegó a las","Botellas","Botellas entregadas","Pago mesa"]];
+  const hMesas=[["Nombre completo","RUT","Cantidad","Ingresan","Mesa","Responsable mesa"]];
   mesas.forEach(m=>{
-    const saldo=Math.max((m.price||0)-(m.amount_paid||0),0);const pago=saldo>0?`Debe ${fmtM(saldo)}`:"Pagado";
-    const perfiles=(m.perfiles||[]).filter(p=>p.estado!=="rechazado").map(p=>({...p,_tipo:"Invitado"}));
-    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada").map(pp=>({...pp,_tipo:"Pulsera extra"})));
+    const perfiles=(m.perfiles||[]).filter(p=>p.estado!=="rechazado");
+    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada"));
     const todos=[...perfiles,...extras];
-    const base=[m.table_num||"",m.section||"",m.responsible_name||"",m.responsible_phone||""];
-    const cola=[m.bottles||0,m.botellas_entregadas?"Sí":"No",pago];
-    if(!todos.length){hMesas.push([...base,"(sin invitados cargados)","","","","","",...cola]);return;}
-    todos.forEach(p=>hMesas.push([...base,`${p.nombre||p.name||""} ${p.apellido||""}`.trim(),p.rut||"",p.instagram?"@"+String(p.instagram).replace("@",""):"",p._tipo,p.llego?"Ingresó":"No validado",p.llego?fechaHora(p.llego_at):"",...cola]));
+    if(!todos.length){hMesas.push(["(sin invitados cargados)","",0,0,m.table_num||"",m.responsible_name||""]);return;}
+    todos.forEach(p=>hMesas.push([`${p.nombre||p.name||""} ${p.apellido||""}`.trim(),p.rut||"",1,0,m.table_num||"",m.responsible_name||""]));
   });
 
   // 3) Close Friends (órdenes pagadas/conciliadas)
   const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado));
-  const hCF=[["Nombre completo","RUT","Código","Instagram","WhatsApp","Correo","Pago","Estado","Ingresó a las"]];
+  const hCF=[["Nombre completo","RUT","Cantidad","Ingresa"]];
   ords.map(o=>({o,p:(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{}}))
     .sort((a,b)=>`${a.p.nombre||""} ${a.p.apellido||""}`.localeCompare(`${b.p.nombre||""} ${b.p.apellido||""}`,"es"))
-    .forEach(({o,p})=>hCF.push([`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut||"",o.codigo||"",p.instagram?"@"+String(p.instagram).replace("@",""):"",p.whatsapp||"",p.email||"",o.estado==="conciliado"?"Conciliado":"Por conciliar",o.ingreso_at?"Ingresó":"No validado",fechaHora(o.ingreso_at)]));
+    .forEach(({o,p})=>hCF.push([`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut||"",o.cantidad||1,0]));
 
-  // 4) Cumpleaños (cumpleañero + sus invitados aprobados)
-  const hBday=[["Lista de (cumpleañero)","Beneficio","Rol","Nombre completo","RUT","Instagram","WhatsApp","Estado","Ingresó a las"]];
+  // 4) Cumpleaños: fila del cumpleañero (amarilla, con Cover) + sus invitados aprobados
+  const hBday=[["Nombre completo","RUT","Cantidad","Ingresa","Cover","Lista de"]];
+  const filasCumple=new Set();
   cumps.slice().sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es")).forEach(c=>{
     const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
-    hBday.push([cNom,ben?.nombre||"",`Cumpleañero/a (${ben?.covers_cumple??1} cover${(ben?.covers_cumple??1)===1?"":"s"})`,cNom,c.rut||"",c.instagram?"@"+String(c.instagram).replace("@",""):"",c.whatsapp||"",c.llego?"Ingresó":"No validado",fechaHora(c.llego_at)]);
+    const covers=ben?.covers_cumple??1;
+    filasCumple.add(hBday.length);
+    hBday.push([cNom,c.rut||"",1,0,covers,"Cumpleañero/a"]);
     (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"))
-      .forEach(i=>hBday.push([cNom,ben?.nombre||"","Invitado",`${i.nombre||""} ${i.apellido||""}`.trim(),i.rut||"",i.instagram?"@"+String(i.instagram).replace("@",""):"",i.whatsapp||"",i.llego?"Ingresó":"No validado",fechaHora(i.llego_at)]));
+      .forEach(i=>hBday.push([`${i.nombre||""} ${i.apellido||""}`.trim(),i.rut||"",1,0,"",cNom]));
   });
 
-  // 0) Resumen
-  const cnt=(rows,col,val)=>rows.slice(1).filter(r=>r[col]===val).length;
+  // 0) Resumen — con fórmulas que suman cada hoja (se actualiza solo cuando marcan "Ingresa")
+  const sum=(rows,col)=>rows.slice(1).reduce((t,r)=>t+(Number(r[col])||0),0);
+  const segs=[["Listas y entradas",hListas],["Mesas VIP",hMesas],["Close Friends",hCF],["Cumpleaños",hBday]];
   const hRes=[["Evento",ev.name||""],["Fecha",ev.date||""],["Exportado",fechaHora(new Date().toISOString())],[],
-    ["Segmento","Personas","Ingresaron"],
-    ["Listas y entradas",hListas.length-1,cnt(hListas,7,"Validado")+cnt(hListas,7,"Parcial")],
-    ["Mesas VIP",hMesas.slice(1).filter(r=>r[4]!=="(sin invitados cargados)").length,cnt(hMesas,8,"Ingresó")],
-    ["Close Friends",hCF.length-1,cnt(hCF,7,"Ingresó")],
-    ["Cumpleaños",hBday.length-1,cnt(hBday,7,"Ingresó")]];
-  hRes.push(["TOTAL",hRes.slice(5).reduce((s,r)=>s+r[1],0),hRes.slice(5).reduce((s,r)=>s+r[2],0)]);
+    ["Segmento","Entradas","Ingresados","Pendientes","% ingreso"]];
+  segs.forEach(([nom,rows])=>hRes.push([nom,sum(rows,2),0,sum(rows,2),0]));
+  hRes.push(["TOTAL",hRes.slice(5).reduce((t,r)=>t+r[1],0),0,hRes.slice(5).reduce((t,r)=>t+r[1],0),0]);
+  // Fórmulas (fila 6..9 = segmentos, fila 10 = total; columnas C/D de cada hoja = Cantidad/Ingresa)
+  const resFormulas={};
+  segs.forEach(([nom,rows],i)=>{const r=6+i;const last=Math.max(2,rows.length);const sh=`'${nom}'`;
+    resFormulas[`B${r}`]=`SUM(${sh}!C2:C${last})`;resFormulas[`C${r}`]=`SUM(${sh}!D2:D${last})`;resFormulas[`D${r}`]=`B${r}-C${r}`;resFormulas[`E${r}`]=`IF(B${r}=0,0,C${r}/B${r})`;});
+  ["B","C","D"].forEach(col=>resFormulas[`${col}10`]=`SUM(${col}6:${col}9)`);resFormulas["E10"]="IF(B10=0,0,C10/B10)";
 
   const wb=X.utils.book_new();
   const BORDE={top:{style:"thin",color:{rgb:"D9D9D9"}},bottom:{style:"thin",color:{rgb:"D9D9D9"}},left:{style:"thin",color:{rgb:"D9D9D9"}},right:{style:"thin",color:{rgb:"D9D9D9"}}};
@@ -2428,7 +2430,9 @@ async function exportarAcreditacionCompleta(){
   const S_WARN={font:{sz:11,bold:true,color:{rgb:"92400E"}},fill:{fgColor:{rgb:"FEF3C7"}},border:BORDE};
   const S_TOTAL={font:{bold:true,sz:11,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1A1A1A"}},border:BORDE};
   const S_TITLE={font:{bold:true,sz:14,color:{rgb:"534AB7"}}};
-  const esOk=v=>/^(Ingresó|Validado|Pagado|Conciliado|Sí)$/.test(v), esNo=v=>/^(No validado|No)$|^Debe /.test(v), esWarn=v=>/^(Por conciliar|Parcial)/.test(v);
+  const S_HEAD_ING={font:{bold:true,color:{rgb:"000000"},sz:11},fill:{fgColor:{rgb:"FFF200"}},alignment:{vertical:"center",horizontal:"center"},border:BORDE};
+  const S_CUMPLE={font:{sz:11,bold:true,color:{rgb:"000000"}},fill:{fgColor:{rgb:"FFF200"}},border:BORDE};
+  const S_NUM={font:{sz:11},border:BORDE,alignment:{horizontal:"center"}};
   const add=(name,rows,widths,opts={})=>{
     const ws=X.utils.aoa_to_sheet(rows);ws["!cols"]=widths.map(w=>({wch:w}));
     if(conEstilo){
@@ -2438,7 +2442,9 @@ async function exportarAcreditacionCompleta(){
         if(opts.totalRow===ri)ws[ref].s=S_TOTAL;
         else if(isHead)ws[ref].s=S_HEAD;
         else if(opts.titleRows&&opts.titleRows.includes(ri))ws[ref].s=ci===0?{font:{bold:true,sz:11,color:{rgb:"666666"}}}:S_TITLE;
-        else ws[ref].s=esOk(v)?S_OK:esNo(v)?S_NO:esWarn(v)?S_WARN:S_CELL;
+        else if(opts.yellowRows&&opts.yellowRows.has(ri))ws[ref].s={...S_CUMPLE,alignment:{horizontal:typeof v==="number"?"center":"left"}};
+        else ws[ref].s=typeof v==="number"?S_NUM:S_CELL;
+        if(isHead&&/^Ingresa/.test(v))ws[ref].s=S_HEAD_ING;
       }));
       ws["!rows"]=rows.map((_,ri)=>({hpt:(opts.headRows?opts.headRows.includes(ri):ri===0)?22:18}));
       if(!opts.noFilter)ws["!autofilter"]={ref:X.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}})};
@@ -2446,15 +2452,17 @@ async function exportarAcreditacionCompleta(){
     }
     X.utils.book_append_sheet(wb,ws,name);
   };
-  add("Resumen",hRes,[24,16,14],{headRows:[4],titleRows:[0,1,2],totalRow:hRes.length-1,noFilter:true,noFreeze:true});
-  add("Listas y entradas",hListas,[30,14,22,12,14,9,8,16,20,14,30]);
-  add("Mesas VIP",hMesas,[8,12,24,14,30,14,18,14,14,20,9,16,16]);
-  add("Close Friends",hCF,[30,14,10,18,16,28,14,12,20]);
-  add("Cumpleaños",hBday,[28,24,24,30,14,18,16,12,20]);
+  add("Resumen",hRes,[24,12,12,12,11],{headRows:[4],titleRows:[0,1,2],totalRow:hRes.length-1,noFilter:true,noFreeze:true});
+  {const ws=wb.Sheets["Resumen"];Object.entries(resFormulas).forEach(([ref,f])=>{if(!ws[ref])ws[ref]={t:"n",v:0};ws[ref].f=f;if(/^E/.test(ref)){ws[ref].s={...(ws[ref].s||S_NUM),numFmt:"0%"};}});
+   wb.Workbook=wb.Workbook||{};wb.Workbook.CalcPr={fullCalcOnLoad:true};}
+  add("Listas y entradas",hListas,[34,16,11,11]);
+  add("Mesas VIP",hMesas,[34,16,11,11,8,26]);
+  add("Close Friends",hCF,[34,16,11,11]);
+  add("Cumpleaños",hBday,[34,16,11,11,12,30],{yellowRows:filasCumple});
   const safe=(ev.name||"evento").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
   X.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
-  toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} personas en 4 hojas`,"success");
-  try{await log("export_acreditacion","event",currentEvId,`Exportó acreditación completa (${hRes[hRes.length-1][1]} personas)`);}catch(e){}
+  toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} entradas en 4 hojas`,"success");
+  try{await log("export_acreditacion","event",currentEvId,`Exportó acreditación completa (${hRes[hRes.length-1][1]} entradas)`);}catch(e){}
 }
 
 // Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
@@ -2838,14 +2846,16 @@ function searchAcc(q){
   }).join("");
   const htmlBday=bdayRes.map(inv=>{
     const yaEntro=!!inv.llego;
-    return `<div style="background:#f0eeff;border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-left:3px solid #534AB7">
+    const esCumple=inv.tipo==="cumpleanero";
+    return `<div style="background:${esCumple?"#FEF9C3":"#f0eeff"};border-radius:10px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;gap:8px;border-left:3px solid ${esCumple?"#EAB308":"#534AB7"}">
       <div>
-        <div style="font-size:14px;font-weight:600">${inv.nombre} ${inv.apellido} <span style="font-size:11px;color:#534AB7;font-weight:600">${inv.genero==="m"?"♂":"♀"}</span></div>
-        <div style="font-size:11px;color:#534AB7;font-weight:600">${inv.info}</div>
+        <div style="font-size:14px;font-weight:600">${esCumple?"🎂 ":""}${inv.nombre} ${inv.apellido} ${!esCumple?`<span style="font-size:11px;color:#534AB7;font-weight:600">${inv.genero==="m"?"♂":"♀"}</span>`:""}</div>
+        <div style="font-size:11px;color:${esCumple?"#854d0e":"#534AB7"};font-weight:600">${inv.info}</div>
+        ${inv.rut?`<div style="font-size:11px;color:#777">${inv.rut}</div>`:""}
         ${inv.whatsapp?`<div style="font-size:11px;color:#25D366">📱 ${inv.whatsapp}</div>`:""}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
-        ${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):`<button class="btn btn-success" style="padding:6px 12px;font-size:12px" onclick="bdayCheckinInv('${inv.id}')">✓ Ingresar</button>`}
+        ${yaEntro?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):`<button class="btn btn-success" style="padding:6px 12px;font-size:12px" onclick="${esCumple?`bdayCheckinCumple('${inv.id}').then(()=>searchAcc($('search-q')?.value||''))`:`bdayCheckinInv('${inv.id}')`}">✓ Ingresar</button>`}
       </div>
     </div>`;
   }).join("");
@@ -2918,7 +2928,23 @@ function filterAccType(type){
   if(type==="all"||type==="birthday"){
     const cumpleaneros=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
     const bdayInvs=(D.bday_invitados||[]).filter(i=>cumpleaneros.some(c=>c.id===i.cumpleanero_id)&&i.estado==="aprobado");
-    rowsBday=bdayInvs.map(inv=>{
+    // Fila del cumpleañero (amarilla) con sus covers
+    rowsBday=cumpleaneros.map(c=>{
+      const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+      const covers=ben?.covers_cumple??1;
+      return `<tr style="background:#FEF9C3">
+        <td><strong>🎂 ${c.nombre} ${c.apellido}</strong><br><span style="font-size:11px;color:#854d0e;font-weight:600">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}</span></td>
+        <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+        <td style="font-size:12px;color:#854d0e;font-weight:600">Lista cumpleaños</td>
+        <td><span style="font-size:11px;color:#bbb">— sin pulsera —</span></td>
+        <td style="font-weight:600;text-align:center">${Math.max(1,covers)}</td>
+        <td>${c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray")}</td>
+        <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+          ${!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}').then(()=>filterAccType('${type}'))">✓ Ingresar</button>`:""}
+          ${c.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}').then(()=>filterAccType('${type}'))" title="Anular ingreso">🔓 Anular</button>`:""}
+        </div></td>
+      </tr>`;
+    }).join("")+bdayInvs.map(inv=>{
       const c=cumpleaneros.find(c=>c.id===inv.cumpleanero_id);
       const yaEntro=!!inv.llego;
       return `<tr style="background:#f5f3ff">
@@ -11154,12 +11180,18 @@ if(typeof initAdminApp==="function"){
 // Se llama desde la vista de puerta para incluir bday invitados en la búsqueda
 window.bdayBuscarEnAcreditacion=(query, eventoId)=>{
   const norm=s=>(s||"").toLowerCase().trim();
-  const q=norm(query);
+  const q=norm(query), qr=normRut(query);
   if(!q||q.length<2)return[];
-  return (D.bday_invitados||[])
+  const matchRut=r=>qr.length>=2&&r&&normRut(r).includes(qr);
+  // Cumpleañeros del evento (fila amarilla)
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===eventoId)
+    .filter(c=>norm(c.nombre+" "+c.apellido).includes(q)||norm(c.email).includes(q)||matchRut(c.rut))
+    .map(c=>{const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);const covers=ben?.covers_cumple??1;
+      return {...c,tipo:"cumpleanero",covers,info:`🎂 Cumpleañero/a · ${ben?.nombre||""} · ${covers} cover${covers===1?"":"s"}`};});
+  const invs=(D.bday_invitados||[])
     .filter(i=>i.evento_id===eventoId||((D.bday_cumpleaneros||[]).find(c=>c.id===i.cumpleanero_id)?.evento_id===eventoId))
     .filter(i=>i.estado==="aprobado")
-    .filter(i=>norm(i.nombre+" "+i.apellido).includes(q)||norm(i.email).includes(q))
+    .filter(i=>norm(i.nombre+" "+i.apellido).includes(q)||norm(i.email).includes(q)||matchRut(i.rut))
     .map(i=>{
       const c=(D.bday_cumpleaneros||[]).find(x=>x.id===i.cumpleanero_id);
       const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);
@@ -11170,6 +11202,7 @@ window.bdayBuscarEnAcreditacion=(query, eventoId)=>{
         precio: i.genero==="m"?(ben?.precio_invitado_h||0):(ben?.precio_invitado_m||0),
       };
     });
+  return [...cumps,...invs];
 };
 
 // ── Detectar acceso público bday en la URL ──
