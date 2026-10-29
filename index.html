@@ -2366,7 +2366,8 @@ VIEWS.puerta=async()=>{
 // ── Exportar acreditación completa (Excel con una hoja por segmento, sin duplicar) ──
 async function exportarAcreditacionCompleta(){
   const ev=D.eventos.find(e=>e.id===currentEvId);if(!ev){toast("Selecciona un evento","warn");return;}
-  if(!(await cargarSheetJS())){toast("No se pudo cargar el generador de Excel","error");return;}
+  if(!(await cargarSheetJSStyled())){toast("No se pudo cargar el generador de Excel","error");return;}
+  const X=window.XLSX_STYLE||window.XLSX; const conEstilo=!!window.XLSX_STYLE;
   const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
   const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
 
@@ -2418,15 +2419,40 @@ async function exportarAcreditacionCompleta(){
     ["Cumpleaños",hBday.length-1,cnt(hBday,7,"Ingresó")]];
   hRes.push(["TOTAL",hRes.slice(5).reduce((s,r)=>s+r[1],0),hRes.slice(5).reduce((s,r)=>s+r[2],0)]);
 
-  const wb=XLSX.utils.book_new();
-  const add=(name,rows,widths)=>{const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=widths.map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,name);};
-  add("Resumen",hRes,[22,14,12]);
-  add("Listas y entradas",hListas,[30,14,22,12,14,9,8,16,16,14,30]);
-  add("Mesas VIP",hMesas,[8,12,24,14,30,14,18,14,14,16,9,16,16]);
-  add("Close Friends",hCF,[30,14,10,18,16,28,14,12,16]);
-  add("Cumpleaños",hBday,[28,24,22,30,14,18,16,12,16]);
+  const wb=X.utils.book_new();
+  const BORDE={top:{style:"thin",color:{rgb:"D9D9D9"}},bottom:{style:"thin",color:{rgb:"D9D9D9"}},left:{style:"thin",color:{rgb:"D9D9D9"}},right:{style:"thin",color:{rgb:"D9D9D9"}}};
+  const S_HEAD={font:{bold:true,color:{rgb:"FFFFFF"},sz:11},fill:{fgColor:{rgb:"534AB7"}},alignment:{vertical:"center"},border:BORDE};
+  const S_CELL={font:{sz:11},border:BORDE};
+  const S_OK={font:{sz:11,bold:true,color:{rgb:"166534"}},fill:{fgColor:{rgb:"DCFCE7"}},border:BORDE};
+  const S_NO={font:{sz:11,bold:true,color:{rgb:"991B1B"}},fill:{fgColor:{rgb:"FEE2E2"}},border:BORDE};
+  const S_WARN={font:{sz:11,bold:true,color:{rgb:"92400E"}},fill:{fgColor:{rgb:"FEF3C7"}},border:BORDE};
+  const S_TOTAL={font:{bold:true,sz:11,color:{rgb:"FFFFFF"}},fill:{fgColor:{rgb:"1A1A1A"}},border:BORDE};
+  const S_TITLE={font:{bold:true,sz:14,color:{rgb:"534AB7"}}};
+  const esOk=v=>/^(Ingresó|Validado|Pagado|Conciliado|Sí)$/.test(v), esNo=v=>/^(No validado|No)$|^Debe /.test(v), esWarn=v=>/^(Por conciliar|Parcial)/.test(v);
+  const add=(name,rows,widths,opts={})=>{
+    const ws=X.utils.aoa_to_sheet(rows);ws["!cols"]=widths.map(w=>({wch:w}));
+    if(conEstilo){
+      rows.forEach((r,ri)=>r.forEach((v,ci)=>{
+        const ref=X.utils.encode_cell({r:ri,c:ci});if(!ws[ref])return;
+        const isHead=opts.headRows?opts.headRows.includes(ri):ri===0;
+        if(opts.totalRow===ri)ws[ref].s=S_TOTAL;
+        else if(isHead)ws[ref].s=S_HEAD;
+        else if(opts.titleRows&&opts.titleRows.includes(ri))ws[ref].s=ci===0?{font:{bold:true,sz:11,color:{rgb:"666666"}}}:S_TITLE;
+        else ws[ref].s=esOk(v)?S_OK:esNo(v)?S_NO:esWarn(v)?S_WARN:S_CELL;
+      }));
+      ws["!rows"]=rows.map((_,ri)=>({hpt:(opts.headRows?opts.headRows.includes(ri):ri===0)?22:18}));
+      if(!opts.noFilter)ws["!autofilter"]={ref:X.utils.encode_range({s:{r:0,c:0},e:{r:rows.length-1,c:rows[0].length-1}})};
+      if(!opts.noFreeze)ws["!freeze"]={xSplit:0,ySplit:1};
+    }
+    X.utils.book_append_sheet(wb,ws,name);
+  };
+  add("Resumen",hRes,[24,16,14],{headRows:[4],titleRows:[0,1,2],totalRow:hRes.length-1,noFilter:true,noFreeze:true});
+  add("Listas y entradas",hListas,[30,14,22,12,14,9,8,16,20,14,30]);
+  add("Mesas VIP",hMesas,[8,12,24,14,30,14,18,14,14,20,9,16,16]);
+  add("Close Friends",hCF,[30,14,10,18,16,28,14,12,20]);
+  add("Cumpleaños",hBday,[28,24,24,30,14,18,16,12,20]);
   const safe=(ev.name||"evento").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
-  XLSX.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
+  X.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
   toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} personas en 4 hojas`,"success");
   try{await log("export_acreditacion","event",currentEvId,`Exportó acreditación completa (${hRes[hRes.length-1][1]} personas)`);}catch(e){}
 }
@@ -4619,6 +4645,15 @@ function openImportBloqueo(){
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-danger" onclick="importBloqueoCSV()">Importar</button>
     </div>`);
+}
+// Carga SheetJS con soporte de estilos (xlsx-js-style). Si falla, cae al SheetJS normal (sin colores).
+async function cargarSheetJSStyled(){
+  if(window.XLSX_STYLE)return true;
+  try{
+    await new Promise((ok,fail)=>{const sc=document.createElement("script");sc.src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js";
+      const prev=window.XLSX;sc.onload=()=>{window.XLSX_STYLE=window.XLSX;if(prev)window.XLSX=prev;ok();};sc.onerror=fail;document.head.appendChild(sc);});
+    return true;
+  }catch(e){return await cargarSheetJS();}
 }
 async function cargarSheetJS(){
   if(window.XLSX)return true;
