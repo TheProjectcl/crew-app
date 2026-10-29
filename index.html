@@ -445,6 +445,7 @@ let currentEvId = null;
 // ═══════════════════════════════════
 const uid = ()=>crypto.randomUUID();
 const now = ()=>new Date().toISOString();
+const acrNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[.\-\s]/g,"");
 const fmtDT = s=>s?new Date(s).toLocaleString("es-CL",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
 const fmtT  = s=>s?new Date(s).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false}):"—";
 const fmtM  = n=>"$"+(n||0).toLocaleString("es-CL");
@@ -2378,7 +2379,6 @@ function setAcrTab(tab){
 }
 
 // ── Acreditación: Close Friends ──
-const acrNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[.\-\s]/g,"");
 let _acrCfQ="";
 function renderAcrCF(q){
   const el=$("acr-cf");if(!el)return;
@@ -4427,9 +4427,15 @@ async function guardarEditMesa(mesaId){
 }
 
 // ── Lista de bloqueo ──
-VIEWS.bloqueo=()=>{
+let _blQ="";
+VIEWS.bloqueo=(q)=>{
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const lista=(D.lista_bloqueo||[]).filter(b=>b.productora_id===prodId);
+  const todos=(D.lista_bloqueo||[]).filter(b=>b.productora_id===prodId);
+  if(q!==undefined)_blQ=q;
+  const nq=acrNorm(_blQ||"");
+  const lista=nq?todos.filter(b=>[b.nombre,b.rut,b.motivo,b.email].some(v=>acrNorm(v).includes(nq))):todos;
+  const hoyISO=new Date().toISOString().slice(0,10);
+  const vigentes=todos.filter(b=>!b.vence||b.vence>=hoyISO).length;
   $("main-content").innerHTML=`
     <div class="sec-header">
       <div class="page-title">Lista de bloqueo</div>
@@ -4440,6 +4446,14 @@ VIEWS.bloqueo=()=>{
       </div>
     </div>
     <div class="alert alert-info">Esta lista aplica a <strong>todos los eventos</strong> de la productora. Al cargar perfiles en cualquier mesa, se cruza automáticamente por RUT y nombre.</div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <input class="form-input" id="bl-q" placeholder="🔍 Buscar por nombre y apellido, RUT, correo o motivo..." style="flex:1;min-width:240px;font-size:15px;padding:11px" value="${(_blQ||"").replace(/"/g,"&quot;")}" oninput="VIEWS.bloqueo(this.value)">
+        ${_blQ?`<button class="btn" style="font-size:12px" onclick="VIEWS.bloqueo('')">✕ Limpiar</button>`:""}
+        <span style="font-size:12px;color:#888;white-space:nowrap">${_blQ?`<strong>${lista.length}</strong> resultado${lista.length===1?"":"s"} · `:""}<strong>${todos.length}</strong> en lista · <strong style="color:#991B1B">${vigentes}</strong> vigentes</span>
+      </div>
+      ${_blQ&&!lista.length?`<div style="margin-top:10px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;font-size:13px;color:#166534">✅ <strong>"${_blQ.replace(/</g,"&lt;")}"</strong> no está en la lista de bloqueo.</div>`:""}
+    </div>
     <div class="card"><div class="table-wrap"><table class="data-table">
       <thead><tr><th>Nombre</th><th>RUT</th><th>Motivo</th><th>Vence</th><th>Agregado</th><th></th></tr></thead>
       <tbody>${lista.length?lista.map(b=>{const hoy=new Date().toISOString().slice(0,10);const vencido=b.vence&&b.vence<hoy;return `<tr style="${vencido?"opacity:.55":""}">
@@ -4449,8 +4463,9 @@ VIEWS.bloqueo=()=>{
         <td style="font-size:12px;font-weight:600;color:${b.vence?(vencido?"#6b7280":"#92400E"):"#991B1B"}">${b.vence?fmtFechaBloqueo(b.vence):"🚫 Permanente"}</td>
         <td style="font-size:11px;color:#aaa">${fmtDT(b.created_at)}</td>
         <td><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="delBloqueo('${b.id}')">✕</button></td>
-      </tr>`;}).join(""):`<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">Sin personas bloqueadas.</td></tr>`}</tbody>
+      </tr>`;}).join(""):`<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">${_blQ?"Sin resultados para la búsqueda.":"Sin personas bloqueadas."}</td></tr>`}</tbody>
     </table></div></div>`;
+  const inp=$("bl-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 };
 const fmtFechaBloqueo=iso=>{const d=new Date(iso+" 12:00:00");return isNaN(d)?iso:"Hasta el "+d.toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"});};
 // Acepta "permanente", "", DD-MM-AAAA, DD/MM/AAAA, AAAA-MM-DD o fecha serial de Excel → ISO o null (permanente)
