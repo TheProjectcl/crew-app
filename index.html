@@ -2318,6 +2318,8 @@ VIEWS.puerta=async()=>{
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn" id="acr-tab-listas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('listas')">👥 Listas / Entradas</button>
         <button class="btn" id="acr-tab-mesas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('mesas')">🍾 Mesas VIP</button>
+        <button class="btn" id="acr-tab-cf" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('cf')">🌸 Close Friends</button>
+        <button class="btn" id="acr-tab-bday" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('bday')">🎂 Cumpleaños</button>
       </div>
     </div>
     <div id="acr-listas">
@@ -2351,26 +2353,188 @@ VIEWS.puerta=async()=>{
       <div id="acc-table"></div>
     </div>
     </div>
-    <div id="acr-mesas" style="display:none"></div>`;
+    <div id="acr-mesas" style="display:none"></div>
+    <div id="acr-cf" style="display:none"></div>
+    <div id="acr-bday" style="display:none"></div>`;
   filterAccType("all");
-  setAcrTab("listas");
+  setAcrTab(window._acrTabActual||"listas");
 };
 
-// Alterna entre la pestaña de Listas/Entradas y la de Mesas en Acreditación
+// Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
 function setAcrTab(tab){
-  const elL=$("acr-listas"), elM=$("acr-mesas");
-  const btnL=$("acr-tab-listas"), btnM=$("acr-tab-mesas");
-  if(!elL||!elM)return;
-  if(tab==="mesas"){
-    elL.style.display="none";elM.style.display="block";
-    if(btnM){btnM.style.background="#534AB7";btnM.style.color="#fff";}
-    if(btnL){btnL.style.background="";btnL.style.color="";}
-    renderAcrMesas();
-  }else{
-    elL.style.display="block";elM.style.display="none";
-    if(btnL){btnL.style.background="#534AB7";btnL.style.color="#fff";}
-    if(btnM){btnM.style.background="";btnM.style.color="";}
-  }
+  const tabs={listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday"};
+  if(!tabs[tab])tab="listas";
+  if(!$("acr-listas"))return;
+  window._acrTabActual=tab;
+  Object.entries(tabs).forEach(([k,id])=>{
+    const el=$(id),btn=$("acr-tab-"+k);
+    if(el)el.style.display=k===tab?"block":"none";
+    if(btn){btn.style.background=k===tab?"#534AB7":"";btn.style.color=k===tab?"#fff":"";}
+  });
+  if(tab==="mesas")renderAcrMesas();
+  if(tab==="cf")renderAcrCF();
+  if(tab==="bday")renderAcrBday();
+}
+
+// ── Acreditación: Close Friends ──
+const acrNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[.\-\s]/g,"");
+let _acrCfQ="";
+function renderAcrCF(q){
+  const el=$("acr-cf");if(!el)return;
+  if(q!==undefined)_acrCfQ=q;
+  const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado));
+  const posts=D.cf_postulantes||[];
+  const filas=ords.map(o=>{const p=posts.find(x=>x.id===o.postulante_id)||{};return {o,p,nombre:`${p.nombre||""} ${p.apellido||""}`.trim()||"(sin nombre)",rut:p.rut||"",codigo:o.codigo||""};})
+    .sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+  const nq=acrNorm(_acrCfQ||"");
+  const vis=nq?filas.filter(f=>acrNorm(f.nombre).includes(nq)||acrNorm(f.rut).includes(nq)||acrNorm(f.codigo).includes(nq)):filas;
+  const total=filas.length, dentro=filas.filter(f=>f.o.ingreso_at).length, porConciliar=filas.filter(f=>f.o.estado!=="conciliado").length;
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:14px;background:#fdf2f8;padding:12px 16px;border-left:4px solid #EC4899">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
+        <span>🌸 <strong>${total}</strong> entradas Close Friends pagadas</span>
+        <span style="color:#166534"><strong>${dentro}/${total}</strong> ya ingresaron</span>
+        ${porConciliar?`<span style="color:#92400E">⚠ <strong>${porConciliar}</strong> con pago por conciliar</span>`:""}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <input class="form-input" id="acr-cf-q" placeholder="🔍 Buscar por nombre, RUT o código..." style="width:100%;font-size:15px;padding:11px" value="${(_acrCfQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrCF(this.value)">
+    </div>
+    <div class="card">
+      <div class="sec-header"><div class="sec-title">Close Friends — ${vis.length} de ${total}</div></div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Código</th><th>Instagram</th><th>Pago</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${vis.map(f=>{
+          const ya=!!f.o.ingreso_at;
+          const conc=f.o.estado==="conciliado";
+          return `<tr style="background:${ya?"#f0fdf4":"#fff"}">
+            <td><strong>${f.nombre}</strong>${f.p.whatsapp?`<br><span style="font-size:11px;color:#aaa">${f.p.whatsapp}</span>`:""}</td>
+            <td style="font-size:12px;color:#555">${f.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+            <td style="font-family:monospace;font-size:12px;font-weight:700;color:#EC4899">${f.codigo}</td>
+            <td style="font-size:12px;color:#555">${f.p.instagram?`@${String(f.p.instagram).replace("@","")}`:"—"}</td>
+            <td>${conc?badge("✓ Conciliado","green"):badge("Por conciliar","amber")}</td>
+            <td>${ya?badge("✓ Ingresó "+fmtT(f.o.ingreso_at),"green"):badge("No validado","gray")}</td>
+            <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+              ${!ya?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="cfCheckinOrden('${f.o.id}')">✓ Ingresar</button>`:""}
+              ${ya&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="cfAnularIngreso('${f.o.id}')">🔓 Anular</button>`:""}
+            </div></td>
+          </tr>`;}).join("")||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">${total?"Sin resultados para la búsqueda.":"No hay entradas Close Friends pagadas para este evento."}</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  const inp=$("acr-cf-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
+}
+async function cfCheckinOrden(ordId){
+  const o=(D.cf_ordenes||[]).find(x=>x.id===ordId);if(!o)return;
+  if(o.ingreso_at){toast("Ya ingresó","warn");return;}
+  const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};
+  const nom=`${p.nombre||""} ${p.apellido||""}`.trim();
+  if(o.estado!=="conciliado"&&!confirm(`El pago de ${nom} aún no está conciliado.\n\n¿Dejar ingresar igual?`))return;
+  const at=now();
+  try{await sbPatch("cf_ordenes",`id=eq.${ordId}`,{ingreso_at:at});}
+  catch(e){toast("Error: "+e.message,"error");alert("Error al registrar ingreso:\n"+e.message+"\n\nSi dice que falta la columna ingreso_at, hay que crearla en Supabase.");return;}
+  o.ingreso_at=at;
+  const aforo=getAforo(),max=getMax();
+  if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);await sbPost("capacity_log",[cap]);}
+  try{await log("checkin_cf","cf_orden",ordId,`Ingreso Close Friends: ${nom} (${o.codigo})`);}catch(e){}
+  toast(`✓ ${nom} ingresó 🌸`,"success");
+  renderAcrCF();
+}
+async function cfAnularIngreso(ordId){
+  const o=(D.cf_ordenes||[]).find(x=>x.id===ordId);if(!o||!o.ingreso_at)return;
+  const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};
+  if(!confirm(`¿Anular el ingreso de ${p.nombre||""} ${p.apellido||""}?`))return;
+  await sbPatch("cf_ordenes",`id=eq.${ordId}`,{ingreso_at:null});
+  o.ingreso_at=null;
+  toast("🔓 Ingreso anulado","warn");
+  renderAcrCF();
+}
+
+// ── Acreditación: Cumpleaños ──
+let _acrBdayQ="";
+function renderAcrBday(q){
+  const el=$("acr-bday");if(!el)return;
+  if(q!==undefined)_acrBdayQ=q;
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId).sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"));
+  const invsAll=D.bday_invitados||[];
+  const nq=acrNorm(_acrBdayQ||"");
+  const match=(nombre,rut)=>!nq||acrNorm(nombre).includes(nq)||acrNorm(rut||"").includes(nq);
+  let totalInv=0,dentroInv=0,cumpsDentro=0;
+  const bloques=cumps.map(c=>{
+    const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+    const invs=invsAll.filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"));
+    const pend=invsAll.filter(i=>i.cumpleanero_id===c.id&&i.estado==="pendiente").length;
+    totalInv+=invs.length;dentroInv+=invs.filter(i=>i.llego).length;if(c.llego)cumpsDentro++;
+    const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();
+    const cMatch=match(cNom,c.rut);
+    const invVis=invs.filter(i=>cMatch||match(`${i.nombre} ${i.apellido}`,i.rut));
+    if(nq&&!cMatch&&!invVis.length)return "";
+    const covers=ben?.covers_cumple??1;
+    const filaCumple=`<tr style="background:#f5f3ff">
+      <td><strong>🎂 ${cNom}</strong><br><span style="font-size:11px;color:#534AB7">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}${c.instagram?` · @${String(c.instagram).replace("@","")}`:""}</span></td>
+      <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+      <td style="font-size:12px;color:#555">${c.whatsapp||"—"}</td>
+      <td>${c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray")}</td>
+      <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+        ${!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}')">✓ Ingresar cumpleañero</button>`:""}
+        ${c.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}')">🔓 Anular</button>`:""}
+      </div></td></tr>`;
+    const filasInv=invVis.map(inv=>`<tr style="background:${inv.llego?"#f0fdf4":"#fff"}">
+      <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong>${inv.instagram?`<br><span style="font-size:11px;color:#aaa">@${String(inv.instagram).replace("@","")}</span>`:""}</td>
+      <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+      <td style="font-size:12px;color:#555">${inv.whatsapp||"—"}</td>
+      <td>${inv.llego?badge("✓ Ingresó "+fmtT(inv.llego_at),"green"):badge("No validado","gray")}</td>
+      <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+        ${!inv.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${inv.id}').then(()=>renderAcrBday())">✓ Ingresar</button>`:""}
+        ${inv.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${inv.id}','all').then(()=>renderAcrBday())">🔓 Anular</button>`:""}
+      </div></td></tr>`).join("");
+    const llegaron=invs.filter(i=>i.llego).length;
+    return `<div class="card" style="margin-bottom:12px;border-left:4px solid #534AB7;padding:0;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#faf9ff;border-bottom:1px solid #ede9fe">
+        <div style="font-size:13px"><strong>Lista de ${cNom}</strong> <span style="color:#888">· ${ben?.nombre||"Sin beneficio"}</span></div>
+        <div style="font-size:12px;display:flex;gap:12px;flex-wrap:wrap">
+          <span style="color:#166534"><strong>${llegaron}/${invs.length}</strong> invitados ingresaron</span>
+          ${pend?`<span style="color:#92400E">${pend} pendiente${pend>1?"s":""} sin aprobar</span>`:""}
+        </div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>WhatsApp</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${filaCumple}${filasInv||(invs.length?"":`<tr><td colspan="5" style="text-align:center;color:#aaa;padding:12px">Sin invitados aprobados aún.</td></tr>`)}</tbody>
+      </table></div>
+    </div>`;
+  }).join("");
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:14px;background:#f5f3ff;padding:12px 16px;border-left:4px solid #534AB7">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
+        <span>🎂 <strong>${cumps.length}</strong> cumpleañeros</span>
+        <span style="color:#534AB7"><strong>${cumpsDentro}/${cumps.length}</strong> cumpleañeros ingresaron</span>
+        <span style="color:#166534"><strong>${dentroInv}/${totalInv}</strong> invitados ingresaron</span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <input class="form-input" id="acr-bday-q" placeholder="🔍 Buscar cumpleañero o invitado por nombre o RUT..." style="width:100%;font-size:15px;padding:11px" value="${(_acrBdayQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrBday(this.value)">
+    </div>
+    ${bloques||`<div class="card" style="text-align:center;color:#aaa;padding:24px">${cumps.length?"Sin resultados para la búsqueda.":"No hay cumpleañeros registrados para este evento."}</div>`}`;
+  const inp=$("acr-bday-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
+}
+async function bdayCheckinCumple(cid){
+  const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);if(!c)return;
+  if(c.llego){toast("Ya ingresó","warn");return;}
+  const at=now();
+  try{await sbPatch("bday_cumpleaneros",`id=eq.${cid}`,{llego:true,llego_at:at});}
+  catch(e){toast("Error: "+e.message,"error");alert("Error al registrar ingreso:\n"+e.message+"\n\nSi dice que falta la columna llego, hay que crearla en Supabase.");return;}
+  c.llego=true;c.llego_at=at;
+  const aforo=getAforo(),max=getMax();
+  if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);await sbPost("capacity_log",[cap]);}
+  toast(`✓ ${c.nombre} ${c.apellido} ingresó 🎂`,"success");
+  renderAcrBday();
+}
+async function bdayAnularCumple(cid){
+  const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);if(!c||!c.llego)return;
+  if(!confirm(`¿Anular el ingreso de ${c.nombre} ${c.apellido}?`))return;
+  await sbPatch("bday_cumpleaneros",`id=eq.${cid}`,{llego:false,llego_at:null});
+  c.llego=false;c.llego_at=null;
+  toast("🔓 Ingreso anulado","warn");
+  renderAcrBday();
 }
 
 // Renderiza la acreditación de mesas VIP para la gente de puerta
