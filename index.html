@@ -2369,7 +2369,7 @@ async function exportarAcreditacionCompleta(){
   if(!(await cargarSheetJSStyled())){toast("No se pudo cargar el generador de Excel","error");return;}
   const X=window.XLSX_STYLE||window.XLSX; const conEstilo=!!window.XLSX_STYLE;
   const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
-  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c));
 
   // 1) Listas y entradas
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
@@ -2486,6 +2486,8 @@ function setAcrTab(tab){
 // Celda de pulsera a partir del nombre (usa el color configurado en el evento)
 // Regla: si está en alguna lista y no tiene pulsera asignada, la pulsera es GENERAL
 const PULSERA_DEFAULT="General";
+// Un cumpleañero solo entra a acreditación cuando completó su perfil (lista activa)
+const bdayActivo=c=>!!c&&!!c.datos_completos;
 function pulseraCellPorNombre(nombre){
   nombre=nombre||PULSERA_DEFAULT;
   const ev=D.eventos.find(e=>e.id===currentEvId);
@@ -2570,7 +2572,9 @@ let _acrBdayQ="";
 function renderAcrBday(q){
   const el=$("acr-bday");if(!el)return;
   if(q!==undefined)_acrBdayQ=q;
-  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId).sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"));
+  const todosCumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
+  const cumps=todosCumps.filter(bdayActivo).sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"));
+  const inactivos=todosCumps.length-cumps.length;
   const invsAll=D.bday_invitados||[];
   const nq=acrNorm(_acrBdayQ||"");
   const match=(nombre,rut)=>!nq||acrNorm(nombre).includes(nq)||acrNorm(rut||"").includes(nq);
@@ -2625,7 +2629,8 @@ function renderAcrBday(q){
   el.innerHTML=`
     <div class="card" style="margin-bottom:14px;background:#f5f3ff;padding:12px 16px;border-left:4px solid #534AB7">
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
-        <span>🎂 <strong>${cumps.length}</strong> cumpleañeros</span>
+        <span>🎂 <strong>${cumps.length}</strong> cumpleañeros activos</span>
+        ${inactivos?`<span style="color:#92400E" title="Aún no completan su perfil; no aparecen en acreditación">⚠ <strong>${inactivos}</strong> sin activar (no se acreditan)</span>`:""}
         <span style="color:#534AB7"><strong>${cumpsDentro}/${cumps.length}</strong> cumpleañeros ingresaron</span>
         <span style="color:#166534"><strong>${dentroInv}/${totalInv}</strong> invitados ingresaron</span>
       </div>
@@ -2973,7 +2978,7 @@ function filterAccType(type){
   // Filas bday (solo en "Todos" o filtro "birthday")
   let rowsBday="";
   if(type==="all"||type==="birthday"){
-    const cumpleaneros=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
+    const cumpleaneros=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c));
     const bdayInvs=(D.bday_invitados||[]).filter(i=>cumpleaneros.some(c=>c.id===i.cumpleanero_id)&&i.estado==="aprobado");
     // Fila del cumpleañero (amarilla) con sus covers
     rowsBday=cumpleaneros.map(c=>{
@@ -11231,12 +11236,12 @@ window.bdayBuscarEnAcreditacion=(query, eventoId)=>{
   if(!q||q.length<2)return[];
   const matchRut=r=>qr.length>=2&&r&&normRut(r).includes(qr);
   // Cumpleañeros del evento (fila amarilla)
-  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===eventoId)
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===eventoId&&bdayActivo(c))
     .filter(c=>norm(c.nombre+" "+c.apellido).includes(q)||norm(c.email).includes(q)||matchRut(c.rut))
     .map(c=>{const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);const covers=ben?.covers_cumple??1;
       return {...c,tipo:"cumpleanero",covers,info:`🎂 Cumpleañero/a · ${ben?.nombre||""} · ${covers} cover${covers===1?"":"s"}`};});
   const invs=(D.bday_invitados||[])
-    .filter(i=>i.evento_id===eventoId||((D.bday_cumpleaneros||[]).find(c=>c.id===i.cumpleanero_id)?.evento_id===eventoId))
+    .filter(i=>{const c=(D.bday_cumpleaneros||[]).find(c=>c.id===i.cumpleanero_id);return c&&c.evento_id===eventoId&&bdayActivo(c);})
     .filter(i=>i.estado==="aprobado")
     .filter(i=>norm(i.nombre+" "+i.apellido).includes(q)||norm(i.email).includes(q)||matchRut(i.rut))
     .map(i=>{
