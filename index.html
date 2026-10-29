@@ -2319,6 +2319,7 @@ VIEWS.puerta=async()=>{
         <button class="btn btn-primary" style="font-size:12px;padding:6px 14px;white-space:nowrap" onclick="exportarAcreditacionCompleta()">📥 Descargar acreditación completa</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn" id="acr-tab-total" style="font-size:12px;padding:6px 14px;font-weight:700" onclick="setAcrTab('total')">📋 Acreditación total</button>
         <button class="btn" id="acr-tab-listas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('listas')">👥 Listas / Entradas</button>
         <button class="btn" id="acr-tab-mesas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('mesas')">🍾 Mesas VIP</button>
         <button class="btn" id="acr-tab-cf" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('cf')">🌸 Close Friends</button>
@@ -2360,9 +2361,10 @@ VIEWS.puerta=async()=>{
     <div id="acr-mesas" style="display:none"></div>
     <div id="acr-cf" style="display:none"></div>
     <div id="acr-bday" style="display:none"></div>
-    <div id="acr-staff" style="display:none"></div>`;
+    <div id="acr-staff" style="display:none"></div>
+    <div id="acr-total" style="display:none"></div>`;
   filterAccType("all");
-  setAcrTab(window._acrTabActual||"listas");
+  setAcrTab(window._acrTabActual||"total");
 };
 
 // ── Exportar acreditación completa (Excel con una hoja por segmento, sin duplicar) ──
@@ -2477,8 +2479,8 @@ async function exportarAcreditacionCompleta(){
 
 // Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
 function setAcrTab(tab){
-  const tabs={listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday",staff:"acr-staff"};
-  if(!tabs[tab])tab="listas";
+  const tabs={total:"acr-total",listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday",staff:"acr-staff"};
+  if(!tabs[tab])tab="total";
   if(!$("acr-listas"))return;
   window._acrTabActual=tab;
   Object.entries(tabs).forEach(([k,id])=>{
@@ -2490,6 +2492,106 @@ function setAcrTab(tab){
   if(tab==="cf")renderAcrCF();
   if(tab==="bday")renderAcrBday();
   if(tab==="staff")renderAcrStaff();
+  if(tab==="total")renderAcrTotal();
+}
+
+// ── Acreditación total: lista madre con TODOS los segmentos en una sola tabla ──
+function acrTotalItems(){
+  const ev=D.eventos.find(e=>e.id===currentEvId);
+  const items=[];
+  const R=()=>"renderAcrTotal()";
+  // Listas y staff (acc_entries)
+  D.acc_entries.filter(e=>e.event_id===currentEvId).forEach(e=>{
+    const l=D.acc_lists.find(l=>l.id===e.list_id);const esStaff=l?.type==="staff";
+    const t=1+(e.companions||0),u=e.entradas_usadas||0;const puls=getPulsera(e,ev);
+    items.push({seg:esStaff?"staff":"listas",nombre:e.name||"",rut:getRut(e)||"",
+      sub:esStaff?`🪪 ${l?.name||"Staff"}`:`👥 ${l?.name||"Lista"}`,subColor:esStaff?"#0f766e":"#534AB7",
+      origen:(esStaff?"Staff · ":"")+(l?.name||"—"),origenColor:esStaff?"#0f766e":"#555",
+      pulsera:puls?.nombre||"",entradas:t,usadas:u,
+      estado:u===0?badge("No validado","gray"):u>=t?badge("✓ Validado "+fmtT(e.checked_in_at),"green"):badge(`Parcial ${u}/${t}`,"amber"),
+      extra:e.fuera_horario?` <span style="font-size:10px;color:#92400E;background:#fef3c7;padding:2px 6px;border-radius:6px;font-weight:600">⏰ fuera de horario</span>`:"",
+      acciones:`${u<t?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Ingresar</button>`:""}${u>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')">🔓 Anular</button>`:""}<button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${e.list_id||""}')" title="Editar">✏️</button>`});
+  });
+  // Mesas VIP
+  D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").forEach(m=>{
+    const perfilesMesa=(m.perfiles||[]).filter(p=>p.estado!=="rechazado").map(p=>({...p,_tipo:"mesa"}));
+    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada").map(pp=>({...pp,_tipo:"pulsera_extra",_lote_id:l.id})));
+    [...perfilesMesa,...extras].forEach((p,idx)=>{
+      const esExtra=p._tipo==="pulsera_extra";const args=`'${m.id}','${p.id||idx}',${idx}`;const lote=esExtra?`,'${p._lote_id}'`:"";
+      items.push({seg:"mesas",nombre:`${p.nombre||p.name||""} ${p.apellido||""}`.trim()||"(sin nombre)",rut:p.rut||"",
+        sub:`🍾 Mesa ${m.table_num}${esExtra?" · pulsera extra":""}`,subColor:"#0e7490",origen:`Mesa ${m.table_num}${m.section?" · "+m.section:""}`,origenColor:"#0e7490",
+        pulsera:pulseraDeMesa(m),entradas:1,usadas:p.llego?1:0,
+        estado:p.llego?badge("✓ Ingresó "+(p.llego_at?fmtT(p.llego_at):""),"green"):badge("No validado","gray"),extra:"",
+        acciones:!p.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="marcarInvitadoMesa(${args},true${lote}).then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="marcarInvitadoMesa(${args},false${lote}).then(()=>${R()})">🔓 Anular</button>`:"")});
+    });
+  });
+  // Close Friends
+  (D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado)).forEach(o=>{
+    const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};const ya=!!o.ingreso_at;
+    items.push({seg:"cf",nombre:`${p.nombre||""} ${p.apellido||""}`.trim()||"(sin nombre)",rut:p.rut||"",
+      sub:`🌸 ${o.codigo||"Close Friends"}`,subColor:"#EC4899",origen:"Close Friends"+(o.estado==="conciliado"?"":" · pago por conciliar"),origenColor:"#EC4899",
+      pulsera:p.tipo_entrada||"",entradas:o.cantidad||1,usadas:ya?(o.cantidad||1):0,
+      estado:ya?badge("✓ Ingresó "+fmtT(o.ingreso_at),"green"):badge("No validado","gray"),extra:"",
+      acciones:!ya?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="cfCheckinOrden('${o.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="cfAnularIngreso('${o.id}').then(()=>${R()})">🔓 Anular</button>`:"")});
+  });
+  // Cumpleaños (solo activos)
+  (D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c)).forEach(c=>{
+    const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);const covers=ben?.covers_cumple??1;const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();
+    items.push({seg:"bday",esCumple:true,nombre:cNom,rut:c.rut||"",sub:`🎂 Cumpleañero/a · ${covers} cover${covers===1?"":"s"}`,subColor:"#854d0e",origen:"Lista cumpleaños",origenColor:"#854d0e",
+      pulsera:ben?.pulsera||"",entradas:1,usadas:c.llego?1:0,estado:c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray"),extra:"",
+      acciones:!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}').then(()=>${R()})">🔓 Anular</button>`:"")});
+    (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").forEach(i=>{
+      items.push({seg:"bday",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:i.rut||"",sub:`🎂 Cumple de ${cNom}`,subColor:"#534AB7",origen:"Lista cumpleaños",origenColor:"#534AB7",
+        pulsera:ben?.pulsera||"",entradas:1,usadas:i.llego?1:0,estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):badge("No validado","gray"),extra:"",
+        acciones:!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${i.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${i.id}','all').then(()=>${R()})">🔓 Anular</button>`:"")});
+    });
+  });
+  return items.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
+}
+let _acrTotalQ="", _acrTotalSeg="all";
+function renderAcrTotal(q){
+  const el=$("acr-total");if(!el)return;
+  if(q!==undefined)_acrTotalQ=q;
+  const items=acrTotalItems();
+  const nq=acrNorm(_acrTotalQ||"");
+  const vis=items.filter(it=>_acrTotalSeg==="all"||it.seg===_acrTotalSeg)
+    .filter(it=>!nq||acrNorm(it.nombre).includes(nq)||acrNorm(it.rut).includes(nq)||acrNorm(it.origen).includes(nq)||acrNorm(it.sub).includes(nq));
+  const tot=items.reduce((s,i)=>s+i.entradas,0), ing=items.reduce((s,i)=>s+i.usadas,0);
+  const segNames={all:"Todos",listas:"👥 Listas",mesas:"🍾 Mesas",cf:"🌸 Close Friends",bday:"🎂 Cumpleaños",staff:"🪪 Staff"};
+  const cnt=seg=>items.filter(i=>i.seg===seg).length;
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:14px;background:#f8fafc;padding:12px 16px;border-left:4px solid #1a1a1a">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
+        <span>📋 <strong>${items.length}</strong> personas · <strong>${tot}</strong> entradas en total</span>
+        <span style="color:#166534"><strong>${ing}/${tot}</strong> ingresadas</span>
+        <span style="color:#888;font-size:12px">👥 ${cnt("listas")} · 🍾 ${cnt("mesas")} · 🌸 ${cnt("cf")} · 🎂 ${cnt("bday")} · 🪪 ${cnt("staff")}</span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <input class="form-input" id="acr-total-q" placeholder="🔍 Buscar en TODAS las listas por nombre, RUT, mesa, código o lista..." style="flex:1;min-width:260px;font-size:15px;padding:11px" value="${(_acrTotalQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrTotal(this.value)">
+        <button class="btn btn-primary" onclick="openWalkin()">+ Walk-in</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+        ${Object.entries(segNames).map(([k,v])=>`<button class="btn" style="padding:4px 10px;font-size:11px;${_acrTotalSeg===k?"background:#1a1a1a;color:#fff":""}" onclick="_acrTotalSeg='${k}';renderAcrTotal()">${v}</button>`).join("")}
+      </div>
+    </div>
+    <div class="card">
+      <div class="sec-header"><div class="sec-title">Acreditación total — ${vis.length} de ${items.length}</div></div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${vis.map(it=>`<tr style="background:${it.esCumple?"#FEF9C3":it.usadas>=it.entradas&&it.usadas>0?"#f0fdf4":"#fff"}">
+          <td><strong>${it.esCumple?"🎂 ":""}${it.nombre}</strong><br><span style="font-size:11px;color:${it.subColor};font-weight:600">${it.sub}</span></td>
+          <td style="font-size:12px;color:#555">${it.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+          <td style="font-size:12px;color:${it.origenColor};font-weight:600">${it.origen}</td>
+          <td>${pulseraCellPorNombre(it.pulsera)}</td>
+          <td style="font-weight:600;text-align:center">${it.entradas}${it.entradas>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${it.usadas} usadas</div>`:""}</td>
+          <td>${it.estado}${it.extra}</td>
+          <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">${it.acciones}</div></td>
+        </tr>`).join("")||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px">${items.length?"Sin resultados para la búsqueda.":"No hay personas acreditables en este evento."}</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  const inp=$("acr-total-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
 
 // ── Acreditación: Staff (listas de tipo staff del evento) ──
