@@ -2316,6 +2316,7 @@ VIEWS.puerta=async()=>{
         </select>
         <span style="font-size:12px;color:#999">${totalE} registros · ${personasIngresadas}/${personasTotales} personas dentro</span>
         ${fueraHorarioList.length?`<button class="btn" style="font-size:11px;padding:4px 10px;background:#FEF3C7;color:#92400E;border-color:#FDE68A" onclick="verFueraHorario()">⏰ ${fueraHorarioList.length} fuera de horario</button>`:""}
+        <button class="btn btn-primary" style="font-size:12px;padding:6px 14px;white-space:nowrap" onclick="exportarAcreditacionCompleta()">📥 Descargar acreditación completa</button>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <button class="btn" id="acr-tab-listas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('listas')">👥 Listas / Entradas</button>
@@ -2361,6 +2362,74 @@ VIEWS.puerta=async()=>{
   filterAccType("all");
   setAcrTab(window._acrTabActual||"listas");
 };
+
+// ── Exportar acreditación completa (Excel con una hoja por segmento, sin duplicar) ──
+async function exportarAcreditacionCompleta(){
+  const ev=D.eventos.find(e=>e.id===currentEvId);if(!ev){toast("Selecciona un evento","warn");return;}
+  if(!(await cargarSheetJS())){toast("No se pudo cargar el generador de Excel","error");return;}
+  const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId);
+
+  // 1) Listas y entradas (acc_entries; los invitados de cumpleaños van en su propia hoja)
+  const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
+    .map(e=>({e,l:D.acc_lists.find(l=>l.id===e.list_id)}))
+    .sort((a,b)=>((a.l?.name||"")+a.e.name).localeCompare((b.l?.name||"")+b.e.name,"es"));
+  const hListas=[["Nombre completo","RUT","Lista (origen)","Tipo de lista","Pulsera","Entradas","Usadas","Estado","Validado a las","Fuera de horario","Notas"]];
+  entries.forEach(({e,l})=>{const total=1+(e.companions||0),usadas=e.entradas_usadas||0;const puls=getPulsera(e,ev);
+    hListas.push([e.name||"",getRut(e)||"",l?.name||"",{staff:"Staff",vip_table:"VIP",birthday:"Cumpleaños",friends_list:"Lista"}[l?.type]||l?.type||"",puls?.nombre||"",total,usadas,usadas===0?"No validado":usadas>=total?"Validado":`Parcial ${usadas}/${total}`,usadas?fechaHora(e.checked_in_at):"",e.fuera_horario?"Sí":"",e.notes||""]);});
+
+  // 2) Mesas VIP (una fila por invitado; mesa sin invitados = una fila)
+  const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").sort((a,b)=>String(a.table_num).localeCompare(String(b.table_num),"es",{numeric:true}));
+  const hMesas=[["Mesa","Sector","Responsable","Teléfono","Invitado","RUT","Instagram","Tipo","Estado invitado","Llegó a las","Botellas","Botellas entregadas","Pago mesa"]];
+  mesas.forEach(m=>{
+    const saldo=Math.max((m.price||0)-(m.amount_paid||0),0);const pago=saldo>0?`Debe ${fmtM(saldo)}`:"Pagado";
+    const perfiles=(m.perfiles||[]).filter(p=>p.estado!=="rechazado").map(p=>({...p,_tipo:"Invitado"}));
+    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada").map(pp=>({...pp,_tipo:"Pulsera extra"})));
+    const todos=[...perfiles,...extras];
+    const base=[m.table_num||"",m.section||"",m.responsible_name||"",m.responsible_phone||""];
+    const cola=[m.bottles||0,m.botellas_entregadas?"Sí":"No",pago];
+    if(!todos.length){hMesas.push([...base,"(sin invitados cargados)","","","","","",...cola]);return;}
+    todos.forEach(p=>hMesas.push([...base,`${p.nombre||p.name||""} ${p.apellido||""}`.trim(),p.rut||"",p.instagram?"@"+String(p.instagram).replace("@",""):"",p._tipo,p.llego?"Ingresó":"No validado",p.llego?fechaHora(p.llego_at):"",...cola]));
+  });
+
+  // 3) Close Friends (órdenes pagadas/conciliadas)
+  const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado));
+  const hCF=[["Nombre completo","RUT","Código","Instagram","WhatsApp","Correo","Pago","Estado","Ingresó a las"]];
+  ords.map(o=>({o,p:(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{}}))
+    .sort((a,b)=>`${a.p.nombre||""} ${a.p.apellido||""}`.localeCompare(`${b.p.nombre||""} ${b.p.apellido||""}`,"es"))
+    .forEach(({o,p})=>hCF.push([`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut||"",o.codigo||"",p.instagram?"@"+String(p.instagram).replace("@",""):"",p.whatsapp||"",p.email||"",o.estado==="conciliado"?"Conciliado":"Por conciliar",o.ingreso_at?"Ingresó":"No validado",fechaHora(o.ingreso_at)]));
+
+  // 4) Cumpleaños (cumpleañero + sus invitados aprobados)
+  const hBday=[["Lista de (cumpleañero)","Beneficio","Rol","Nombre completo","RUT","Instagram","WhatsApp","Estado","Ingresó a las"]];
+  cumps.slice().sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es")).forEach(c=>{
+    const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+    hBday.push([cNom,ben?.nombre||"",`Cumpleañero/a (${ben?.covers_cumple??1} cover${(ben?.covers_cumple??1)===1?"":"s"})`,cNom,c.rut||"",c.instagram?"@"+String(c.instagram).replace("@",""):"",c.whatsapp||"",c.llego?"Ingresó":"No validado",fechaHora(c.llego_at)]);
+    (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"))
+      .forEach(i=>hBday.push([cNom,ben?.nombre||"","Invitado",`${i.nombre||""} ${i.apellido||""}`.trim(),i.rut||"",i.instagram?"@"+String(i.instagram).replace("@",""):"",i.whatsapp||"",i.llego?"Ingresó":"No validado",fechaHora(i.llego_at)]));
+  });
+
+  // 0) Resumen
+  const cnt=(rows,col,val)=>rows.slice(1).filter(r=>r[col]===val).length;
+  const hRes=[["Evento",ev.name||""],["Fecha",ev.date||""],["Exportado",fechaHora(new Date().toISOString())],[],
+    ["Segmento","Personas","Ingresaron"],
+    ["Listas y entradas",hListas.length-1,cnt(hListas,7,"Validado")+cnt(hListas,7,"Parcial")],
+    ["Mesas VIP",hMesas.slice(1).filter(r=>r[4]!=="(sin invitados cargados)").length,cnt(hMesas,8,"Ingresó")],
+    ["Close Friends",hCF.length-1,cnt(hCF,7,"Ingresó")],
+    ["Cumpleaños",hBday.length-1,cnt(hBday,7,"Ingresó")]];
+  hRes.push(["TOTAL",hRes.slice(5).reduce((s,r)=>s+r[1],0),hRes.slice(5).reduce((s,r)=>s+r[2],0)]);
+
+  const wb=XLSX.utils.book_new();
+  const add=(name,rows,widths)=>{const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=widths.map(w=>({wch:w}));XLSX.utils.book_append_sheet(wb,ws,name);};
+  add("Resumen",hRes,[22,14,12]);
+  add("Listas y entradas",hListas,[30,14,22,12,14,9,8,16,16,14,30]);
+  add("Mesas VIP",hMesas,[8,12,24,14,30,14,18,14,14,16,9,16,16]);
+  add("Close Friends",hCF,[30,14,10,18,16,28,14,12,16]);
+  add("Cumpleaños",hBday,[28,24,22,30,14,18,16,12,16]);
+  const safe=(ev.name||"evento").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
+  XLSX.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
+  toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} personas en 4 hojas`,"success");
+  try{await log("export_acreditacion","event",currentEvId,`Exportó acreditación completa (${hRes[hRes.length-1][1]} personas)`);}catch(e){}
+}
 
 // Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
 function setAcrTab(tab){
