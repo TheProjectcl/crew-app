@@ -2375,37 +2375,39 @@ async function exportarAcreditacionCompleta(){
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
     .map(e=>({e,l:D.acc_lists.find(l=>l.id===e.list_id)}))
     .sort((a,b)=>((a.l?.name||"")+a.e.name).localeCompare((b.l?.name||"")+b.e.name,"es"));
-  const hListas=[["Nombre completo","RUT","Cantidad","Ingresa"]];
-  entries.forEach(({e})=>hListas.push([e.name||"",getRut(e)||"",1+(e.companions||0),0]));
+  const pulsTxt=v=>v||"No asignado";
+  const hListas=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa","Lista"]];
+  entries.forEach(({e,l})=>hListas.push([e.name||"",getRut(e)||"",pulsTxt(getPulsera(e,ev)?.nombre),1+(e.companions||0),0,l?.name||""]));
 
   // 2) Mesas VIP (una fila por invitado)
   const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").sort((a,b)=>String(a.table_num).localeCompare(String(b.table_num),"es",{numeric:true}));
-  const hMesas=[["Nombre completo","RUT","Cantidad","Ingresan","Mesa","Responsable mesa"]];
+  const hMesas=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresan","Mesa","Responsable mesa"]];
   mesas.forEach(m=>{
     const perfiles=(m.perfiles||[]).filter(p=>p.estado!=="rechazado");
     const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada"));
     const todos=[...perfiles,...extras];
-    if(!todos.length){hMesas.push(["(sin invitados cargados)","",0,0,m.table_num||"",m.responsible_name||""]);return;}
-    todos.forEach(p=>hMesas.push([`${p.nombre||p.name||""} ${p.apellido||""}`.trim(),p.rut||"",1,0,m.table_num||"",m.responsible_name||""]));
+    const pulM=pulsTxt(pulseraDeMesa(m));
+    if(!todos.length){hMesas.push(["(sin invitados cargados)","",pulM,0,0,m.table_num||"",m.responsible_name||""]);return;}
+    todos.forEach(p=>hMesas.push([`${p.nombre||p.name||""} ${p.apellido||""}`.trim(),p.rut||"",pulM,1,0,m.table_num||"",m.responsible_name||""]));
   });
 
   // 3) Close Friends (órdenes pagadas/conciliadas)
   const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado));
-  const hCF=[["Nombre completo","RUT","Cantidad","Ingresa"]];
+  const hCF=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa"]];
   ords.map(o=>({o,p:(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{}}))
     .sort((a,b)=>`${a.p.nombre||""} ${a.p.apellido||""}`.localeCompare(`${b.p.nombre||""} ${b.p.apellido||""}`,"es"))
-    .forEach(({o,p})=>hCF.push([`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut||"",o.cantidad||1,0]));
+    .forEach(({o,p})=>hCF.push([`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut||"",pulsTxt(p.tipo_entrada),o.cantidad||1,0]));
 
   // 4) Cumpleaños: fila del cumpleañero (amarilla, con Cover) + sus invitados aprobados
-  const hBday=[["Nombre completo","RUT","Cantidad","Ingresa","Cover","Lista de"]];
+  const hBday=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa","Cover","Lista de"]];
   const filasCumple=new Set();
   cumps.slice().sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es")).forEach(c=>{
     const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
     const covers=ben?.covers_cumple??1;
     filasCumple.add(hBday.length);
-    hBday.push([cNom,c.rut||"",1,0,covers,"Cumpleañero/a"]);
+    hBday.push([cNom,c.rut||"",pulsTxt(ben?.pulsera),1,0,covers,"Cumpleañero/a"]);
     (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").sort((a,b)=>`${a.nombre} ${a.apellido}`.localeCompare(`${b.nombre} ${b.apellido}`,"es"))
-      .forEach(i=>hBday.push([`${i.nombre||""} ${i.apellido||""}`.trim(),i.rut||"",1,0,"",cNom]));
+      .forEach(i=>hBday.push([`${i.nombre||""} ${i.apellido||""}`.trim(),i.rut||"",pulsTxt(ben?.pulsera),1,0,"",cNom]));
   });
 
   // 0) Resumen — con fórmulas que suman cada hoja (se actualiza solo cuando marcan "Ingresa")
@@ -2413,12 +2415,12 @@ async function exportarAcreditacionCompleta(){
   const segs=[["Listas y entradas",hListas],["Mesas VIP",hMesas],["Close Friends",hCF],["Cumpleaños",hBday]];
   const hRes=[["Evento",ev.name||""],["Fecha",ev.date||""],["Exportado",fechaHora(new Date().toISOString())],[],
     ["Segmento","Entradas","Ingresados","Pendientes","% ingreso"]];
-  segs.forEach(([nom,rows])=>hRes.push([nom,sum(rows,2),0,sum(rows,2),0]));
+  segs.forEach(([nom,rows])=>hRes.push([nom,sum(rows,3),0,sum(rows,3),0]));
   hRes.push(["TOTAL",hRes.slice(5).reduce((t,r)=>t+r[1],0),0,hRes.slice(5).reduce((t,r)=>t+r[1],0),0]);
-  // Fórmulas (fila 6..9 = segmentos, fila 10 = total; columnas C/D de cada hoja = Cantidad/Ingresa)
+  // Fórmulas (fila 6..9 = segmentos, fila 10 = total; columnas D/E de cada hoja = Cantidad/Ingresa)
   const resFormulas={};
   segs.forEach(([nom,rows],i)=>{const r=6+i;const last=Math.max(2,rows.length);const sh=`'${nom}'`;
-    resFormulas[`B${r}`]=`SUM(${sh}!C2:C${last})`;resFormulas[`C${r}`]=`SUM(${sh}!D2:D${last})`;resFormulas[`D${r}`]=`B${r}-C${r}`;resFormulas[`E${r}`]=`IF(B${r}=0,0,C${r}/B${r})`;});
+    resFormulas[`B${r}`]=`SUM(${sh}!D2:D${last})`;resFormulas[`C${r}`]=`SUM(${sh}!E2:E${last})`;resFormulas[`D${r}`]=`B${r}-C${r}`;resFormulas[`E${r}`]=`IF(B${r}=0,0,C${r}/B${r})`;});
   ["B","C","D"].forEach(col=>resFormulas[`${col}10`]=`SUM(${col}6:${col}9)`);resFormulas["E10"]="IF(B10=0,0,C10/B10)";
 
   const wb=X.utils.book_new();
@@ -2455,10 +2457,10 @@ async function exportarAcreditacionCompleta(){
   add("Resumen",hRes,[24,12,12,12,11],{headRows:[4],titleRows:[0,1,2],totalRow:hRes.length-1,noFilter:true,noFreeze:true});
   {const ws=wb.Sheets["Resumen"];Object.entries(resFormulas).forEach(([ref,f])=>{if(!ws[ref])ws[ref]={t:"n",v:0};ws[ref].f=f;if(/^E/.test(ref)){ws[ref].s={...(ws[ref].s||S_NUM),numFmt:"0%"};}});
    wb.Workbook=wb.Workbook||{};wb.Workbook.CalcPr={fullCalcOnLoad:true};}
-  add("Listas y entradas",hListas,[34,16,11,11]);
-  add("Mesas VIP",hMesas,[34,16,11,11,8,26]);
-  add("Close Friends",hCF,[34,16,11,11]);
-  add("Cumpleaños",hBday,[34,16,11,11,12,30],{yellowRows:filasCumple});
+  add("Listas y entradas",hListas,[34,16,16,11,11,22]);
+  add("Mesas VIP",hMesas,[34,16,16,11,11,8,26]);
+  add("Close Friends",hCF,[34,16,16,11,11]);
+  add("Cumpleaños",hBday,[34,16,16,11,11,10,30],{yellowRows:filasCumple});
   const safe=(ev.name||"evento").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
   X.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
   toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} entradas en 4 hojas`,"success");
@@ -2483,7 +2485,7 @@ function setAcrTab(tab){
 
 // Celda de pulsera a partir del nombre (usa el color configurado en el evento)
 function pulseraCellPorNombre(nombre){
-  if(!nombre)return `<span style="font-size:11px;color:#bbb">— sin pulsera —</span>`;
+  if(!nombre)return `<span style="font-size:11px;color:#9a3412;font-weight:600">No asignado</span>`;
   const ev=D.eventos.find(e=>e.id===currentEvId);
   const p=(ev?.pulseras||[]).find(x=>(x.nombre||"").toLowerCase()===String(nombre).toLowerCase());
   const color=p?.color||"#534AB7";
@@ -2654,53 +2656,84 @@ async function bdayAnularCumple(cid){
 }
 
 // Renderiza la acreditación de mesas VIP para la gente de puerta
-function renderAcrMesas(){
+// Pulsera de una mesa: la configurada en la mesa, o si no, una del evento que se llame "VIP Mesa"/"Mesa"/"VIP"
+function pulseraDeMesa(m){
+  if(m?.pulsera)return m.pulsera;
+  const ev=D.eventos.find(e=>e.id===currentEvId);const ps=ev?.pulseras||[];
+  const f=ps.find(p=>/vip\s*mesa|mesa\s*vip/i.test(p.nombre||""))||ps.find(p=>/^mesa/i.test(p.nombre||""))||ps.find(p=>/^vip$/i.test(p.nombre||""));
+  return f?.nombre||"";
+}
+let _acrMesasQ="";
+function renderAcrMesas(q){
   const el=$("acr-mesas");if(!el)return;
-  const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible");
-  // Cuenta invitados llegados por mesa
-  const llegadosDe=m=>(m.perfiles||[]).filter(p=>p.estado!=="rechazado"&&p.llego).length;
-  const totalInvitados=mesas.reduce((s,m)=>s+(m.perfiles||[]).filter(p=>p.estado!=="rechazado").length,0);
-  const totalLlegados=mesas.reduce((s,m)=>s+llegadosDe(m),0);
-  const mesasConGente=mesas.filter(m=>llegadosDe(m)>0).length;
+  if(q!==undefined)_acrMesasQ=q;
+  const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible")
+    .slice().sort((a,b)=>String(a.table_num).localeCompare(String(b.table_num),"es",{numeric:true}));
+  const invitadosDe=m=>{
+    const perfilesMesa=(m.perfiles||[]).filter(p=>p.estado!=="rechazado").map(p=>({...p,_tipo:"mesa"}));
+    const pulserasPagadas=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada").map(pp=>({...pp,_tipo:"pulsera_extra",_lote_id:l.id})));
+    return [...perfilesMesa,...pulserasPagadas];
+  };
+  const nq=acrNorm(_acrMesasQ||"");
+  const match=(nombre,rut)=>!nq||acrNorm(nombre).includes(nq)||acrNorm(rut||"").includes(nq);
+  let totalInv=0,totalLleg=0,mesasConGente=0;
+  const bloques=mesas.map(m=>{
+    const total=m.price||0, pagado=m.amount_paid||0, saldo=Math.max(total-pagado,0);
+    const todos=invitadosDe(m);
+    const llegados=todos.filter(p=>p.llego).length;
+    totalInv+=todos.length;totalLleg+=llegados;if(llegados>0)mesasConGente++;
+    const botEnt=!!m.botellas_entregadas;
+    const mesaMatch=!nq||acrNorm(`mesa ${m.table_num} ${m.responsible_name||""}`).includes(nq);
+    const vis=todos.map((p,idx)=>({p,idx})).filter(({p})=>mesaMatch||match(`${p.nombre||p.name||""} ${p.apellido||""}`,p.rut));
+    if(nq&&!mesaMatch&&!vis.length)return "";
+    const pulsera=pulseraDeMesa(m);
+    const filas=vis.map(({p,idx})=>{
+      const nom=`${p.nombre||p.name||""} ${p.apellido||""}`.trim()||"(sin nombre)";
+      const esExtra=p._tipo==="pulsera_extra";
+      const args=`'${m.id}','${p.id||idx}',${idx}`;
+      return `<tr style="background:${p.llego?"#f0fdf4":"#fff"}">
+        <td><strong>${nom}</strong><br><span style="font-size:11px;color:#0e7490;font-weight:600">🍾 Mesa ${m.table_num}${esExtra?" · pulsera extra":""}</span>${p.instagram?` <span style="font-size:11px;color:#aaa">· @${igHandle(p.instagram)}</span>`:""}</td>
+        <td style="font-size:12px;color:#555">${p.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+        <td style="font-size:12px;color:#0e7490;font-weight:600">Mesa ${m.table_num}${m.section?` · ${m.section}`:""}</td>
+        <td>${pulseraCellPorNombre(pulsera)}</td>
+        <td style="font-weight:600;text-align:center">1</td>
+        <td>${p.llego?badge("✓ Ingresó "+(p.llego_at?fmtT(p.llego_at):""),"green"):badge("No validado","gray")}</td>
+        <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+          ${!p.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="marcarInvitadoMesa(${args},true${esExtra?`,'${p._lote_id}'`:""})">✓ Ingresar</button>`:""}
+          ${p.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="marcarInvitadoMesa(${args},false${esExtra?`,'${p._lote_id}'`:""})">🔓 Anular</button>`:""}
+        </div></td>
+      </tr>`;}).join("");
+    return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${llegados===todos.length&&todos.length>0?"#22C55E":llegados>0?"#F59E0B":"#E5E7EB"};padding:0;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#f8fafc;border-bottom:1px solid #e5e7eb">
+        <div style="font-size:13px"><strong>Mesa ${m.table_num}</strong> <span style="color:#888">· ${m.section||"—"} · ${m.responsible_name||"Sin responsable"}${m.responsible_phone?` · ${m.responsible_phone}`:""} · 🍾 ${m.bottles||0} botellas</span></div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12px">
+          <span style="color:#534AB7;font-weight:700">${llegados}/${todos.length} llegaron</span>
+          ${saldo>0?badge("Debe "+fmtM(saldo),"red"):badge("✓ Pagado","green")}
+          ${botEnt?badge("🍾 Botellas entregadas","green"):badge("🍾 Botellas pendientes","amber")}
+          <button class="btn" style="font-size:11px;padding:4px 10px" onclick="toggleBotellasMesa('${m.id}')">${botEnt?"↩ No entregadas":"🍾 Entregar botellas"}</button>
+          ${saldo>0?`<button class="btn" style="font-size:11px;padding:4px 10px;background:#FEE2E2;color:#991B1B;border-color:#FECACA" onclick="openPagoPuerta('${m.id}')">💵 Cobrar saldo</button>`:""}
+        </div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${filas||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:12px">Sin invitados cargados en esta mesa.</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }).join("");
   el.innerHTML=`
-    <div class="card" style="margin-bottom:14px;background:#fafafa;padding:12px 16px">
+    <div class="card" style="margin-bottom:14px;background:#ecfeff;padding:12px 16px;border-left:4px solid #0e7490">
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
-        <span><strong>${mesas.length}</strong> mesas reservadas</span>
-        <span style="color:#166534"><strong>${totalLlegados}/${totalInvitados}</strong> invitados llegaron</span>
+        <span>🍾 <strong>${mesas.length}</strong> mesas reservadas</span>
+        <span style="color:#166534"><strong>${totalLleg}/${totalInv}</strong> invitados llegaron</span>
         <span style="color:#534AB7"><strong>${mesasConGente}</strong> mesas con gente adentro</span>
         <span style="color:#991B1B"><strong>${mesas.filter(m=>(m.amount_paid||0)<(m.price||0)).length}</strong> con saldo pendiente</span>
       </div>
     </div>
-    ${mesas.length?mesas.map(m=>{
-      const total=m.price||0, pagado=m.amount_paid||0, saldo=Math.max(total-pagado,0);
-      const perfiles=(m.perfiles||[]).filter(p=>p.estado!=="rechazado");
-      const llegados=perfiles.filter(p=>p.llego).length;
-      const pct=perfiles.length?Math.round(llegados/perfiles.length*100):0;
-      const botEnt=!!m.botellas_entregadas;
-      const algunoLlego=llegados>0;
-      return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${llegados===perfiles.length&&perfiles.length>0?"#22C55E":algunoLlego?"#F59E0B":"#E5E7EB"}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px">
-          <div>
-            <div style="font-size:16px;font-weight:700">Mesa ${m.table_num} <span style="font-size:12px;color:#888;font-weight:400">· ${m.section||"—"}</span></div>
-            <div style="font-size:12px;color:#888;margin-top:2px">${m.responsible_name||"Sin responsable"}${m.responsible_phone?` · ${m.responsible_phone}`:""}</div>
-            <div style="font-size:12px;color:#555;margin-top:4px">🍾 ${m.bottles||0} botellas</div>
-          </div>
-          <div style="text-align:right">
-            ${saldo>0?badge("Debe "+fmtM(saldo),"red"):badge("✓ Pagado","green")}
-            <div style="margin-top:4px">🍾 ${botEnt?badge("Botellas entregadas","green"):badge("Botellas pendientes","amber")}</div>
-          </div>
-        </div>
-        <div style="margin-top:12px">
-          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="color:#555;font-weight:600">Llegada de invitados</span><span style="color:#534AB7;font-weight:700">${llegados}/${perfiles.length}</span></div>
-          <div class="pbar"><div class="pfill ${pct===100?"pfill-g":"pfill-p"}" style="width:${pct}%"></div></div>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn btn-primary" style="font-size:13px;padding:8px 14px;font-weight:600" onclick="acreditarInvitadosMesa('${m.id}')">👥 Acreditar invitados (${llegados}/${perfiles.length})</button>
-          <button class="btn ${botEnt?"":""}" style="font-size:12px;padding:6px 12px" onclick="toggleBotellasMesa('${m.id}')">${botEnt?"↩ Botellas no entregadas":"🍾 Marcar botellas entregadas"}</button>
-          ${saldo>0?`<button class="btn" style="font-size:12px;padding:6px 12px;background:#FEE2E2;color:#991B1B;border-color:#FECACA" onclick="openPagoPuerta('${m.id}')">💵 Cobrar saldo (${fmtM(saldo)})</button>`:""}
-        </div>
-      </div>`;
-    }).join(""):`<div class="card" style="color:#999;text-align:center;padding:30px">No hay mesas reservadas en este evento.</div>`}`;
+    <div class="card" style="margin-bottom:14px">
+      <input class="form-input" id="acr-mesas-q" placeholder="🔍 Buscar invitado por nombre o RUT, o mesa (ej: mesa 3)..." style="width:100%;font-size:15px;padding:11px" value="${(_acrMesasQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrMesas(this.value)">
+    </div>
+    ${bloques||`<div class="card" style="color:#999;text-align:center;padding:30px">${mesas.length?"Sin resultados para la búsqueda.":"No hay mesas reservadas en este evento."}</div>`}`;
+  const inp=$("acr-mesas-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
 
 async function toggleBotellasMesa(mid){
