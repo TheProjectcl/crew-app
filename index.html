@@ -4442,6 +4442,7 @@ VIEWS.bloqueo=(q)=>{
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="descargarPlantillaBloqueo()">Plantilla</button>
         <button class="btn" onclick="openImportBloqueo()">Importar Excel/CSV</button>
+        <button class="btn" onclick="exportarBloqueo()">📤 Exportar${_blQ?" filtrado":""}</button>
         <button class="btn btn-primary" onclick="openAddBloqueo()">+ Agregar</button>
       </div>
     </div>
@@ -4513,6 +4514,30 @@ async function delBloqueo(bid){
   D.lista_bloqueo=D.lista_bloqueo?.filter(b=>b.id!==bid)||[];
   try{await sbDelete("lista_bloqueo",`id=eq.${bid}`);await log("del_bloqueo","bloqueo",bid,`Desbloqueado: ${b?.nombre}`);}catch(e){}
   toast("Eliminado de lista de bloqueo");VIEWS.bloqueo();
+}
+async function exportarBloqueo(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const todos=(D.lista_bloqueo||[]).filter(b=>b.productora_id===prodId);
+  const nq=acrNorm(_blQ||"");
+  const lista=(nq?todos.filter(b=>[b.nombre,b.rut,b.motivo,b.email].some(v=>acrNorm(v).includes(nq))):todos)
+    .slice().sort((a,b)=>(a.nombre||"").localeCompare(b.nombre||"","es"));
+  if(!lista.length){toast("No hay personas para exportar","warn");return;}
+  const hoyISO=new Date().toISOString().slice(0,10);
+  const fmtF=iso=>{if(!iso)return "";const [y,m,d]=iso.split("-");return `${d}-${m}-${y}`;};
+  const rows=[["Nombre y apellido","RUT","Motivo de bloqueo","Vence","Estado","Correo","Agregado"]];
+  lista.forEach(b=>rows.push([b.nombre||"",b.rut||"",b.motivo||"",b.vence?fmtF(b.vence):"Permanente",(!b.vence||b.vence>=hoyISO)?"Vigente":"Vencido",b.email||"",b.created_at?fmtF(b.created_at.slice(0,10)):""]));
+  const prodNom=((D.productoras||[]).find(p=>p.id===prodId)?.nombre||"productora").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
+  const fname=`lista_bloqueo_${prodNom}_${hoyISO}`;
+  if(await cargarSheetJS()){
+    const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=[{wch:30},{wch:16},{wch:34},{wch:14},{wch:10},{wch:26},{wch:12}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Lista de bloqueo");
+    XLSX.writeFile(wb,fname+".xlsx");
+  }else{
+    const esc=v=>{const t=String(v??"");return /[";\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
+    const csv="\uFEFF"+rows.map(r=>r.map(esc).join(";")).join("\r\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=fname+".csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+  }
+  toast(`✓ ${lista.length} persona${lista.length===1?"":"s"} exportada${lista.length===1?"":"s"}`,"success");
 }
 function openImportBloqueo(){
   openModal("Importar lista de bloqueo",`
