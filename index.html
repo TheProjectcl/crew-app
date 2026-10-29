@@ -672,8 +672,9 @@ const ESTADO_MESA = {
 function chequearBloqueo(nombre, rut, prodId){
   const lista = D.lista_bloqueo||[];
   const norm = s => (s||"").toLowerCase().trim().replace(/[.\-]/g,"");
-  const bloqueadoRut  = rut  && lista.find(b=>b.productora_id===prodId && norm(b.rut)===norm(rut));
-  const bloqueadoNom  = nombre && lista.find(b=>b.productora_id===prodId && norm(b.nombre)===norm(nombre));
+  const vigente = b => !b.vence || b.vence >= new Date().toISOString().slice(0,10); // sin fecha = permanente
+  const bloqueadoRut  = rut  && lista.find(b=>b.productora_id===prodId && vigente(b) && norm(b.rut)===norm(rut));
+  const bloqueadoNom  = nombre && lista.find(b=>b.productora_id===prodId && vigente(b) && norm(b.nombre)===norm(nombre));
   return bloqueadoRut||bloqueadoNom||null;
 }
 
@@ -4434,27 +4435,46 @@ VIEWS.bloqueo=()=>{
       <div class="page-title">Lista de bloqueo</div>
       <div style="display:flex;gap:8px">
         <button class="btn" onclick="descargarPlantillaBloqueo()">Plantilla</button>
-        <button class="btn" onclick="openImportBloqueo()">Importar CSV</button>
+        <button class="btn" onclick="openImportBloqueo()">Importar Excel/CSV</button>
         <button class="btn btn-primary" onclick="openAddBloqueo()">+ Agregar</button>
       </div>
     </div>
     <div class="alert alert-info">Esta lista aplica a <strong>todos los eventos</strong> de la productora. Al cargar perfiles en cualquier mesa, se cruza automáticamente por RUT y nombre.</div>
     <div class="card"><div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Nombre</th><th>RUT</th><th>Motivo</th><th>Agregado</th><th></th></tr></thead>
-      <tbody>${lista.length?lista.map(b=>`<tr>
-        <td><strong>${b.nombre}</strong></td>
+      <thead><tr><th>Nombre</th><th>RUT</th><th>Motivo</th><th>Vence</th><th>Agregado</th><th></th></tr></thead>
+      <tbody>${lista.length?lista.map(b=>{const hoy=new Date().toISOString().slice(0,10);const vencido=b.vence&&b.vence<hoy;return `<tr style="${vencido?"opacity:.55":""}">
+        <td><strong>${b.nombre}</strong>${vencido?` <span style="font-size:10px;background:#e5e7eb;color:#555;padding:2px 6px;border-radius:6px;font-weight:600">bloqueo vencido</span>`:""}</td>
         <td style="font-size:12px">${b.rut||"—"}</td>
         <td style="font-size:12px;color:#888">${b.motivo||"—"}</td>
+        <td style="font-size:12px;font-weight:600;color:${b.vence?(vencido?"#6b7280":"#92400E"):"#991B1B"}">${b.vence?fmtFechaBloqueo(b.vence):"🚫 Permanente"}</td>
         <td style="font-size:11px;color:#aaa">${fmtDT(b.created_at)}</td>
         <td><button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="delBloqueo('${b.id}')">✕</button></td>
-      </tr>`).join(""):`<tr><td colspan="5" style="text-align:center;color:#aaa;padding:20px">Sin personas bloqueadas.</td></tr>`}</tbody>
+      </tr>`;}).join(""):`<tr><td colspan="6" style="text-align:center;color:#aaa;padding:20px">Sin personas bloqueadas.</td></tr>`}</tbody>
     </table></div></div>`;
 };
+const fmtFechaBloqueo=iso=>{const d=new Date(iso+" 12:00:00");return isNaN(d)?iso:"Hasta el "+d.toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"});};
+// Acepta "permanente", "", DD-MM-AAAA, DD/MM/AAAA, AAAA-MM-DD o fecha serial de Excel → ISO o null (permanente)
+function parseVenceBloqueo(v){
+  if(v==null)return null;
+  if(typeof v==="number"&&v>20000){const d=new Date(Math.round(v-25569)*86400000);return isNaN(d)?null:d.toISOString().slice(0,10);}
+  const t=String(v).trim().toLowerCase();
+  if(!t||/^perm/.test(t)||t==="no"||t==="-")return null;
+  let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  m=t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(m){const y=m[3].length===2?"20"+m[3]:m[3];return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;}
+  return null;
+}
 function openAddBloqueo(){
   openModal("Agregar a lista de bloqueo",`
     <label class="form-label">Nombre y apellido</label><input class="form-input" id="bl-n" placeholder="Nombre completo">
     <label class="form-label">RUT</label><input class="form-input" id="bl-r" placeholder="12.345.678-9">
     <label class="form-label">Motivo</label><input class="form-input" id="bl-m" placeholder="Ej: Comportamiento, deuda, etc.">
+    <label class="form-label">Duración del bloqueo</label>
+    <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="bl-tipo" value="perm" checked onchange="$('bl-v').style.display='none'"> 🚫 Permanente</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer"><input type="radio" name="bl-tipo" value="fecha" onchange="$('bl-v').style.display='block';$('bl-v').focus()"> ⏳ Hasta una fecha</label>
+    </div>
+    <input class="form-input" id="bl-v" type="date" style="display:none" min="${new Date().toISOString().slice(0,10)}">
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-danger" onclick="saveBloqueo()">🚫 Agregar a lista</button>
@@ -4463,7 +4483,10 @@ function openAddBloqueo(){
 async function saveBloqueo(){
   const nombre=($("bl-n")?.value||"").trim();if(!nombre){toast("Escribe un nombre","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const b={id:uid(),productora_id:prodId,nombre,rut:$("bl-r")?.value||"",motivo:$("bl-m")?.value||"",created_at:now(),created_by:CU?.id};
+  const esFecha=document.querySelector("input[name='bl-tipo']:checked")?.value==="fecha";
+  const vence=esFecha?($("bl-v")?.value||null):null;
+  if(esFecha&&!vence){toast("Indica hasta qué fecha dura el bloqueo","error");return;}
+  const b={id:uid(),productora_id:prodId,nombre,rut:$("bl-r")?.value||"",motivo:$("bl-m")?.value||"",vence,created_at:now(),created_by:CU?.id};
   if(!D.lista_bloqueo)D.lista_bloqueo=[];
   D.lista_bloqueo.push(b);
   try{await sbPost("lista_bloqueo",[b]);await log("add_bloqueo","bloqueo",b.id,`Bloqueado: ${nombre} ${b.rut}`);}catch(e){toast("Error: "+e.message,"error");}
@@ -4478,24 +4501,40 @@ async function delBloqueo(bid){
 }
 function openImportBloqueo(){
   openModal("Importar lista de bloqueo",`
-    <div class="alert alert-info">El CSV debe tener columnas: <strong>nombre</strong> · <strong>rut</strong> · <strong>motivo</strong></div>
-    <button class="btn btn-full" style="margin-bottom:10px" onclick="descargarPlantillaBloqueo()">Descargar plantilla CSV</button>
-    <label class="form-label" style="margin-top:0">Subir archivo CSV</label>
-    <input type="file" id="bl-file" accept=".csv" class="form-input">
+    <div class="alert alert-info">Sube un Excel o CSV con una persona por fila y estas columnas:<br>
+      <strong>A</strong> Nombre y apellido · <strong>B</strong> RUT · <strong>C</strong> Motivo · <strong>D</strong> Vence (<em>Permanente</em> o fecha DD-MM-AAAA)</div>
+    <button class="btn btn-full" style="margin-bottom:10px" onclick="descargarPlantillaBloqueo()">📥 Descargar plantilla Excel</button>
+    <label class="form-label" style="margin-top:0">Subir archivo (.xlsx, .xls o .csv)</label>
+    <input type="file" id="bl-file" accept=".xlsx,.xls,.csv" class="form-input">
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-danger" onclick="importBloqueoCSV()">Importar</button>
     </div>`);
 }
-function descargarPlantillaBloqueo(){
-  const rows=[
-    ["nombre","rut","motivo"],
-    ["Juan Pérez González","12.345.678-9","Comportamiento agresivo"],
-    ["María Soto Díaz","9.876.543-2","Deuda pendiente de mesa"],
-    ["Pedro Ramírez","18.222.333-4","Ingreso con documento falso"]
-  ];
-  const esc=v=>{const s=String(v??"");return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;};
-  const csv="\uFEFF"+rows.map(r=>r.map(esc).join(",")).join("\r\n");
+async function cargarSheetJS(){
+  if(window.XLSX)return true;
+  try{await new Promise((ok,fail)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=ok;sc.onerror=fail;document.head.appendChild(sc);});return true;}
+  catch(e){return false;}
+}
+const PLANTILLA_BLOQUEO_ROWS=[
+  ["Nombre y apellido","RUT","Motivo de bloqueo","Vence (Permanente o fecha DD-MM-AAAA)"],
+  ["Juan Pérez González","12.345.678-9","Comportamiento agresivo","Permanente"],
+  ["María Soto Díaz","9.876.543-2","Deuda pendiente de mesa","31-12-2026"],
+  ["Pedro Ramírez","18.222.333-4","Ingreso con documento falso","Permanente"]
+];
+async function descargarPlantillaBloqueo(){
+  const ok=await cargarSheetJS();
+  if(ok){
+    const ws=XLSX.utils.aoa_to_sheet(PLANTILLA_BLOQUEO_ROWS);
+    ws["!cols"]=[{wch:28},{wch:16},{wch:34},{wch:38}];
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Lista de bloqueo");
+    XLSX.writeFile(wb,"lista_bloqueo_plantilla.xlsx");
+    toast("✓ Plantilla Excel descargada","success");
+    return;
+  }
+  // Fallback CSV con ; (Excel en español lo abre en columnas)
+  const esc=v=>{const t=String(v??"");return /[";\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
+  const csv="\uFEFF"+PLANTILLA_BLOQUEO_ROWS.map(r=>r.map(esc).join(";")).join("\r\n");
   const a=document.createElement("a");
   a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
   a.download="lista_bloqueo_plantilla.csv";
@@ -4504,32 +4543,43 @@ function descargarPlantillaBloqueo(){
 }
 async function importBloqueoCSV(){
   const file=$("bl-file")?.files?.[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    const text=e.target.result;
-    const sep=text.includes(";")&&!text.includes(",")?";":",";
-    const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
-    const normH=s=>(s||"").toLowerCase().trim().replace(/[áä]/g,"a").replace(/[éë]/g,"e").replace(/[íï]/g,"i").replace(/[óö]/g,"o").replace(/[úü]/g,"u");
-    let hi=-1;
-    for(let i=0;i<lines.length;i++){const r=parseCSVRow(lines[i],sep).map(normH);if(r.some(c=>c.includes("nombre"))){hi=i;break;}}
-    if(hi===-1){toast("No se encontró encabezado con columna 'nombre'","error");return;}
-    const headers=parseCSVRow(lines[hi],sep).map(normH);
+  const normH=s=>String(s||"").toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  let rows=[];
+  try{
+    if(/\.(xlsx|xls)$/i.test(file.name)){
+      if(!(await cargarSheetJS())){toast("No se pudo cargar el lector de Excel. Sube un CSV.","error");return;}
+      const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:false});
+      rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:true,defval:""});
+    }else{
+      const text=await file.text();
+      const lines=text.replace(/^\uFEFF/,"").split(/\r?\n/).filter(l=>l.trim());
+      const head=lines[0]||"";
+      const sep=(head.split(";").length>head.split(",").length)?";":(head.split("\t").length>head.split(",").length?"\t":",");
+      rows=lines.map(l=>parseCSVRow(l,sep));
+    }
+  }catch(e){toast("No se pudo leer el archivo: "+e.message,"error");return;}
+  let hi=rows.findIndex(r=>r.some(c=>normH(c).includes("nombre")));
+  let iN=0,iR=1,iM=2,iV=3;
+  if(hi>=0){
+    const headers=rows[hi].map(normH);
     const findCol=(...keys)=>{for(const k of keys){const i=headers.findIndex(h=>h===normH(k)||h.includes(normH(k)));if(i>=0)return i;}return -1;};
-    const iN=findCol("nombre"), iR=findCol("rut"), iM=findCol("motivo","razon","porque","por que","bloqueo");
-    const getC=(row,idx)=>idx>=0?(row[idx]||"").trim():"";
-    const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-    const nuevos=[];
-    lines.slice(hi+1).forEach(line=>{
-      const row=parseCSVRow(line,sep);
-      const nombre=getC(row,iN);if(!nombre)return;
-      nuevos.push({id:uid(),productora_id:prodId,nombre,rut:getC(row,iR),motivo:getC(row,iM),created_at:now(),created_by:CU?.id});
-    });
-    if(!D.lista_bloqueo)D.lista_bloqueo=[];
-    D.lista_bloqueo.push(...nuevos);
-    try{await sbPost("lista_bloqueo",nuevos);await log("import_bloqueo","bloqueo","all",`+${nuevos.length} bloqueados importados`);}catch(err){toast("Error: "+err.message,"error");return;}
-    closeModal();toast(`✓ ${nuevos.length} personas importadas a lista de bloqueo`,"success");VIEWS.bloqueo();
-  };
-  reader.readAsText(file,"UTF-8");
+    iN=findCol("nombre");iR=findCol("rut");iM=findCol("motivo","razon","porque","por que");
+    iV=findCol("vence","vencimiento","hasta","permanente","duracion","fecha");
+  }else hi=-1; // sin encabezado: asumir columnas A-D
+  const getC=(row,idx)=>idx>=0?String(row[idx]??"").trim():"";
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const nuevos=[];
+  rows.slice(hi+1).forEach(row=>{
+    const nombre=getC(row,iN);if(!nombre)return;
+    nuevos.push({id:uid(),productora_id:prodId,nombre,rut:getC(row,iR),motivo:getC(row,iM),vence:iV>=0?parseVenceBloqueo(row[iV]):null,created_at:now(),created_by:CU?.id});
+  });
+  if(!nuevos.length){toast("No se encontraron filas con nombre","error");return;}
+  if(!D.lista_bloqueo)D.lista_bloqueo=[];
+  try{await sbPost("lista_bloqueo",nuevos);await log("import_bloqueo","bloqueo","all",`+${nuevos.length} bloqueados importados`);}
+  catch(err){toast("Error: "+err.message,"error");alert("Error al importar:\n"+err.message+(/vence/.test(err.message)?"\n\nFalta crear la columna 'vence' en Supabase.":""));return;}
+  D.lista_bloqueo.push(...nuevos);
+  const perm=nuevos.filter(x=>!x.vence).length;
+  closeModal();toast(`✓ ${nuevos.length} personas importadas (${perm} permanentes, ${nuevos.length-perm} con fecha)`,"success");VIEWS.bloqueo();
 }
 
 // ── LISTAS ──
