@@ -2323,6 +2323,7 @@ VIEWS.puerta=async()=>{
         <button class="btn" id="acr-tab-mesas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('mesas')">🍾 Mesas VIP</button>
         <button class="btn" id="acr-tab-cf" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('cf')">🌸 Close Friends</button>
         <button class="btn" id="acr-tab-bday" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('bday')">🎂 Cumpleaños</button>
+        <button class="btn" id="acr-tab-staff" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('staff')">🪪 Staff</button>
       </div>
     </div>
     <div id="acr-listas">
@@ -2358,7 +2359,8 @@ VIEWS.puerta=async()=>{
     </div>
     <div id="acr-mesas" style="display:none"></div>
     <div id="acr-cf" style="display:none"></div>
-    <div id="acr-bday" style="display:none"></div>`;
+    <div id="acr-bday" style="display:none"></div>
+    <div id="acr-staff" style="display:none"></div>`;
   filterAccType("all");
   setAcrTab(window._acrTabActual||"listas");
 };
@@ -2371,13 +2373,17 @@ async function exportarAcreditacionCompleta(){
   const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
   const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c));
 
-  // 1) Listas y entradas
-  const entries=D.acc_entries.filter(e=>e.event_id===currentEvId)
+  // 1) Listas y entradas (sin staff: va en su propia hoja)
+  const entriesAll=D.acc_entries.filter(e=>e.event_id===currentEvId)
     .map(e=>({e,l:D.acc_lists.find(l=>l.id===e.list_id)}))
     .sort((a,b)=>((a.l?.name||"")+a.e.name).localeCompare((b.l?.name||"")+b.e.name,"es"));
+  const entries=entriesAll.filter(({l})=>l?.type!=="staff");
   const pulsTxt=v=>v||PULSERA_DEFAULT; // sin pulsera asignada => General
   const hListas=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa","Lista"]];
   entries.forEach(({e,l})=>hListas.push([e.name||"",getRut(e)||"",pulsTxt(getPulsera(e,ev)?.nombre),1+(e.companions||0),0,l?.name||""]));
+  // 5) Staff
+  const hStaff=[["Nombre completo","RUT","Pulsera","Cantidad","Ingresa","Lista staff"]];
+  entriesAll.filter(({l})=>l?.type==="staff").forEach(({e,l})=>hStaff.push([e.name||"",getRut(e)||"",pulsTxt(getPulsera(e,ev)?.nombre),1+(e.companions||0),0,l?.name||""]));
 
   // 2) Mesas VIP (una fila por invitado)
   const mesas=D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").sort((a,b)=>String(a.table_num).localeCompare(String(b.table_num),"es",{numeric:true}));
@@ -2412,16 +2418,17 @@ async function exportarAcreditacionCompleta(){
 
   // 0) Resumen — con fórmulas que suman cada hoja (se actualiza solo cuando marcan "Ingresa")
   const sum=(rows,col)=>rows.slice(1).reduce((t,r)=>t+(Number(r[col])||0),0);
-  const segs=[["Listas y entradas",hListas],["Mesas VIP",hMesas],["Close Friends",hCF],["Cumpleaños",hBday]];
+  const segs=[["Listas y entradas",hListas],["Mesas VIP",hMesas],["Close Friends",hCF],["Cumpleaños",hBday],["Staff",hStaff]];
   const hRes=[["Evento",ev.name||""],["Fecha",ev.date||""],["Exportado",fechaHora(new Date().toISOString())],[],
     ["Segmento","Entradas","Ingresados","Pendientes","% ingreso"]];
   segs.forEach(([nom,rows])=>hRes.push([nom,sum(rows,3),0,sum(rows,3),0]));
   hRes.push(["TOTAL",hRes.slice(5).reduce((t,r)=>t+r[1],0),0,hRes.slice(5).reduce((t,r)=>t+r[1],0),0]);
-  // Fórmulas (fila 6..9 = segmentos, fila 10 = total; columnas D/E de cada hoja = Cantidad/Ingresa)
+  // Fórmulas (filas 6.. = segmentos, última = total; columnas D/E de cada hoja = Cantidad/Ingresa)
   const resFormulas={};
+  const rTot=6+segs.length, rUlt=rTot-1;
   segs.forEach(([nom,rows],i)=>{const r=6+i;const last=Math.max(2,rows.length);const sh=`'${nom}'`;
     resFormulas[`B${r}`]=`SUM(${sh}!D2:D${last})`;resFormulas[`C${r}`]=`SUM(${sh}!E2:E${last})`;resFormulas[`D${r}`]=`B${r}-C${r}`;resFormulas[`E${r}`]=`IF(B${r}=0,0,C${r}/B${r})`;});
-  ["B","C","D"].forEach(col=>resFormulas[`${col}10`]=`SUM(${col}6:${col}9)`);resFormulas["E10"]="IF(B10=0,0,C10/B10)";
+  ["B","C","D"].forEach(col=>resFormulas[`${col}${rTot}`]=`SUM(${col}6:${col}${rUlt})`);resFormulas[`E${rTot}`]=`IF(B${rTot}=0,0,C${rTot}/B${rTot})`;
 
   const wb=X.utils.book_new();
   const BORDE={top:{style:"thin",color:{rgb:"D9D9D9"}},bottom:{style:"thin",color:{rgb:"D9D9D9"}},left:{style:"thin",color:{rgb:"D9D9D9"}},right:{style:"thin",color:{rgb:"D9D9D9"}}};
@@ -2461,15 +2468,16 @@ async function exportarAcreditacionCompleta(){
   add("Mesas VIP",hMesas,[34,16,16,11,11,8,26]);
   add("Close Friends",hCF,[34,16,16,11,11]);
   add("Cumpleaños",hBday,[34,16,16,11,11,10,30],{yellowRows:filasCumple});
+  add("Staff",hStaff,[34,16,16,11,11,22]);
   const safe=(ev.name||"evento").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
   X.writeFile(wb,`acreditacion_${safe}_${ev.date||""}.xlsx`);
-  toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} entradas en 4 hojas`,"success");
+  toast(`✓ Acreditación exportada: ${hRes[hRes.length-1][1]} entradas en 5 hojas`,"success");
   try{await log("export_acreditacion","event",currentEvId,`Exportó acreditación completa (${hRes[hRes.length-1][1]} entradas)`);}catch(e){}
 }
 
 // Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
 function setAcrTab(tab){
-  const tabs={listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday"};
+  const tabs={listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday",staff:"acr-staff"};
   if(!tabs[tab])tab="listas";
   if(!$("acr-listas"))return;
   window._acrTabActual=tab;
@@ -2481,6 +2489,69 @@ function setAcrTab(tab){
   if(tab==="mesas")renderAcrMesas();
   if(tab==="cf")renderAcrCF();
   if(tab==="bday")renderAcrBday();
+  if(tab==="staff")renderAcrStaff();
+}
+
+// ── Acreditación: Staff (listas de tipo staff del evento) ──
+let _acrStaffQ="";
+function renderAcrStaff(q){
+  const el=$("acr-staff");if(!el)return;
+  if(q!==undefined)_acrStaffQ=q;
+  const ev=D.eventos.find(e=>e.id===currentEvId);
+  const listas=D.acc_lists.filter(l=>l.event_id===currentEvId&&l.type==="staff").sort((a,b)=>(a.name||"").localeCompare(b.name||"","es"));
+  const nq=acrNorm(_acrStaffQ||"");
+  let total=0,dentro=0,personas=0,personasDentro=0;
+  const bloques=listas.map(l=>{
+    const ents=D.acc_entries.filter(e=>e.event_id===currentEvId&&e.list_id===l.id).sort((a,b)=>(a.name||"").localeCompare(b.name||"","es"));
+    ents.forEach(e=>{const t=1+(e.companions||0),u=e.entradas_usadas||0;total+=t;dentro+=u;personas++;if(u>0)personasDentro++;});
+    const listaMatch=!nq||acrNorm(l.name).includes(nq);
+    const vis=listaMatch?ents:ents.filter(e=>acrNorm(e.name).includes(nq)||acrNorm(getRut(e)).includes(nq));
+    if(nq&&!listaMatch&&!vis.length)return "";
+    const filas=vis.map(e=>{
+      const puls=getPulsera(e,ev);const rut=getRut(e);
+      const t=1+(e.companions||0),u=e.entradas_usadas||0;
+      const estado=u===0?badge("No validado","gray"):u>=t?badge("✓ Validado "+fmtT(e.checked_in_at),"green"):badge(`Parcial ${u}/${t}`,"amber");
+      return `<tr style="background:${u>=t&&u>0?"#f0fdf4":"#fff"}">
+        <td><strong>${e.name}</strong><br><span style="font-size:11px;color:#0f766e;font-weight:600">🪪 ${l.name}</span>${e.notes?` <span style="font-size:11px;color:#aaa">· ${e.notes}</span>`:""}</td>
+        <td style="font-size:12px;color:#555">${rut||`<span style="color:#9a3412;font-weight:600">— falta</span> <button class="btn" style="padding:1px 6px;font-size:10px;margin-left:4px" onclick="openEditEntry('${e.id}','${l.id}')">✏️ Completar</button>`}</td>
+        <td style="font-size:12px;color:#0f766e;font-weight:600">Staff · ${l.name}</td>
+        <td>${puls?pulseraCellPorNombre(puls.nombre):pulseraCellPorNombre("")}</td>
+        <td style="font-weight:600;text-align:center">${t}${t>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${u} usadas</div>`:""}</td>
+        <td>${estado}${e.fuera_horario?` <span style="font-size:10px;color:#92400E;background:#fef3c7;padding:2px 6px;border-radius:6px;font-weight:600">⏰ fuera de horario</span>`:""}</td>
+        <td style="text-align:right"><div style="display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+          ${u<t?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Ingresar</button>`:""}
+          ${u>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')">🔓 Anular</button>`:""}
+          <button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${l.id}')" title="Editar">✏️</button>
+        </div></td>
+      </tr>`;}).join("");
+    const lDentro=ents.filter(e=>(e.entradas_usadas||0)>0).length;
+    return `<div class="card" style="margin-bottom:12px;border-left:4px solid #0f766e;padding:0;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 16px;background:#f0fdfa;border-bottom:1px solid #ccfbf1">
+        <div style="font-size:13px"><strong>🪪 ${l.name}</strong> <span style="color:#888">· ${ents.length} persona${ents.length===1?"":"s"}</span></div>
+        <div style="font-size:12px;color:#166534"><strong>${lDentro}/${ents.length}</strong> ingresaron</div>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${filas||`<tr><td colspan="7" style="text-align:center;color:#aaa;padding:12px">${nq?"Sin resultados en esta lista.":"Sin personas en esta lista."}</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+  }).join("");
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:14px;background:#f0fdfa;padding:12px 16px;border-left:4px solid #0f766e">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
+        <span>🪪 <strong>${listas.length}</strong> lista${listas.length===1?"":"s"} de staff</span>
+        <span><strong>${personas}</strong> personas · <strong>${total}</strong> entradas</span>
+        <span style="color:#166534"><strong>${personasDentro}/${personas}</strong> ingresaron</span>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="display:flex;gap:10px">
+        <input class="form-input" id="acr-staff-q" placeholder="🔍 Buscar staff por nombre, RUT o lista..." style="flex:1;font-size:15px;padding:11px" value="${(_acrStaffQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrStaff(this.value)">
+        <button class="btn" onclick="openAgregarALista()">+ A lista</button>
+      </div>
+    </div>
+    ${bloques||`<div class="card" style="color:#999;text-align:center;padding:30px">${listas.length?"Sin resultados para la búsqueda.":"No hay listas de staff en este evento. Créalas en <strong>Listas → Staff</strong>."}</div>`}`;
+  const inp=$("acr-staff-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
 
 // Celda de pulsera a partir del nombre (usa el color configurado en el evento)
