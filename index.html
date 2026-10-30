@@ -8274,12 +8274,14 @@ function mostrarRegistroCF(eventoId){
     // Cargar evento y config antes de mostrar cualquier pantalla
     let ev, cfg;
     try{
-      const [evArr, cfCfgArr] = await Promise.all([
+      const [evArr, cfCfgArr, ordArr] = await Promise.all([
         sbGet("eventos",`id=eq.${eventoId}`),
-        sbGet("cf_config",`evento_id=eq.${eventoId}`)
+        sbGet("cf_config",`evento_id=eq.${eventoId}`),
+        sbGet("cf_ordenes",`evento_id=eq.${eventoId}&estado=in.(pendiente,pagado,conciliado)&select=cantidad`)
       ]);
       ev = evArr[0]; cfg = cfCfgArr[0];
-    }catch(e){ ev=null; cfg=null; }
+      window._cfCuposUsados=(ordArr||[]).reduce((t,o)=>t+(o.cantidad||0),0);
+    }catch(e){ ev=null; cfg=null; window._cfCuposUsados=0; }
 
     const nombreProd = cfg?.nombre_productora || (ev?.productora_id ? "" : "THE PROJECT");
     // Si hay productora, buscar su nombre
@@ -8318,6 +8320,17 @@ function mostrarRegistroCF(eventoId){
       }
       if(cfg.cierre_venta && new Date()>new Date(cfg.cierre_venta)){
         screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El período de registro ha finalizado.</p></div></div>`;
+        return;
+      }
+      const _agotado=(cfg.cupos_total||100)-(window._cfCuposUsados||0)<=0;
+      if(cfg.registro_cerrado || _agotado){
+        const wtsp=cfg.wtsp_cierre||"";const wtspLink=wtsp?`https://wa.me/${wtsp.replace(/\D/g,"")}`:"";
+        screen.innerHTML=`<div class="cf-box"><div class="cf-ok" style="text-align:center;padding:30px 20px">
+          <div style="font-size:48px;margin-bottom:12px">🔒</div>
+          <h2>${_agotado?"Se acabaron los cupos":"Inscripciones cerradas"}</h2>
+          <p style="color:#999;line-height:1.5">${_agotado?"Los cupos de Close Friends para este evento ya se agotaron.":"Ya no estamos recibiendo nuevas postulaciones para este evento."}</p>
+          ${wtspLink?`<a href="${wtspLink}" target="_blank" style="display:inline-block;margin-top:14px;background:#25D366;color:#fff;padding:12px 22px;border-radius:10px;font-weight:700;text-decoration:none">💬 Escribir por WhatsApp</a>`:""}
+        </div></div>`;
         return;
       }
       const evDate = ev.date ? new Date(ev.date.includes("T")?ev.date:ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
@@ -9258,6 +9271,18 @@ VIEWS.cfPostulantes = async()=>{
     return `<img src="https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&data=${encodeURIComponent(text)}&bgcolor=ffffff&color=000000&format=png" width="${size}" height="${size}" style="border-radius:8px;display:block" alt="QR" onerror="this.style.display='none'">`;
   };
 
+  window.cfToggleRegistro=async(evId,cerrar)=>{
+    if(cerrar&&!confirm("¿Cerrar las inscripciones de Close Friends para este evento?\n\nNadie más podrá postular desde el link. Las personas ya aprobadas podrán seguir comprando su entrada."))return;
+    const cfg=getCFConfig(evId);
+    try{
+      const ex=(D.cf_config||[]).find(c=>c.evento_id===evId);
+      if(ex){await sbPatch("cf_config",`evento_id=eq.${evId}`,{registro_cerrado:cerrar});ex.registro_cerrado=cerrar;}
+      else{const nuevo={...cfg,id:uid(),evento_id:evId,registro_cerrado:cerrar};await sbPost("cf_config",[nuevo]);(D.cf_config=D.cf_config||[]).push(nuevo);}
+      toast(cerrar?"🔒 Inscripciones cerradas":"🔓 Inscripciones abiertas","ok");
+      await log(cerrar?"cf_cerrar_registro":"cf_abrir_registro","event",evId,cerrar?"Cerró inscripciones Close Friends":"Abrió inscripciones Close Friends");
+      VIEWS.cfPostulantes();
+    }catch(e){toast("Error: "+e.message,"error");alert("No se pudo guardar.\n"+e.message+(/registro_cerrado/.test(e.message)?"\n\nFalta crear la columna registro_cerrado en cf_config (ver SQL).":""));}
+  };
   const renderLinkPanel=(evId)=>{
     const link=`${CF_APP_URL}?cf=${evId}`;
     const ev=evs.find(e=>e.id===evId);
@@ -9265,7 +9290,42 @@ VIEWS.cfPostulantes = async()=>{
     const nPend=posts.filter(p=>p.estado==="pendiente").length;
     const nApro=posts.filter(p=>p.estado==="aprobado").length;
     const nRech=posts.filter(p=>p.estado==="rechazado").length;
-    return `
+    const cfgEv=getCFConfig(evId);
+    const cuposTotal=cfgEv.cupos_total||100;
+    const ordsEv=(D.cf_ordenes||[]).filter(o=>o.evento_id===evId);
+    const cuposUsados=ordsEv.filter(o=>["pendiente","pagado","conciliado"].includes(o.estado)).reduce((t,o)=>t+(o.cantidad||0),0);
+    const cuposPagados=ordsEv.filter(o=>["pagado","conciliado"].includes(o.estado)).reduce((t,o)=>t+(o.cantidad||0),0);
+    const cuposReserv=cuposUsados-cuposPagados; // órdenes pendientes de pago
+    const cuposDisp=Math.max(0,cuposTotal-cuposUsados);
+    const aproSinOrden=posts.filter(p=>p.estado==="aprobado"&&!ordsEv.some(o=>o.postulante_id===p.id&&o.estado!=="vencido"&&o.estado!=="rechazado")).length;
+    const pct=Math.min(100,Math.round(cuposUsados/cuposTotal*100));
+    const cerrado=!!cfgEv.registro_cerrado;
+    const agotado=cuposDisp<=0;
+    const bloqueCupos=`
+    <div style="background:#fff;border-radius:16px;padding:18px 22px;margin-bottom:14px;border:1px solid ${agotado||cerrado?"#FCA5A5":"#e8e8e8"};display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+      <div style="flex:1;min-width:260px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:700">🎟 Cupos Close Friends</div>
+          <div style="font-size:13px"><strong style="font-size:20px;color:${agotado?"#991B1B":"#EC4899"}">${cuposUsados}</strong> <span style="color:#888">/ ${cuposTotal} usados</span></div>
+        </div>
+        <div style="height:10px;background:#f1f1f4;border-radius:6px;overflow:hidden;display:flex">
+          <div style="width:${Math.round(cuposPagados/cuposTotal*100)}%;background:#16a34a" title="Pagados"></div>
+          <div style="width:${Math.round(cuposReserv/cuposTotal*100)}%;background:#f59e0b" title="Reservados (pago pendiente)"></div>
+        </div>
+        <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:#555;margin-top:8px">
+          <span>🟢 <strong>${cuposPagados}</strong> pagados</span>
+          <span>🟠 <strong>${cuposReserv}</strong> reservados (pago pendiente)</span>
+          <span style="color:${agotado?"#991B1B":"#15803d"}">⚪ <strong>${cuposDisp}</strong> disponibles</span>
+          ${aproSinOrden?`<span style="color:#b45309">⚠ <strong>${aproSinOrden}</strong> aprobadas aún no compran</span>`:""}
+        </div>
+      </div>
+      <div style="text-align:right;min-width:200px">
+        <div style="font-size:11px;color:#888;margin-bottom:6px">${cerrado?"🔒 Inscripciones <strong style='color:#991B1B'>cerradas</strong>":agotado?"🔒 Cupos <strong style='color:#991B1B'>agotados</strong> (registro bloqueado)":"🟢 Inscripciones <strong style='color:#15803d'>abiertas</strong>"}</div>
+        <button class="btn" style="font-weight:700;${cerrado?"background:#dcfce7;color:#166534;border-color:#bbf7d0":"background:#FEE2E2;color:#991B1B;border-color:#FCA5A5"}" onclick="cfToggleRegistro('${evId}',${cerrado?"false":"true"})">${cerrado?"🔓 Abrir inscripciones":"🔒 Cerrar inscripciones"}</button>
+        <div style="font-size:11px;color:#aaa;margin-top:6px">Las ya aprobadas pueden seguir comprando.</div>
+      </div>
+    </div>`;
+    return bloqueCupos+`
     <!-- PANEL LINK DESTACADO -->
     <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px;padding:24px;margin-bottom:20px;color:#fff">
       <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start">
