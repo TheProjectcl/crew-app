@@ -883,17 +883,21 @@ const glMail={
   },
 
   // ── 5) Recordatorio últimas horas para pagar
-  recordatorio({nombre,evento,link,horasRestantes}){
-    const urgente=horasRestantes<=3;
+  recordatorio({nombre,evento,link,horasRestantes,cierreTxt,sinOrden}){
+    const urgente=(horasRestantes<=3)||!!cierreTxt;
     const color=urgente?"#DC2626":"#D97706";
-    const badge=urgente?"🔥 ¡Últimos cupos!":"⚡ Asegura tu cupo ahora";
-    const msg=urgente
+    const badge=cierreTxt?"🔥 Cierre de venta":urgente?"🔥 ¡Últimos cupos!":"⚡ Asegura tu cupo ahora";
+    const accion=sinOrden?"compra tu entrada":"completa tu pago";
+    const msg=cierreTxt
+      ? `La venta Close Friends de <strong style="color:#0B0B0C">${glEsc(evento)}</strong> se cierra <strong style="color:#DC2626">${glEsc(cierreTxt)}</strong>. ${sinOrden?"Tu postulación está aprobada pero aún no compras tu entrada":"Tu cupo está reservado pero aún no está pagado"} — ${accion} antes del cierre o tu cupo será liberado para otra persona.`
+      : urgente
       ? `Tu cupo en <strong style="color:#0B0B0C">${glEsc(evento)}</strong> está a punto de liberarse para otra persona. Solo tienes <strong>${horasRestantes} hora${horasRestantes===1?"":"s"}</strong> — completa tu pago ahora o perdemos tu lugar.`
       : `Quedan los <strong>últimos cupos</strong> para <strong style="color:#0B0B0C">${glEsc(evento)}</strong>. Completa tu pago para asegurarlo — recuerda que si no lo haces, tu cupo será liberado para otra persona.`;
+    const cierreBox=cierreTxt?`<p style="margin:14px 0 0;font-size:14px;color:#991B1B;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:12px 14px;line-height:1.5;text-align:center"><strong>⏰ Cierre: ${glEsc(cierreTxt)}</strong><br>Después de esa hora no se podrán comprar entradas Close Friends.</p>`:"";
     return glMail.shell(color,
       glMail.row(glMail.badge(badge,"warn"),"36px 48px 0")+
-      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#9203;`)+glMail.p(msg),"20px 48px 0")+
-      glMail.row(glMail.button(link,"COMPLETAR MI PAGO")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
+      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#9203;`)+glMail.p(msg)+cierreBox,"20px 48px 0")+
+      glMail.row(glMail.button(link,sinOrden?"COMPRAR MI ENTRADA":"COMPLETAR MI PAGO")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"28px 48px 0")+
       glMail.row(glMail.fallback(link),"28px 48px 40px"));
   }
 };
@@ -9758,7 +9762,7 @@ VIEWS.cfPlanilla = async()=>{
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input class="form-input cf-buscar" placeholder="Buscar..." style="width:180px;font-size:12px" autocomplete="off">
           <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">Exportar CSV</button>
-          <button class="btn" style="font-size:12px;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio()">⏰ Recordatorio pagos</button>
+          <button class="btn" style="font-size:12px;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio()">⏰ Aviso de cierre / recordatorio pagos</button>
         </div>
       </div>
       <div id="cf-tabla-planilla" style="overflow-x:auto">${renderTablaPlanilla(ord0,pos0,"")}</div>
@@ -9796,71 +9800,91 @@ VIEWS.cfPlanilla = async()=>{
   };
 
   window.cfReenviarRecordatorio=()=>{
-    const _ords=window._cfOrdenes||[];
-    const pendientes=_ords.filter(o=>o.estado==="pendiente");
-    if(!pendientes.length){toast("No hay pagos pendientes","warn");return;}
-    const ev=D.eventos?.find(e=>e.id===pendientes[0]?.evento_id);
-    const evNom=ev?.name||"el evento";
-
-    // Construir filas del modal
-    const _posts=window._cfPosts||[];
-    const filas=pendientes.map(ord=>{
-      const post=_posts.find(p=>p.id===ord.postulante_id);
-      if(!post)return "";
-      let horasRestantes=6;
-      if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
-      const venceLabel=ord.vence_at?`vence en ${horasRestantes}h`:"sin vencimiento";
-      return `<label style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;cursor:pointer;border:1px solid var(--line);margin-bottom:6px;background:var(--surface)">
-        <input type="checkbox" class="rcrd-chk" value="${ord.id}" data-post="${post.id}" checked style="width:16px;height:16px;cursor:pointer;accent-color:#534AB7">
-        <div style="flex:1;min-width:0">
-          <div style="font-size:13px;font-weight:600">${post.nombre} ${post.apellido||""}</div>
-          <div style="font-size:11px;color:var(--ink-4)">${post.email} · ${venceLabel}</div>
-        </div>
-        <span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;white-space:nowrap">⏰ Pendiente</span>
-      </label>`;
-    }).join("");
-
-    window._cfRcrdEvNom=evNom;
-    openModal("⏰ Recordatorio de pago",`
-      <div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between">
-        <div style="font-size:13px;color:var(--ink-3)">${pendientes.length} persona${pendientes.length===1?"":"s"} sin pagar · <strong>${evNom}</strong></div>
-        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)">
-          <input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todos
-        </label>
+    const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
+    const ahora=new Date();
+    // Grupo 1: con orden pendiente de pago. Grupo 2: aprobadas que nunca iniciaron la compra.
+    const pendientes=_ords.filter(o=>o.estado==="pendiente").map(ord=>({ord,post:_posts.find(p=>p.id===ord.postulante_id)})).filter(x=>x.post?.email);
+    const idsConOrden=new Set(_ords.filter(o=>!["vencido","rechazado"].includes(o.estado)).map(o=>o.postulante_id));
+    const sinOrden=_posts.filter(p=>p.estado==="aprobado"&&p.email&&!idsConOrden.has(p.id)).map(post=>({ord:null,post}));
+    const todos=[...pendientes,...sinOrden];
+    if(!todos.length){toast("No hay personas aprobadas sin pagar","warn");return;}
+    const evId=(pendientes[0]||sinOrden[0]).post.evento_id;
+    const ev=D.eventos?.find(e=>e.id===evId); const evNom=ev?.name||"el evento";
+    const cfg=getCFConfig(evId);
+    // Cierre sugerido: el configurado en Config CF, o hoy a las 12:00
+    const hoy=new Date();const def=cfg.cierre_venta?cfg.cierre_venta.slice(0,16):`${hoy.getFullYear()}-${String(hoy.getMonth()+1).padStart(2,"0")}-${String(hoy.getDate()).padStart(2,"0")}T12:00`;
+    const fila=({ord,post})=>{
+      let venceLabel="";
+      if(ord){if(ord.vence_at){const h=Math.max(1,Math.round((new Date(ord.vence_at)-ahora)/36e5));venceLabel=`orden ${ord.codigo||""} · vence en ${h}h`;}else venceLabel=`orden ${ord.codigo||""}`;}
+      return `<label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--line);margin-bottom:6px;background:var(--surface)">
+        <input type="checkbox" class="rcrd-chk" value="${ord?ord.id:""}" data-post="${post.id}" data-sinorden="${ord?"0":"1"}" checked style="width:16px;height:16px;cursor:pointer;accent-color:#534AB7">
+        <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${post.nombre} ${post.apellido||""}</div><div style="font-size:11px;color:var(--ink-4)">${post.email}${venceLabel?" · "+venceLabel:""}</div></div>
+        ${ord?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;white-space:nowrap">⏰ Pago pendiente</span>`:`<span style="font-size:11px;background:#FCE7F3;color:#9D174D;padding:2px 8px;border-radius:5px;white-space:nowrap">🌸 Aprobada sin comprar</span>`}
+      </label>`;};
+    window._cfRcrdEvNom=evNom;window._cfRcrdEvId=evId;
+    openModal("⏰ Aviso de cierre de venta — Close Friends",`
+      <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:10px 12px">
+        <div style="flex:1;min-width:200px"><label class="form-label" style="margin-top:0">La venta se cierra el</label><input class="form-input" id="rcrd-cierre" type="datetime-local" value="${def}" style="margin:0"></div>
+        <div style="font-size:12px;color:#991B1B;max-width:260px">Este dato va en el correo: <em>"La venta se cierra <strong id="rcrd-cierre-txt"></strong>"</em></div>
       </div>
-      <div style="max-height:340px;overflow-y:auto;padding-right:4px">${filas}</div>
+      <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div style="font-size:13px;color:var(--ink-3)"><strong>${pendientes.length}</strong> con pago pendiente · <strong>${sinOrden.length}</strong> aprobadas sin comprar · <strong>${evNom}</strong></div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todos</label>
+      </div>
+      <div style="max-height:220px;overflow-y:auto;padding-right:4px">${todos.map(fila).join("")}</div>
+      <details style="margin-top:10px"><summary style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600">👁 Ver vista previa del correo</summary>
+        <iframe id="rcrd-prev" style="width:100%;height:380px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6;margin-top:8px"></iframe></details>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar recordatorio</button>
+        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar aviso a <span id="rcrd-count">${todos.length}</span></button>
       </div>`);
+    const muestra=todos[0];
+    const actualizar=()=>{
+      const v=$("rcrd-cierre")?.value||"";const txt=cfFmtCierre(v);
+      const t=$("rcrd-cierre-txt");if(t)t.textContent=txt||"(sin fecha)";
+      const f=$("rcrd-prev");if(f)f.srcdoc=glMail.recordatorio({nombre:muestra.post.nombre,evento:evNom,link:`${CF_APP_URL}?cf_buy=${muestra.post.buy_token||muestra.post.token||""}`,horasRestantes:6,cierreTxt:txt,sinOrden:!muestra.ord});
+      const c=$("rcrd-count");if(c)c.textContent=document.querySelectorAll(".rcrd-chk:checked").length;
+    };
+    setTimeout(()=>{actualizar();$("rcrd-cierre")?.addEventListener("input",actualizar);document.querySelectorAll(".rcrd-chk,#rcrd-todos").forEach(c=>c.addEventListener("change",()=>setTimeout(actualizar,0)));},40);
   };
-
 };
 
 // Global permanente — fuera del closure de VIEWS.cfPlanilla para que siempre exista
+// "viernes 30 de octubre a las 12:00 hrs" a partir de un datetime-local
+function cfFmtCierre(v){
+  if(!v)return "";const d=new Date(v);if(isNaN(d))return "";
+  const f=d.toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"});
+  const h=d.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false});
+  const hoy=new Date();const esHoy=d.toDateString()===hoy.toDateString();
+  return `${esHoy?"hoy ":"el "}${esHoy?"":f+" "}a las ${h} hrs`.replace(/\s+/g," ");
+}
 window.cfEnviarRecordatorioSeleccion=async(evNom)=>{
   const checks=[...document.querySelectorAll(".rcrd-chk:checked")];
   if(!checks.length){toast("Selecciona al menos una persona","warn");return;}
+  const cierreTxt=cfFmtCierre($("rcrd-cierre")?.value||"");
+  if(!cierreTxt&&!confirm("No pusiste fecha/hora de cierre. ¿Enviar igual el recordatorio genérico?"))return;
   const btn=document.getElementById("rcrd-send-btn");
   if(btn){btn.disabled=true;btn.textContent="Enviando...";}
   const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
-  let ok=0,err=0;
+  let ok=0,err=0,i=0;
   for(const chk of checks){
-    const ord=_ords.find(o=>o.id===chk.value);
+    i++;if(btn)btn.textContent=`Enviando ${i}/${checks.length}...`;
+    const ord=chk.value?_ords.find(o=>o.id===chk.value):null;
     const post=_posts.find(p=>p.id===chk.dataset.post);
-    if(!ord||!post?.email)continue;
+    if(!post?.email)continue;
     const link=`${CF_APP_URL}?cf_buy=${post.buy_token||post.token}`;
     let horasRestantes=6;
-    if(ord.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
+    if(ord?.vence_at){const diff=(new Date(ord.vence_at)-new Date())/3600000;horasRestantes=Math.max(1,Math.round(diff));}
     try{
-      await sendEmail(post.email,`⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
-        glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes}));
-      ok++;
+      const r=await sendEmail(post.email,cierreTxt?`🔥 La venta Close Friends se cierra ${cierreTxt} — ${evNom}`:`⏰ Últimas horas para confirmar tu lugar — ${evNom}`,
+        glMail.recordatorio({nombre:post.nombre,evento:evNom,link,horasRestantes,cierreTxt,sinOrden:!ord}));
+      if(r)ok++;else err++;
     }catch(e){err++;console.error("Recordatorio error",post.email,e);}
     await new Promise(r=>setTimeout(r,300));
   }
   closeModal();
-  toast(`✅ Recordatorio enviado a ${ok} persona${ok===1?"":"s"}${err?` · ${err} fallaron`:""}`,ok>0?"ok":"error");
+  toast(`✅ Aviso enviado a ${ok} persona${ok===1?"":"s"}${err?` · ${err} fallaron`:""}`,ok>0?"ok":"error");
+  try{await log("cf_recordatorio","event",window._cfRcrdEvId||"",`Aviso de cierre CF a ${ok} personas${cierreTxt?" ("+cierreTxt+")":""}`);}catch(e){}
 };
 
 function renderTablaPlanilla(ordenes,posts,q,filtroEstado="todos"){
