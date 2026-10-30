@@ -9325,7 +9325,10 @@ VIEWS.cfPostulantes = async()=>{
       </div>
       <div style="text-align:right;min-width:200px">
         <div style="font-size:11px;color:#888;margin-bottom:6px">${cerrado?"🔒 Inscripciones <strong style='color:#991B1B'>cerradas</strong>":agotado?"🔒 Cupos <strong style='color:#991B1B'>agotados</strong> (registro bloqueado)":"🟢 Inscripciones <strong style='color:#15803d'>abiertas</strong>"}</div>
-        <button class="btn" style="font-weight:700;${cerrado?"background:#dcfce7;color:#166534;border-color:#bbf7d0":"background:#FEE2E2;color:#991B1B;border-color:#FCA5A5"}" onclick="cfToggleRegistro('${evId}',${cerrado?"false":"true"})">${cerrado?"🔓 Abrir inscripciones":"🔒 Cerrar inscripciones"}</button>
+        <div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          <button class="btn" style="font-weight:600;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio('${evId}')" title="Correo a quienes tienen pago pendiente">⏰ Aviso de cierre (${cuposReserv} sin pagar)</button>
+          <button class="btn" style="font-weight:700;${cerrado?"background:#dcfce7;color:#166534;border-color:#bbf7d0":"background:#FEE2E2;color:#991B1B;border-color:#FCA5A5"}" onclick="cfToggleRegistro('${evId}',${cerrado?"false":"true"})">${cerrado?"🔓 Abrir inscripciones":"🔒 Cerrar inscripciones"}</button>
+        </div>
         <div style="font-size:11px;color:#aaa;margin-top:6px">Las ya aprobadas pueden seguir comprando.</div>
       </div>
     </div>`;
@@ -9799,15 +9802,21 @@ VIEWS.cfPlanilla = async()=>{
     const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="close_friends.csv";a.click();
   };
 
-  window.cfReenviarRecordatorio=()=>{
-    const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
+};
+
+// Global permanente — fuera del closure de VIEWS.cfPlanilla para que siempre exista
+// Aviso de cierre / recordatorio de pago CF. Se puede abrir desde Planilla (usa la selección actual) o desde Postulantes (evId)
+window.cfReenviarRecordatorio=(evIdArg)=>{
+    const prodIdR=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+    const _ords=evIdArg?(D.cf_ordenes||[]).filter(o=>o.evento_id===evIdArg&&(prodIdR===null||o.productora_id===prodIdR)):(window._cfOrdenes||[]);
+    const _posts=evIdArg?(D.cf_postulantes||[]).filter(p=>p.evento_id===evIdArg&&(prodIdR===null||p.productora_id===prodIdR)):(window._cfPosts||[]);
     const ahora=new Date();
     // Grupo 1: con orden pendiente de pago. Grupo 2: aprobadas que nunca iniciaron la compra.
     const pendientes=_ords.filter(o=>o.estado==="pendiente").map(ord=>({ord,post:_posts.find(p=>p.id===ord.postulante_id)})).filter(x=>x.post?.email);
     const idsConOrden=new Set(_ords.filter(o=>!["vencido","rechazado"].includes(o.estado)).map(o=>o.postulante_id));
     const sinOrden=_posts.filter(p=>p.estado==="aprobado"&&p.email&&!idsConOrden.has(p.id)).map(post=>({ord:null,post}));
     const todos=[...pendientes,...sinOrden];
-    if(!todos.length){toast("No hay personas aprobadas sin pagar","warn");return;}
+    if(!pendientes.length&&!sinOrden.length){toast("No hay personas con pago pendiente","warn");return;}
     const evId=(pendientes[0]||sinOrden[0]).post.evento_id;
     const ev=D.eventos?.find(e=>e.id===evId); const evNom=ev?.name||"el evento";
     const cfg=getCFConfig(evId);
@@ -9816,40 +9825,39 @@ VIEWS.cfPlanilla = async()=>{
     const fila=({ord,post})=>{
       let venceLabel="";
       if(ord){if(ord.vence_at){const h=Math.max(1,Math.round((new Date(ord.vence_at)-ahora)/36e5));venceLabel=`orden ${ord.codigo||""} · vence en ${h}h`;}else venceLabel=`orden ${ord.codigo||""}`;}
-      return `<label style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--line);margin-bottom:6px;background:var(--surface)">
-        <input type="checkbox" class="rcrd-chk" value="${ord?ord.id:""}" data-post="${post.id}" data-sinorden="${ord?"0":"1"}" checked style="width:16px;height:16px;cursor:pointer;accent-color:#534AB7">
+      return `<label class="${ord?"rcrd-row-pend":"rcrd-row-sin"}" style="display:${ord?"flex":"none"};align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;border:1px solid var(--line);margin-bottom:6px;background:var(--surface)">
+        <input type="checkbox" class="rcrd-chk" value="${ord?ord.id:""}" data-post="${post.id}" data-sinorden="${ord?"0":"1"}" ${ord?"checked":""} style="width:16px;height:16px;cursor:pointer;accent-color:#534AB7">
         <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">${post.nombre} ${post.apellido||""}</div><div style="font-size:11px;color:var(--ink-4)">${post.email}${venceLabel?" · "+venceLabel:""}</div></div>
         ${ord?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;white-space:nowrap">⏰ Pago pendiente</span>`:`<span style="font-size:11px;background:#FCE7F3;color:#9D174D;padding:2px 8px;border-radius:5px;white-space:nowrap">🌸 Aprobada sin comprar</span>`}
       </label>`;};
-    window._cfRcrdEvNom=evNom;window._cfRcrdEvId=evId;
+    window._cfRcrdEvNom=evNom;window._cfRcrdEvId=evId;window._cfRcrdOrds=_ords;window._cfRcrdPosts=_posts;
     openModal("⏰ Aviso de cierre de venta — Close Friends",`
       <div style="display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:10px 12px">
         <div style="flex:1;min-width:200px"><label class="form-label" style="margin-top:0">La venta se cierra el</label><input class="form-input" id="rcrd-cierre" type="datetime-local" value="${def}" style="margin:0"></div>
         <div style="font-size:12px;color:#991B1B;max-width:260px">Este dato va en el correo: <em>"La venta se cierra <strong id="rcrd-cierre-txt"></strong>"</em></div>
       </div>
       <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-        <div style="font-size:13px;color:var(--ink-3)"><strong>${pendientes.length}</strong> con pago pendiente · <strong>${sinOrden.length}</strong> aprobadas sin comprar · <strong>${evNom}</strong></div>
-        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todos</label>
+        <div style="font-size:13px;color:var(--ink-3)"><strong>${pendientes.length}</strong> con pago pendiente · <strong>${evNom}</strong></div>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-row-pend .rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todas las pendientes</label>
       </div>
+      ${sinOrden.length?`<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:#9D174D;background:#FCE7F3;border-radius:8px;padding:8px 10px;margin-bottom:8px"><input type="checkbox" id="rcrd-incluir-sin" onchange="document.querySelectorAll('.rcrd-row-sin').forEach(r=>{r.style.display=this.checked?'flex':'none';r.querySelector('.rcrd-chk').checked=this.checked;})"> Incluir también a las <strong>${sinOrden.length}</strong> aprobadas que nunca entraron a comprar (opcional)</label>`:""}
       <div style="max-height:220px;overflow-y:auto;padding-right:4px">${todos.map(fila).join("")}</div>
       <details style="margin-top:10px"><summary style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600">👁 Ver vista previa del correo</summary>
         <iframe id="rcrd-prev" style="width:100%;height:380px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6;margin-top:8px"></iframe></details>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn" onclick="closeModal()">Cancelar</button>
-        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar aviso a <span id="rcrd-count">${todos.length}</span></button>
+        <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar aviso a <span id="rcrd-count">${pendientes.length}</span></button>
       </div>`);
-    const muestra=todos[0];
+    const muestra=pendientes[0]||sinOrden[0];
     const actualizar=()=>{
       const v=$("rcrd-cierre")?.value||"";const txt=cfFmtCierre(v);
       const t=$("rcrd-cierre-txt");if(t)t.textContent=txt||"(sin fecha)";
       const f=$("rcrd-prev");if(f)f.srcdoc=glMail.recordatorio({nombre:muestra.post.nombre,evento:evNom,link:`${CF_APP_URL}?cf_buy=${muestra.post.buy_token||muestra.post.token||""}`,horasRestantes:6,cierreTxt:txt,sinOrden:!muestra.ord});
       const c=$("rcrd-count");if(c)c.textContent=document.querySelectorAll(".rcrd-chk:checked").length;
     };
-    setTimeout(()=>{actualizar();$("rcrd-cierre")?.addEventListener("input",actualizar);document.querySelectorAll(".rcrd-chk,#rcrd-todos").forEach(c=>c.addEventListener("change",()=>setTimeout(actualizar,0)));},40);
-  };
+    setTimeout(()=>{actualizar();$("rcrd-cierre")?.addEventListener("input",actualizar);document.querySelectorAll(".rcrd-chk,#rcrd-todos,#rcrd-incluir-sin").forEach(c=>c.addEventListener("change",()=>setTimeout(actualizar,0)));},40);
 };
 
-// Global permanente — fuera del closure de VIEWS.cfPlanilla para que siempre exista
 // "viernes 30 de octubre a las 12:00 hrs" a partir de un datetime-local
 function cfFmtCierre(v){
   if(!v)return "";const d=new Date(v);if(isNaN(d))return "";
@@ -9865,7 +9873,7 @@ window.cfEnviarRecordatorioSeleccion=async(evNom)=>{
   if(!cierreTxt&&!confirm("No pusiste fecha/hora de cierre. ¿Enviar igual el recordatorio genérico?"))return;
   const btn=document.getElementById("rcrd-send-btn");
   if(btn){btn.disabled=true;btn.textContent="Enviando...";}
-  const _ords=window._cfOrdenes||[]; const _posts=window._cfPosts||[];
+  const _ords=window._cfRcrdOrds||window._cfOrdenes||[]; const _posts=window._cfRcrdPosts||window._cfPosts||[];
   let ok=0,err=0,i=0;
   for(const chk of checks){
     i++;if(btn)btn.textContent=`Enviando ${i}/${checks.length}...`;
