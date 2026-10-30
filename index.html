@@ -10335,6 +10335,69 @@ function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, produc
   </div>`;
 }
 
+// Datos de estado de la lista de un cumpleañero (para correos y vistas previas)
+function bdayEstadoLista(c){
+  const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+  const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
+  const invs=(D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id);
+  const ap=invs.filter(i=>i.estado==="aprobado").length, pend=invs.filter(i=>i.estado==="pendiente").length;
+  const maxInv=ben?.max_invitados||20, cupos=Math.max(0,maxInv-ap);
+  const cierreTxt=bdayFmtFechaHora(ben?.fecha_cierre||ev?.date||"",ben?.hora_cierre||"16:00","");
+  const prod=(D.productoras||[]).find(p=>p.id===(c.productora_id||ev?.productora_id));
+  return {ev,ben,prod,ap,pend,maxInv,cupos,cierreTxt,linkPanel:`${APP_URL}?bday_panel=${c.token_invitacion}`,linkInv:bdayTokenLink(c.token_invitacion)};
+}
+const _bdayStatBox=(ap,pend,cupos)=>`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0"><tr>
+  <td width="33%" style="text-align:center;background:#f0edff;border-radius:10px;padding:12px 6px"><div style="font-size:26px;font-weight:800;color:#534AB7">${ap}</div><div style="font-size:11px;color:#666">aprobados</div></td>
+  <td width="4"></td>
+  <td width="33%" style="text-align:center;background:${pend?"#fef3c7":"#f4f4f6"};border-radius:10px;padding:12px 6px"><div style="font-size:26px;font-weight:800;color:${pend?"#b45309":"#888"}">${pend}</div><div style="font-size:11px;color:#666">por aprobar</div></td>
+  <td width="4"></td>
+  <td width="33%" style="text-align:center;background:${cupos?"#dcfce7":"#f4f4f6"};border-radius:10px;padding:12px 6px"><div style="font-size:26px;font-weight:800;color:${cupos?"#15803d":"#888"}">${cupos}</div><div style="font-size:11px;color:#666">cupos libres</div></td>
+</tr></table>`;
+// Correo 1: link al panel + estado actual
+function emailBdayLinkPanel(c){
+  const st=bdayEstadoLista(c);
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+    <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+      <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
+      <div style="text-align:center;font-size:44px;margin-bottom:8px">🎂</div>
+      <h2 style="font-size:20px;font-weight:700;text-align:center;color:#1a1a1a;margin-bottom:4px">Hola ${c.nombre}, así va tu lista</h2>
+      <p style="text-align:center;color:#666;font-size:14px;margin-bottom:8px"><strong>${st.ev?.name||""}</strong> · ${st.prod?.nombre||""}</p>
+      ${_bdayStatBox(st.ap,st.pend,st.cupos)}
+      <p style="color:#555;font-size:14px;line-height:1.6">${st.pend?`Tienes <strong>${st.pend} invitado${st.pend>1?"s":""} esperando tu aprobación</strong>. `:""}${st.cupos?`Aún te quedan <strong>${st.cupos} cupo${st.cupos>1?"s":""}</strong>: comparte tu link con tus amigos para que se inscriban.`:"¡Tu lista está completa! 🎉"}</p>
+      ${st.cierreTxt?`<p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:13px">⏰ Tu lista se cierra <strong>${st.cierreTxt}</strong>.</p>`:""}
+      <div style="text-align:center;margin-top:20px">
+        <a href="${st.linkPanel}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;display:inline-block">Entrar a mi panel 🎂</a>
+      </div>
+      <p style="font-size:12px;color:#888;text-align:center;margin-top:16px">Link para tus amigos:<br><a href="${st.linkInv}" style="color:#534AB7;word-break:break-all">${st.linkInv}</a></p>
+      ${GL_POWERED}
+    </div>
+  </div>`;
+}
+// Correo 2: aviso de cierre (últimas horas)
+function emailBdayCierre(c){
+  const st=bdayEstadoLista(c);
+  const faltan=[];
+  if(st.pend)faltan.push(`aprueba a tus <strong>${st.pend} invitado${st.pend>1?"s":""} pendiente${st.pend>1?"s":""}</strong> — si no lo haces, se quedan afuera`);
+  if(st.cupos)faltan.push(`te quedan <strong>${st.cupos} cupo${st.cupos>1?"s":""} libre${st.cupos>1?"s":""}</strong> — mándale el link a tus amigos antes del cierre`);
+  return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
+    <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
+      <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
+      <div style="background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;border-radius:12px;padding:18px 20px;text-align:center">
+        <div style="font-size:30px">⏰</div>
+        <div style="font-size:19px;font-weight:800;margin-top:4px">¡Quedan las últimas horas, ${c.nombre}!</div>
+        <div style="font-size:14px;margin-top:6px;opacity:.95">Tu lista para <strong>${st.ev?.name||""}</strong> se cierra<br><span style="font-size:16px;font-weight:700">${st.cierreTxt}</span></div>
+      </div>
+      ${_bdayStatBox(st.ap,st.pend,st.cupos)}
+      ${faltan.length?`<p style="color:#555;font-size:14px;line-height:1.7;margin:0 0 6px"><strong>Apúrate:</strong></p><ul style="color:#555;font-size:14px;line-height:1.7;margin:0 0 12px;padding-left:20px">${faltan.map(f=>`<li>${f}</li>`).join("")}</ul>`:`<p style="color:#555;font-size:14px;line-height:1.6">Tu lista ya está completa y aprobada. ¡Nos vemos en la fiesta! 🎉</p>`}
+      <p style="color:#991b1b;font-size:13px;font-weight:600">Después del cierre nadie más podrá inscribirse ni ser aprobado.</p>
+      <div style="text-align:center;margin-top:20px">
+        <a href="${st.linkPanel}" style="background:#b91c1c;color:#fff;padding:13px 30px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;display:inline-block">Revisar mi lista ahora →</a>
+      </div>
+      <p style="font-size:12px;color:#888;text-align:center;margin-top:16px">Link para tus amigos:<br><a href="${st.linkInv}" style="color:#534AB7;word-break:break-all">${st.linkInv}</a></p>
+      ${GL_POWERED}
+    </div>
+  </div>`;
+}
 function emailBdayInvitacion(nombreCumple, eventoNombre, productoraNombre, linkInscripcion, horaCierre){
   return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
     <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
@@ -10583,6 +10646,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
               <div style="font-size:15px;font-weight:700">🎂 ${c.nombre} ${c.apellido}</div>
               <div style="font-size:12px;color:var(--ink-3);margin-top:4px">${c.email} · ${ev?.name||"—"}</div>
               <div style="font-size:12px;color:var(--ink-3);margin-top:2px">Beneficio: ${ben?.nombre||"—"} · Aprobados: ${aprobados}/${maxInv}${pendientes?` (${pendientes} pendientes)`:""}</div>
+              ${c.recordatorio_cierre_at?`<div style="font-size:11px;color:#b45309;margin-top:4px">⏰ Aviso de cierre enviado ${fmtDT(c.recordatorio_cierre_at)}</div>`:""}
               <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                 ${c.instagram?`<a href="https://instagram.com/${c.instagram.replace('@','')}" target="_blank" style="font-size:12px;color:#E1306C;font-weight:600;text-decoration:none">📸 ${c.instagram}</a>`:""}
                 ${c.whatsapp?`<a href="https://wa.me/${c.whatsapp.replace('+','')}" target="_blank" style="font-size:12px;color:#25D366;font-weight:600;text-decoration:none">💬 ${c.whatsapp}</a>`:""}
@@ -10612,7 +10676,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
             <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;align-items:flex-start">
               ${ganoPremio&&!botellaEntregada?`<button class="btn btn-success" style="font-size:12px;padding:5px 12px;font-weight:700" onclick="bdayEntregarBotella('${c.id}')">🍾 Canjear botella</button>`:""}
               <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayVerInvitados('${c.id}')">👥 Invitados (${invs.length})</button>
-              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayCopiarLink('${c.token_invitacion}',this)">🔗 Link</button>
+              <button class="btn" style="font-size:12px;padding:5px 10px" onclick="bdayMenuLink('${c.id}')">🔗 Link</button>
               <button class="btn" style="font-size:12px;padding:5px 10px" title="Reenviar correo de bienvenida" onclick="bdayReenviarBienvenida('${c.id}')">📧 Reenviar</button>
               <button class="btn btn-danger" style="font-size:12px;padding:5px 10px" onclick="bdayEliminarCumple('${c.id}')">✕</button>
             </div>
@@ -10625,7 +10689,10 @@ VIEWS["bday-cumpleaneros"] = async()=>{
     mc.innerHTML=`
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
         <h1 style="font-size:22px;font-weight:700;margin:0">🎂 Cumpleañeros</h1>
-        <button class="btn btn-primary" onclick="bdayNuevoCumple()">+ Registrar cumpleañero</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" style="background:#FEF3C7;color:#92400E;border-color:#FDE68A;font-weight:600" onclick="bdayAvisoCierreMasivo()">⏰ Aviso de cierre a todos</button>
+          <button class="btn btn-primary" onclick="bdayNuevoCumple()">+ Registrar cumpleañero</button>
+        </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
         <select id="bday-ev-sel" class="form-input" style="max-width:260px;margin:0;font-size:13px;padding:6px 10px">
@@ -10648,6 +10715,79 @@ VIEWS["bday-cumpleaneros"] = async()=>{
   window._renderCumpleFull=renderCumple;
 
   window.bdayNuevoCumple=()=>bdayFormCumple(null,prodId,evs);
+  // Menú del botón Link: copiar / enviar link / enviar aviso de cierre (siempre con vista previa)
+  window.bdayMenuLink=(cid)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);if(!c)return;
+    const st=bdayEstadoLista(c);
+    openModal(`🔗 ${c.nombre} ${c.apellido}`,`
+      <div style="font-size:12px;color:#666;margin-bottom:12px">${st.ev?.name||""} · <strong>${st.ap}</strong> aprobados · <strong style="color:#b45309">${st.pend}</strong> por aprobar · <strong style="color:#15803d">${st.cupos}</strong> cupos libres${st.cierreTxt?` · cierra ${st.cierreTxt}`:""}</div>
+      <div style="display:grid;gap:8px">
+        <button class="btn" style="text-align:left;padding:12px 14px" onclick="bdayCopiarLink('${c.token_invitacion}',this)">🔗 <strong>Copiar link de invitación</strong><br><span style="font-size:11px;color:#888">Para que lo compartas tú con el cumpleañero o sus amigos</span></button>
+        <button class="btn" style="text-align:left;padding:12px 14px" onclick="bdayPreviewCorreo('${c.id}','link')">📧 <strong>Enviar link + estado de su lista</strong><br><span style="font-size:11px;color:#888">Correo con acceso a su panel y cuántos aprobados, pendientes y cupos tiene</span></button>
+        <button class="btn" style="text-align:left;padding:12px 14px;border-color:#FDE68A;background:#FFFBEB" onclick="bdayPreviewCorreo('${c.id}','cierre')">⏰ <strong>Enviar aviso de cierre (últimas horas)</strong><br><span style="font-size:11px;color:#888">Le recuerda fecha y hora de cierre y lo apura a aprobar e invitar${c.recordatorio_cierre_at?` · <span style="color:#b45309">ya se envió ${fmtDT(c.recordatorio_cierre_at)}</span>`:""}</span></button>
+      </div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+  };
+  // Vista previa del correo antes de enviar
+  window.bdayPreviewCorreo=(cid,tipo)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);if(!c)return;
+    const st=bdayEstadoLista(c);
+    const html=tipo==="cierre"?emailBdayCierre(c):emailBdayLinkPanel(c);
+    const asunto=tipo==="cierre"?`⏰ Últimas horas: tu lista para ${st.ev?.name||"el evento"} se cierra ${st.cierreTxt}`:`Tu lista para ${st.ev?.name||"el evento"} — accede a tu panel 🎂`;
+    openModal(`Vista previa — se enviará a ${c.email}`,`
+      <div style="font-size:12px;color:#555;margin-bottom:8px"><strong>Para:</strong> ${c.nombre} ${c.apellido} &lt;${c.email}&gt;<br><strong>Asunto:</strong> ${asunto}</div>
+      <iframe id="bday-prev-frame" style="width:100%;height:460px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6"></iframe>
+      <div class="modal-footer">
+        <button class="btn" onclick="bdayMenuLink('${c.id}')">← Volver</button>
+        <button class="btn btn-primary" id="bday-prev-send" onclick="bdayEnviarCorreo('${c.id}','${tipo}',this)">📨 Enviar este correo</button>
+      </div>`);
+    setTimeout(()=>{const f=$("bday-prev-frame");if(f)f.srcdoc=html;},30);
+    window._bdayPrevAsunto=asunto;
+  };
+  window.bdayEnviarCorreo=async(cid,tipo,btn)=>{
+    const c=(D.bday_cumpleaneros||[]).find(x=>x.id===cid);if(!c)return;
+    if(btn){btn.disabled=true;btn.textContent="Enviando...";}
+    const html=tipo==="cierre"?emailBdayCierre(c):emailBdayLinkPanel(c);
+    const ok=await sendEmail(c.email,window._bdayPrevAsunto||"Tu lista 🎂",html);
+    if(ok){
+      if(tipo==="cierre"){const at=now();c.recordatorio_cierre_at=at;try{await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{recordatorio_cierre_at:at});}catch(e){console.warn("recordatorio_cierre_at:",e.message);}}
+      closeModal();toast(`✅ Correo enviado a ${c.email}`,"ok");renderCumple();
+    }else if(btn){btn.disabled=false;btn.textContent="📨 Enviar este correo";}
+  };
+  // Aviso de cierre masivo: solo activos con pendientes o cupos libres, con vista previa de destinatarios
+  window.bdayAvisoCierreMasivo=()=>{
+    const fv=window._bdayEvFiltro||"todos";
+    const base=(D.bday_cumpleaneros||[]).filter(c=>(prodId?c.productora_id===prodId:true)&&(fv==="todos"||c.evento_id===fv)&&bdayActivo(c)&&c.email);
+    const dest=base.map(c=>({c,st:bdayEstadoLista(c)})).filter(({st})=>st.pend>0||st.cupos>0);
+    const omitidos=base.length-dest.length;
+    if(!dest.length){toast("No hay cumpleañeros activos con pendientes o cupos libres","warn");return;}
+    const muestra=dest[0].c;
+    openModal(`⏰ Aviso de cierre — se enviará a ${dest.length} cumpleañero${dest.length>1?"s":""}`,`
+      <div class="alert alert-warn" style="font-size:12px">Se envía solo a los <strong>activos</strong> que tienen invitados por aprobar o cupos libres.${omitidos?` Se omiten <strong>${omitidos}</strong> (lista llena o sin activar).`:""}</div>
+      <div style="max-height:180px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-bottom:10px">
+        <table class="data-table" style="font-size:12px"><thead><tr><th>Cumpleañero</th><th>Evento</th><th>Por aprobar</th><th>Cupos</th><th>Aviso previo</th></tr></thead>
+        <tbody>${dest.map(({c,st})=>`<tr><td><strong>${c.nombre} ${c.apellido}</strong><br><span style="color:#888">${c.email}</span></td><td>${st.ev?.name||""}</td><td style="text-align:center;color:#b45309;font-weight:700">${st.pend}</td><td style="text-align:center;color:#15803d;font-weight:700">${st.cupos}</td><td style="font-size:11px;color:#888">${c.recordatorio_cierre_at?fmtDT(c.recordatorio_cierre_at):"—"}</td></tr>`).join("")}</tbody></table>
+      </div>
+      <div style="font-size:12px;color:#555;margin-bottom:6px"><strong>Vista previa</strong> (ejemplo con ${muestra.nombre}; cada uno recibe sus propios números):</div>
+      <iframe id="bday-prev-frame" style="width:100%;height:320px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6"></iframe>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="bday-masivo-send" onclick="bdayEnviarCierreMasivo(${JSON.stringify(dest.map(d=>d.c.id)).replace(/"/g,"&quot;")},this)">📨 Enviar a ${dest.length}</button>
+      </div>`);
+    setTimeout(()=>{const f=$("bday-prev-frame");if(f)f.srcdoc=emailBdayCierre(muestra);},30);
+  };
+  window.bdayEnviarCierreMasivo=async(ids,btn)=>{
+    let ok=0,fail=0;
+    for(let i=0;i<ids.length;i++){
+      const c=(D.bday_cumpleaneros||[]).find(x=>x.id===ids[i]);if(!c)continue;
+      if(btn){btn.disabled=true;btn.textContent=`Enviando ${i+1}/${ids.length}...`;}
+      const st=bdayEstadoLista(c);
+      const r=await sendEmail(c.email,`⏰ Últimas horas: tu lista para ${st.ev?.name||"el evento"} se cierra ${st.cierreTxt}`,emailBdayCierre(c));
+      if(r){ok++;const at=now();c.recordatorio_cierre_at=at;try{await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{recordatorio_cierre_at:at});}catch(e){}}else fail++;
+      await new Promise(r=>setTimeout(r,350)); // no saturar el envío
+    }
+    closeModal();toast(`✅ ${ok} aviso${ok===1?"":"s"} enviado${ok===1?"":"s"}${fail?` · ${fail} fallaron`:""}`,fail?"warn":"ok");renderCumple();
+  };
   window.bdayCopiarLink=(token,btnEl)=>{
     navigator.clipboard.writeText(bdayTokenLink(token)).then(()=>{
       toast("✅ Link copiado","ok");
