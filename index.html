@@ -371,13 +371,15 @@ let realtimeChannel=null;
 let realtimeRenderTimer=null;
 // Mapa de tabla -> arreglo en memoria
 function _tablaArr(tabla){
-  return {acc_entries:"acc_entries",vip_tables:"vip_tables",acc_lists:"acc_lists",capacity_log:"capacity_log",eventos:"eventos"}[tabla];
+  return {acc_entries:"acc_entries",vip_tables:"vip_tables",acc_lists:"acc_lists",capacity_log:"capacity_log",eventos:"eventos",
+    cf_ordenes:"cf_ordenes",cf_postulantes:"cf_postulantes",bday_invitados:"bday_invitados",bday_cumpleaneros:"bday_cumpleaneros",bday_beneficios:"bday_beneficios"}[tabla];
 }
 // Aplica UN cambio puntual en memoria (sin recargar todo) — estilo Google Docs
 function aplicarCambioRealtime(payload){
   try{
     const key=_tablaArr(payload.table);
-    if(!key||!D[key])return;
+    if(!key)return;
+    if(!D[key])D[key]=[];
     const arr=D[key];
     if(payload.eventType==="INSERT"||payload.eventType==="UPDATE"){
       const row=payload.new;if(!row||!row.id)return;
@@ -402,7 +404,9 @@ function programarRenderSuave(){
     // No redibujar si el usuario está escribiendo en un input (no perder lo que tipea)
     const ae=document.activeElement;
     const escribiendo=ae&&(ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT");
-    if(!modalAbierto&&!escribiendo){
+    if(!modalAbierto&&CURRENT_VIEW==="puerta"&&typeof refrescarAcreditacionSuave==="function"){
+      refrescarAcreditacionSuave(); // conserva buscador, cursor y pestaña activa
+    }else if(!modalAbierto&&!escribiendo){
       if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
     }
     // El aforo de la app móvil sí se actualiza siempre (es barato y no molesta)
@@ -420,12 +424,62 @@ function iniciarRealtime(){
     .on("postgres_changes",{event:"*",schema:"public",table:"vip_tables"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"acc_lists"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"capacity_log"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"cf_ordenes"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"cf_postulantes"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"bday_invitados"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"bday_cumpleaneros"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"bday_beneficios"},aplicarCambioRealtime)
     .subscribe((status)=>{
+      window._rtStatus=status;
       document.querySelectorAll(".rt-dot").forEach(dot=>{
         if(status==="SUBSCRIBED"){dot.style.background="#22C55E";dot.title="Tiempo real activo";}
         else{dot.style.background="#EF4444";dot.title="Tiempo real desconectado — recarga la página";}
       });
     });
+}
+// Refresca la pantalla de Acreditación sin perder lo que el acreditador está haciendo
+function refrescarAcreditacionSuave(){
+  if(CURRENT_VIEW!=="puerta"||!document.getElementById("acr-listas"))return;
+  const ae=document.activeElement;
+  const foco=ae&&ae.tagName==="INPUT"?{id:ae.id,value:ae.value,start:ae.selectionStart,end:ae.selectionEnd}:null;
+  try{
+    const tab=window._acrTabActual||"total";
+    if(tab==="total")renderAcrTotal();
+    else if(tab==="mesas")renderAcrMesas();
+    else if(tab==="cf")renderAcrCF();
+    else if(tab==="bday")renderAcrBday();
+    else if(tab==="staff")renderAcrStaff();
+    else{ // Listas / Entradas
+      filterAccType(window._accFilterType||"all");
+      const q=$("search-q");if(q&&q.value.trim())searchAcc(q.value);
+    }
+    // Contador "X registros · Y/Z personas dentro" del encabezado
+    const ev=D.eventos.find(e=>e.id===currentEvId);
+    if(ev){const entriesEv=D.acc_entries.filter(e=>e.event_id===currentEvId);
+      const span=document.querySelector("#main-content .page-title + .card span[style*='color:#999']");
+      if(span)span.textContent=`${entriesEv.length} registros · ${entriesEv.reduce((s,e)=>s+(e.entradas_usadas||0),0)}/${entriesEv.reduce((s,e)=>s+1+(e.companions||0),0)} personas dentro`;}
+  }catch(e){console.warn("refresco acreditación:",e);}
+  if(foco&&foco.id){const el=document.getElementById(foco.id);if(el){el.focus();try{el.setSelectionRange(foco.start,foco.end);}catch(e){}}}
+}
+// Respaldo: si el tiempo real no está conectado, en Acreditación se recargan las tablas operativas cada 15 s
+let _acrPollTimer=null;
+function iniciarRespaldoAcreditacion(){
+  if(_acrPollTimer)clearInterval(_acrPollTimer);
+  _acrPollTimer=setInterval(async()=>{
+    if(CURRENT_VIEW!=="puerta"||!CU||!currentEvId)return;
+    if(window._rtStatus==="SUBSCRIBED")return; // el tiempo real ya se encarga
+    const modal=document.getElementById("modal");if(modal&&!modal.classList.contains("hidden"))return;
+    try{
+      const [ae,vt,cl,bi,bc,co]=await Promise.all([
+        sbGet("acc_entries",`event_id=eq.${currentEvId}`),sbGet("vip_tables",`event_id=eq.${currentEvId}`),sbGet("capacity_log",`event_id=eq.${currentEvId}`),
+        sbGet("bday_invitados",""),sbGet("bday_cumpleaneros",`evento_id=eq.${currentEvId}`),sbGet("cf_ordenes",`evento_id=eq.${currentEvId}`)]);
+      const merge=(key,rows,pred)=>{D[key]=(D[key]||[]).filter(x=>!pred(x)).concat(rows||[]);};
+      merge("acc_entries",ae,x=>x.event_id===currentEvId);merge("vip_tables",vt,x=>x.event_id===currentEvId);merge("capacity_log",cl,x=>x.event_id===currentEvId);
+      merge("bday_cumpleaneros",bc,x=>x.evento_id===currentEvId);merge("cf_ordenes",co,x=>x.evento_id===currentEvId);
+      const ids=new Set((bc||[]).map(c=>c.id));merge("bday_invitados",(bi||[]).filter(i=>ids.has(i.cumpleanero_id)),x=>ids.has(x.cumpleanero_id));
+      refrescarAcreditacionSuave();
+    }catch(e){console.warn("respaldo acreditación:",e);}
+  },15000);
 }
 const sbGet = async(t,p="")=>{const sep=p?"&":"";const url=`${SB_URL}/rest/v1/${t}?${p}${sep}limit=100000`;const r=await fetch(url,{headers:{...HDR,"Range-Unit":"items","Range":"0-99999"}});if(!r.ok)throw new Error(await r.text());return r.json();};
 const sbPost = async(t,b)=>{const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:"POST",headers:{...HDR,"Prefer":"return=representation"},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();};
@@ -1114,6 +1168,7 @@ async function intentarLogin(email,pass,esRestauracion){
     else if(role==="cumpleanero") initBdayApp();
 
     iniciarRealtime();
+    iniciarRespaldoAcreditacion();
     iniciarInactividad();
     return true;
   }catch(e){
@@ -3116,6 +3171,7 @@ async function bdayAnularCheckin(invId, filterType){
 
 function filterAccType(type){
   const el=$("acc-table");if(!el)return;
+  window._accFilterType=type;
   const lists=D.acc_lists.filter(l=>l.event_id===currentEvId&&(type==="all"||l.type===type));
   const entries=D.acc_entries.filter(e=>e.event_id===currentEvId&&(type==="all"||lists.map(l=>l.id).includes(e.list_id)));
   const ev=D.eventos.find(e=>e.id===currentEvId);
