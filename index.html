@@ -10059,13 +10059,33 @@ VIEWS.cfConfig = async()=>{
       precios_entrada:Object.fromEntries([...document.querySelectorAll(".cfg-precio-cb")].map(inp=>[inp.dataset.nombre,parseInt(inp.value)||0])),
       updated_at:new Date().toISOString()
     };
+    const btn=document.querySelector("#cf-cfg-form .btn-primary");if(btn){btn.disabled=true;btn.textContent="Guardando...";}
+    const faltantes=[];
     try{
       const ex=(D.cf_config||[]).find(c=>c.evento_id===evId);
-      if(ex){ await sbPatch("cf_config",`evento_id=eq.${evId}`,cfg); Object.assign(ex,cfg); }
-      else{ cfg.id=uid(); await sbPost("cf_config",[cfg]); D.cf_config?.push(cfg); }
-      toast("Configuración guardada","ok");
+      const datos={...cfg};
+      // Si falta alguna columna en Supabase, la quitamos y reintentamos (hasta 4 veces) para no perder el resto
+      for(let intento=0;intento<5;intento++){
+        try{
+          if(ex){ await sbPatch("cf_config",`evento_id=eq.${evId}`,datos); Object.assign(ex,datos); }
+          else{ datos.id=datos.id||uid(); await sbPost("cf_config",[datos]); D.cf_config?.push(datos); }
+          break;
+        }catch(e){
+          const m=/Could not find the '([^']+)' column/.exec(e.message||"");
+          if(m&&datos.hasOwnProperty(m[1])){faltantes.push(m[1]);delete datos[m[1]];continue;}
+          throw e;
+        }
+      }
+      if(faltantes.length){
+        const sql=`ALTER TABLE cf_config\n`+faltantes.map(c=>`  ADD COLUMN IF NOT EXISTS ${c} ${c==="registro_cerrado"?"BOOLEAN DEFAULT false":c==="cupos_display_inicio"?"INTEGER":/_at$/.test(c)?"TIMESTAMPTZ":/precios|tipos/.test(c)?"JSONB":"TEXT"}`).join(",\n")+";";
+        toast(`Guardado, pero falta${faltantes.length>1?"n":""} columna${faltantes.length>1?"s":""}: ${faltantes.join(", ")}`,"warn");
+        alert(`Se guardó todo menos: ${faltantes.join(", ")}.\n\nPara que esos campos se guarden, corre esto en Supabase → SQL Editor:\n\n${sql}`);
+      }else toast("Configuración guardada","ok");
       await log("cf_config","cf_config",evId,"Configuración CF actualizada");
-    }catch(e){ toast("Error: "+e.message,"error"); }
+    }catch(e){
+      toast("Error: "+e.message,"error");
+      alert("No se pudo guardar la configuración:\n\n"+e.message);
+    }finally{ if(btn){btn.disabled=false;btn.textContent="Guardar configuración";} }
   };
 };
 
