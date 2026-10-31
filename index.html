@@ -9042,7 +9042,7 @@ window.cfAprobarConTipo=async(id, evId)=>{
     <p style="color:var(--ink-3);margin-bottom:14px">Selecciona qué tipo de entrada le asignas:</p>
     <div>${opciones}</div>
     <div style="display:flex;gap:8px;margin-top:16px">
-      <button class="btn btn-primary" onclick="cfConfirmarAprobacion('${id}')">✓ Confirmar aprobación</button>
+      <button class="btn btn-primary" onclick="this.disabled=true;this.textContent='Aprobando…';cfConfirmarAprobacion('${id}')">✓ Confirmar aprobación</button>
       <button class="btn" onclick="closeModal()">Cancelar</button>
     </div>`);
 };
@@ -9181,7 +9181,32 @@ VIEWS.cfPostulantes = async()=>{
   window.cfCopiarLink=(token)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf_buy=${token}`); toast("Link copiado","ok"); };
   window._cfCurrentEvId=()=>currentCfEvId;
 
-  window.cfAprobar=async(id, tipoEntrada)=>{
+  window._cfAprobando=window._cfAprobando||new Set();
+  window.cfAprobar=async(id, tipoEntrada, opts={})=>{
+    // Freno: si ya se está procesando esta misma persona, ignorar clics repetidos
+    if(window._cfAprobando.has(id)){toast("Ya se está procesando esta aprobación…","warn");return;}
+    const pPrev=(D.cf_postulantes||[]).find(x=>x.id===id);
+    // Si YA está aprobada, no volver a aprobar ni regenerar su link; ofrecer reenviar el mismo correo
+    if(pPrev&&pPrev.estado==="aprobado"&&pPrev.buy_token&&!opts.forzar){
+      if(!confirm(`${pPrev.nombre} ${pPrev.apellido||""} ya está aprobada.\n\n¿Quieres reenviarle el MISMO link de compra por correo? (no se genera uno nuevo)`))return;
+      window._cfAprobando.add(id);
+      try{
+        const cfg=getCFConfig(pPrev.evento_id);const ev=D.eventos.find(e=>e.id===pPrev.evento_id);
+        const ok=await sendEmail(pPrev.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:pPrev.nombre,mensaje:cfg.msg_aprobacion,tipo:pPrev.tipo_entrada||"",link:`${CF_APP_URL}?cf_buy=${pPrev.buy_token}`,horas:cfg.horas_vencimiento||24}));
+        toast(ok?`📧 Correo reenviado a ${pPrev.email}`:"No se pudo reenviar",ok?"ok":"warn");
+      }finally{window._cfAprobando.delete(id);}
+      return;
+    }
+    // Aviso si la venta ya está cerrada: la persona no podrá comprar
+    if(pPrev){const cfgChk=getCFConfig(pPrev.evento_id);
+      if(cfVentaCerrada(cfgChk)&&!confirm(`⚠ La venta Close Friends de este evento ya está CERRADA (Config CF → Cierre de venta).\n\nSi apruebas a ${pPrev.nombre}, recibirá el correo pero NO podrá comprar hasta que reabras la venta.\n\n¿Aprobar igual?`))return;}
+    window._cfAprobando.add(id);
+    // Deshabilitar sus botones de inmediato
+    document.querySelectorAll(`button[onclick*="'${id}'"]`).forEach(b=>{b.disabled=true;b.style.opacity=.5;});
+    try{ await _cfAprobarInterno(id,tipoEntrada); }
+    finally{ window._cfAprobando.delete(id); }
+  };
+  const _cfAprobarInterno=async(id, tipoEntrada)=>{
     const token=cfToken();
     const aprobado_at=new Date().toISOString();
     const patchData={estado:"aprobado",buy_token:token,aprobado_por:CU.id,aprobado_at};
@@ -9253,7 +9278,7 @@ VIEWS.cfPostulantes = async()=>{
     const tipos=cfg.tipos_entrada||[];
     if(!tipos.length){
       if(!confirm(`¿Aprobar ${sel.length} postulantes?`))return;
-      for(const id of sel) await cfAprobar(id,"");
+      for(const id of sel){const pp=(D.cf_postulantes||[]).find(x=>x.id===id);if(pp&&pp.estado==="aprobado"&&pp.buy_token)continue;await cfAprobar(id,"");}
       toast(`${sel.length} aprobadas`,"ok");
       return;
     }
@@ -9272,7 +9297,7 @@ VIEWS.cfPostulantes = async()=>{
     const sel=document.querySelector("input[name='cf-tipo-masivo']:checked");
     const tipo=sel?.value||"";
     closeModal();
-    for(const id of ids) await cfAprobar(id,tipo);
+    for(const id of ids){const pp=(D.cf_postulantes||[]).find(x=>x.id===id);if(pp&&pp.estado==="aprobado"&&pp.buy_token)continue;await cfAprobar(id,tipo);}
     toast(`${ids.length} aprobadas${tipo?" — "+tipo:""}`, "ok");
   };
 
