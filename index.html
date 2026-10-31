@@ -9691,7 +9691,9 @@ VIEWS.cfConciliacion = async()=>{
         ${abonos.length} abonos en cartola
       </div>`;
       // Match automático — incluir pendientes con O sin comprobante
-      const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(!cfConcEvId||o.evento_id===cfConcEvId)&&o.estado==="pendiente");
+      // Solo órdenes CON comprobante subido: quien no subió comprobante no ha pagado, aunque haya una transferencia del mismo monto
+      const ordenesPend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(!cfConcEvId||o.evento_id===cfConcEvId)&&o.estado==="pendiente"&&o.comprobante_url);
+      const sinComprobante=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(!cfConcEvId||o.evento_id===cfConcEvId)&&o.estado==="pendiente"&&!o.comprobante_url).length;
       const matches=[];
       const abonosUsados=new Set();
       for(const ord of ordenesPend){
@@ -9699,7 +9701,8 @@ VIEWS.cfConciliacion = async()=>{
         if(idx>=0){abonosUsados.add(idx);matches.push({orden:ord,abono:abonos[idx],estado:"CONCILIADO"});}
         else matches.push({orden:ord,abono:null,estado:"REVISAR"});
       }
-      res.innerHTML=`
+      const avisoSinComp=sinComprobante?`<div style="background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:10px">ℹ Se excluyeron <strong>${sinComprobante}</strong> órdenes pendientes <strong>sin comprobante</strong>: no se consideran pagadas aunque exista una transferencia del mismo monto.</div>`:"";
+      res.innerHTML=avisoSinComp+`
         <div class="card" style="margin-bottom:16px">
           <div style="font-size:14px;font-weight:600;margin-bottom:12px">Resultado match automático</div>
           ${debugInfo}
@@ -9734,6 +9737,8 @@ VIEWS.cfConciliacion = async()=>{
   };
 
   window.cfConciliar=async(ordenId)=>{
+    const _o=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
+    if(_o&&!_o.comprobante_url&&!confirm("⚠ Esta orden NO tiene comprobante de pago subido.\n\nSi la confirmas, la persona quedará como pagada y su link dirá \"pago confirmado\" sin haber comprobado el pago.\n\n¿Confirmar igual?"))return;
     const btn=document.querySelector(`button[onclick="cfConciliar('${ordenId}')"]`);
     if(btn){btn.disabled=true;btn.textContent="Conciliando...";}
     try{
