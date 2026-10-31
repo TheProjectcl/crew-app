@@ -9813,11 +9813,11 @@ window.cfReenviarRecordatorio=(evIdArg)=>{
     const ahora=new Date();
     // Grupo 1: con orden pendiente de pago. Grupo 2: aprobadas que nunca iniciaron la compra.
     const pendientes=_ords.filter(o=>o.estado==="pendiente").map(ord=>({ord,post:_posts.find(p=>p.id===ord.postulante_id)})).filter(x=>x.post?.email);
-    const idsConOrden=new Set(_ords.filter(o=>!["vencido","rechazado"].includes(o.estado)).map(o=>o.postulante_id));
-    const sinOrden=_posts.filter(p=>p.estado==="aprobado"&&p.email&&!idsConOrden.has(p.id)).map(post=>({ord:null,post}));
-    const todos=[...pendientes,...sinOrden];
-    if(!pendientes.length&&!sinOrden.length){toast("No hay personas con pago pendiente","warn");return;}
-    const evId=(pendientes[0]||sinOrden[0]).post.evento_id;
+    // SOLO quienes entraron a comprar y no han pagado (orden pendiente). Las aprobadas sin orden NO se incluyen.
+    const sinOrden=[];
+    const todos=pendientes;
+    if(!pendientes.length){toast("No hay personas con pago pendiente","warn");return;}
+    const evId=pendientes[0].post.evento_id;
     const ev=D.eventos?.find(e=>e.id===evId); const evNom=ev?.name||"el evento";
     const cfg=getCFConfig(evId);
     // Cierre sugerido: el configurado en Config CF, o hoy a las 12:00
@@ -9840,7 +9840,7 @@ window.cfReenviarRecordatorio=(evIdArg)=>{
         <div style="font-size:13px;color:var(--ink-3)"><strong>${pendientes.length}</strong> con pago pendiente · <strong>${evNom}</strong></div>
         <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-row-pend .rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todas las pendientes</label>
       </div>
-      ${sinOrden.length?`<label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:#9D174D;background:#FCE7F3;border-radius:8px;padding:8px 10px;margin-bottom:8px"><input type="checkbox" id="rcrd-incluir-sin" onchange="document.querySelectorAll('.rcrd-row-sin').forEach(r=>{r.style.display=this.checked?'flex':'none';r.querySelector('.rcrd-chk').checked=this.checked;})"> Incluir también a las <strong>${sinOrden.length}</strong> aprobadas que nunca entraron a comprar (opcional)</label>`:""}
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Solo se incluye a quienes entraron a comprar y aún no pagan. Las aprobadas que nunca iniciaron la compra no reciben este aviso.</div>
       <div style="max-height:220px;overflow-y:auto;padding-right:4px">${todos.map(fila).join("")}</div>
       <details style="margin-top:10px"><summary style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600">👁 Ver vista previa del correo</summary>
         <iframe id="rcrd-prev" style="width:100%;height:380px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6;margin-top:8px"></iframe></details>
@@ -9848,7 +9848,7 @@ window.cfReenviarRecordatorio=(evIdArg)=>{
         <button class="btn" onclick="closeModal()">Cancelar</button>
         <button class="btn btn-primary" id="rcrd-send-btn" onclick="cfEnviarRecordatorioSeleccion(window._cfRcrdEvNom)">📧 Enviar aviso a <span id="rcrd-count">${pendientes.length}</span></button>
       </div>`);
-    const muestra=pendientes[0]||sinOrden[0];
+    const muestra=pendientes[0];
     const actualizar=()=>{
       const v=$("rcrd-cierre")?.value||"";const txt=cfFmtCierre(v);
       const t=$("rcrd-cierre-txt");if(t)t.textContent=txt||"(sin fecha)";
