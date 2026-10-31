@@ -8224,6 +8224,13 @@ function getCFConfig(eventoId){
   };
 }
 
+// ¿Ya pasó la hora de cierre de venta? Se interpreta como hora local (tal como se escribió), ignorando cualquier zona horaria que agregue la base
+function cfVentaCerrada(cfg){
+  if(!cfg||!cfg.cierre_venta)return false;
+  const raw=String(cfg.cierre_venta).slice(0,19); // "YYYY-MM-DDTHH:MM[:SS]" sin sufijo de zona
+  const d=new Date(raw.length===16?raw+":00":raw);
+  return !isNaN(d)&&new Date()>d;
+}
 // Cupos disponibles CF para un evento
 function cfCuposDisponibles(eventoId){
   const cfg = getCFConfig(eventoId);
@@ -8322,7 +8329,7 @@ function mostrarRegistroCF(eventoId){
         screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El registro para este evento está cerrado o no disponible.</p></div></div>`;
         return;
       }
-      if(cfg.cierre_venta && new Date()>new Date(cfg.cierre_venta)){
+      if(cfVentaCerrada(cfg)){
         screen.innerHTML=`<div class="cf-box"><div class="cf-ok"><h2>Registro cerrado</h2><p>El período de registro ha finalizado.</p></div></div>`;
         return;
       }
@@ -8500,7 +8507,7 @@ function mostrarCompraCF(token){
       ]);
       const ev = evArr[0]; const cfg = cfgArr[0];
       if(!ev||!cfg){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Evento no disponible.</p></div>`; return; }
-      if(!cfg.activo||( cfg.cierre_venta&&new Date()>new Date(cfg.cierre_venta))){
+      if(!cfg.activo||cfVentaCerrada(cfg)){
         const wtsp=cfg.wtsp_cierre||"";
         const wtspLink=wtsp?`https://wa.me/${wtsp.replace(/\D/g,"")}`:"";
         cont.innerHTML=`<div class="cf-ok" style="text-align:center;padding:40px 24px">
