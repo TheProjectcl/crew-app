@@ -235,8 +235,8 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     </div>
     <nav id="sidebar-nav"></nav>
     <div class="sb-footer">
-      <div id="sb-av" class="avatar" style="width:30px;height:30px;font-size:11px"></div>
-      <div style="flex:1;min-width:0">
+      <div id="sb-av" class="avatar" style="width:30px;height:30px;font-size:11px;cursor:pointer" onclick="abrirMiCuenta()" title="Mi cuenta"></div>
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="abrirMiCuenta()" title="Mi cuenta · cambiar contraseña">
         <div id="sb-name" style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         <div id="sb-role-lbl" style="font-size:10px;color:var(--ink-4)"></div>
       </div>
@@ -260,6 +260,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="rt-dot" class="rt-dot" title="Tiempo real" style="width:9px;height:9px;border-radius:50%;background:#aaa"></div>
       <div id="mob-aforo-badge" class="badge b-purple" style="font-size:12px"></div>
       <span data-bell-slot></span>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -280,6 +281,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div style="display:flex;gap:8px;align-items:center">
       <div id="emb-pts" class="badge b-amber" style="font-size:12px;padding:4px 12px;font-weight:600"></div>
       <span data-bell-slot></span>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -299,6 +301,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <span data-bell-slot></span>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -1188,6 +1191,42 @@ async function intentarLogin(email,pass,esRestauracion){
   }
 }
 
+// Mi cuenta: ver datos y cambiar la propia contraseña (cualquier rol)
+function abrirMiCuenta(){
+  if(!CU)return;
+  const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"};
+  openModal("👤 Mi cuenta",`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+      <div class="avatar" style="width:44px;height:44px;font-size:15px">${ini(CU.name||"?")}</div>
+      <div><div style="font-size:15px;font-weight:700">${CU.name||""}</div><div style="font-size:12px;color:#888">${CU.email||""} · ${ROL[CU.role]||CU.role}</div></div>
+    </div>
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">Cambiar contraseña</div>
+    <label class="form-label" style="margin-top:0">Contraseña actual</label>
+    <input class="form-input" id="mc-0" type="password" autocomplete="current-password" style="font-size:16px">
+    <label class="form-label">Nueva contraseña</label>
+    <input class="form-input" id="mc-1" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" style="font-size:16px">
+    <label class="form-label">Repite la nueva</label>
+    <input class="form-input" id="mc-2" type="password" autocomplete="new-password" style="font-size:16px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#666;margin-top:8px;cursor:pointer"><input type="checkbox" onchange="['mc-0','mc-1','mc-2'].forEach(i=>{const e=document.getElementById(i);if(e)e.type=this.checked?'text':'password';})"> Mostrar contraseñas</label>
+    <div id="mc-err" style="font-size:12px;color:#dc2626;font-weight:600;margin-top:8px;min-height:16px"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button><button class="btn btn-primary" id="mc-btn" onclick="guardarMiPass()">Guardar nueva contraseña</button></div>`);
+}
+async function guardarMiPass(){
+  const p0=$("mc-0")?.value||"",p1=$("mc-1")?.value||"",p2=$("mc-2")?.value||"";const err=$("mc-err");
+  if(p0!==CU.pass){err.textContent="La contraseña actual no es correcta";return;}
+  if(p1.length<6){err.textContent="La nueva debe tener al menos 6 caracteres";return;}
+  if(p1!==p2){err.textContent="Las contraseñas nuevas no coinciden";return;}
+  if(p1===p0){err.textContent="La nueva debe ser distinta a la actual";return;}
+  const btn=$("mc-btn");if(btn){btn.disabled=true;btn.textContent="Guardando…";}
+  try{
+    try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
+    catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
+    CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
+    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1}));}catch(e){}
+    closeModal();toast("✅ Contraseña actualizada","ok");
+    try{await log("cambio_pass","user",CU.id,"Cambió su contraseña desde Mi cuenta");}catch(e){}
+  }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}}
+}
 // Primer ingreso: obliga a crear una contraseña propia (no se puede cerrar hasta hacerlo)
 function mostrarCambioPassObligatorio(){
   const u=CU;if(!u)return;
