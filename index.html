@@ -8344,6 +8344,7 @@ function mostrarRegistroCF(eventoId){
     if(!prodNombre && ev?.productora_id){
       try{
         const pArr = await sbGet("productoras",`id=eq.${ev.productora_id}`);
+        window._cfProdLogo=pArr[0]?.logo_url||null;
         prodNombre = pArr[0]?.nombre || "THE PROJECT";
       }catch(e){ prodNombre = "THE PROJECT"; }
     }
@@ -8352,6 +8353,7 @@ function mostrarRegistroCF(eventoId){
     const mostrarLobby = ()=>{
       screen.innerHTML=`
         <div class="cf-lobby">
+          ${window._cfProdLogo?`<img src="${window._cfProdLogo}" alt="" style="width:96px;height:96px;object-fit:cover;border-radius:22px;display:block;margin:0 auto 14px;border:1px solid #222">`:""}
           <div style="margin-bottom:8px">${glLogo("neg",24,"margin:0 auto")}</div>
           <div class="cf-lobby-brand">POWERED BY GUESTLY</div>
           <div class="cf-lobby-title">${prodNombre.toUpperCase()}</div>
@@ -11966,7 +11968,7 @@ async function mostrarPostulacionEmb(prodId){
   if(!prod){box.innerHTML=`<div class="pe-ok"><div class="ic">😕</div><h2>Link no válido</h2><p>Este link de postulación no existe.</p></div>`;return;}
   const show=(h)=>{box.innerHTML=h;window.scrollTo(0,0);};
   const form=()=>show(`
-    <div class="pe-title"><h1>${prod.nombre||"Productora"}</h1><p>Embajadoras</p></div>
+    <div class="pe-title">${prod.logo_url?`<img src="${prod.logo_url}" alt="${prod.nombre||""}" style="width:88px;height:88px;object-fit:cover;border-radius:20px;display:block;margin:0 auto 12px;border:1px solid #222">`:""}<h1>${prod.nombre||"Productora"}</h1><p>Embajadoras</p></div>
     <div class="pe-sub">Postula para ser embajadora de <strong style="color:#fff">${prod.nombre||""}</strong>. Revisaremos tu postulación y te avisaremos por correo.</div>
     <div class="pe-row">
       <div><label class="pe-lbl">Nombre <span>*</span></label><input class="pe-in" id="pe-nom" placeholder="Tu nombre"></div>
@@ -11994,7 +11996,7 @@ async function mostrarPostulacionEmb(prodId){
     <label class="pe-chk"><input type="checkbox" id="pe-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para el proceso de selección de embajadoras de ${prod.nombre||"la productora"}.</span></label>
     <button class="pe-btn" id="pe-btn" onclick="window._peEnviar()">Enviar postulación 🌸</button>
     <div id="pe-msg" class="pe-err" style="text-align:center;margin-top:10px"></div>
-    <div class="pe-foot">POWERED BY GUESTLY</div>`);
+    <div class="pe-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div>`);
   window._peFotoFile=null;
   window._pePreview=(inp)=>{const f=inp.files?.[0];if(!f)return;window._peFotoFile=f;const r=new FileReader();r.onload=e=>{document.getElementById("pe-foto-prev").innerHTML=`<img src="${e.target.result}">`;document.getElementById("pe-foto-err").textContent="";};r.readAsDataURL(f);};
   const mark=(id,msg)=>{const el=document.getElementById(id);if(!el)return;el.classList.add("err");let wrap=el.parentElement;if(wrap&&getComputedStyle(wrap).display==="flex"&&id==="pe-wtsp")wrap=wrap.parentElement;let h=wrap.querySelector(".pe-err.auto");if(!h){h=document.createElement("div");h.className="pe-err auto";wrap.appendChild(h);}h.textContent=msg;el.addEventListener("input",()=>{el.classList.remove("err");h.remove();},{once:true});};
@@ -12040,7 +12042,7 @@ async function mostrarPostulacionEmb(prodId){
       const foto_carnet=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
       const row={id:uid(),productora_id:prodId,nombre,apellido,fecha_nacimiento:fnac,rut:rutN,whatsapp:"+569"+wtsp,email,instagram:ig,tiktok:tt||null,ciudad,experiencia:exp||null,eventos_interes:evSel,foto_carnet,estado:"pendiente",reintegro:(fueAprobada||fueEliminada),created_at:now()};
       await sbPost("emb_postulantes",[row]);
-      show(`<div class="pe-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod.nombre||""}</strong> revisará tu postulación y te avisará por correo a <strong style="color:#fff">${email}</strong>.</p><div class="pe-foot">POWERED BY GUESTLY</div></div>`);
+      show(`<div class="pe-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod.nombre||""}</strong> revisará tu postulación y te avisará por correo a <strong style="color:#fff">${email}</strong>.</p><div class="pe-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div></div>`);
     }catch(e){
       btn.disabled=false;btn.textContent="Enviar postulación 🌸";
       document.getElementById("pe-msg").textContent="Error al enviar: "+(e.message||"intenta de nuevo");
@@ -12074,7 +12076,9 @@ VIEWS["emb-postulaciones"]=async()=>{
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="navigator.clipboard.writeText('${link}');toast('✅ Link copiado','ok')" style="background:#EC4899;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar link</button>
             <a href="${link}" target="_blank" style="background:rgba(255,255,255,.12);color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">👁 Ver formulario</a>
+            <button onclick="openLogoProductora('${prodId}')" style="background:rgba(255,255,255,.12);border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖼 Logo de la productora</button>
           </div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:8px">${(D.productoras||[]).find(x=>x.id===prodId)?.logo_url?"✓ Tu logo aparece en la vista previa del link (WhatsApp/Instagram) y en el formulario.":"⚠ Sin logo: la vista previa del link mostrará el logo de Guestly. Súbelo con el botón 🖼."}</div>
         </div>
         <div style="display:flex;gap:8px">
           ${[["pendiente","#FBBF24","Pendientes"],["aprobado","#34D399","Aprobadas"],["rechazado","#F87171","Rechazadas"]].map(([e,c,l])=>`<div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;min-width:84px"><div style="font-size:24px;font-weight:700;color:${c}">${cnt(e)}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">${l}</div></div>`).join("")}
@@ -12120,6 +12124,36 @@ VIEWS["emb-postulaciones"]=async()=>{
   };
   window._embPostRender=(fromInput)=>{window._embPostFocus=!!fromInput;render();};
   render();
+};
+// Logo de la productora: se usa en las vistas previas de los links (WhatsApp/Instagram) y en las páginas públicas
+window.openLogoProductora=(prodId)=>{
+  const prod=(D.productoras||[]).find(x=>x.id===prodId);if(!prod)return;
+  openModal("🖼 Logo de la productora",`
+    <div style="font-size:13px;color:#555;line-height:1.6;margin-bottom:12px">Este logo sale cuando compartes tus links por WhatsApp o Instagram (postulación de embajadoras, Close Friends, cumpleaños) y arriba de los formularios. Ideal: <strong>cuadrado, mínimo 400×400 px</strong>, fondo sólido, JPG o PNG.</div>
+    <div id="logo-prev" style="text-align:center;margin-bottom:12px">${prod.logo_url?`<img src="${prod.logo_url}" style="width:140px;height:140px;object-fit:cover;border-radius:16px;border:1px solid var(--line)">`:`<div style="width:140px;height:140px;border-radius:16px;border:2px dashed #ccc;display:inline-flex;align-items:center;justify-content:center;color:#aaa;font-size:12px">Sin logo</div>`}</div>
+    <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="subirLogoProductora('${prodId}',this)">
+    <button class="btn btn-primary btn-full" style="justify-content:center" onclick="document.getElementById('logo-file').click()">📤 ${prod.logo_url?"Cambiar logo":"Subir logo"}</button>
+    <div id="logo-msg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:#666"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+};
+window.subirLogoProductora=async(prodId,input)=>{
+  const f=input.files?.[0];if(!f)return;const msg=$("logo-msg");
+  if(f.size>4*1024*1024){msg.textContent="La imagen pesa más de 4 MB, usa una más liviana.";return;}
+  msg.textContent="Subiendo…";
+  try{
+    const ext=(f.name.split(".").pop()||"png").toLowerCase().replace("jpeg","jpg");
+    const path=`logos/${prodId}_${Date.now()}.${ext}`;
+    const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":f.type||"image/png","x-upsert":"true"},body:f});
+    if(!up.ok)throw new Error(await up.text());
+    const url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+    try{await sbPatch("productoras",`id=eq.${prodId}`,{logo_url:url});}
+    catch(e){if(/logo_url/.test(e.message||""))throw new Error("Falta la columna logo_url en la tabla productoras (ver SQL).");throw e;}
+    const prod=(D.productoras||[]).find(x=>x.id===prodId);if(prod)prod.logo_url=url;if(CP&&CP.id===prodId)CP.logo_url=url;
+    $("logo-prev").innerHTML=`<img src="${url}" style="width:140px;height:140px;object-fit:cover;border-radius:16px;border:1px solid var(--line)">`;
+    msg.style.color="#166534";msg.textContent="✅ Logo guardado. Las vistas previas pueden tardar unos minutos en actualizarse (WhatsApp guarda caché).";
+    try{await log("logo_productora","productora",prodId,"Actualizó el logo de la productora");}catch(e){}
+    if(CURRENT_VIEW==="emb-postulaciones")setTimeout(()=>VIEWS["emb-postulaciones"](),1500);
+  }catch(e){msg.style.color="#dc2626";msg.textContent="Error: "+e.message;}
 };
 // Aprobar: elegir equipo + contraseña → vista previa del correo → crear usuario embajador + enviar
 window.embAprobarPost=(id)=>{

@@ -1,0 +1,9 @@
+# Vistas previas (WhatsApp / Instagram / iMessage) con título, descripción y logo de la productora
+# según el link público (?emb=, ?cf=, ?cf_buy=, ?bday_inv=, ?bday_panel=).
+[[edge_functions]]
+  path = "/"
+  function = "og"
+
+[[edge_functions]]
+  path = "/index.html"
+  function = "og"
