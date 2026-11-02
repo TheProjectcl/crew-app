@@ -481,6 +481,11 @@ function iniciarRespaldoAcreditacion(){
     }catch(e){console.warn("respaldo acreditación:",e);}
   },15000);
 }
+// Crea un usuario; si la columna must_change_pass aún no existe en Supabase, reintenta sin ella
+async function sbPostUserTolerante(u){
+  try{return await sbPost("users",[u]);}
+  catch(e){if(/must_change_pass/.test(e.message||"")){const {must_change_pass,...sin}=u;return await sbPost("users",[sin]);}throw e;}
+}
 const sbGet = async(t,p="")=>{const sep=p?"&":"";const url=`${SB_URL}/rest/v1/${t}?${p}${sep}limit=100000`;const r=await fetch(url,{headers:{...HDR,"Range-Unit":"items","Range":"0-99999"}});if(!r.ok)throw new Error(await r.text());return r.json();};
 const sbPost = async(t,b)=>{const r=await fetch(`${SB_URL}/rest/v1/${t}`,{method:"POST",headers:{...HDR,"Prefer":"return=representation"},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();};
 const sbPatch = async(t,m,b)=>{const r=await fetch(`${SB_URL}/rest/v1/${t}?${m}`,{method:"PATCH",headers:{...HDR,"Prefer":"return=representation"},body:JSON.stringify(b)});if(!r.ok)throw new Error(await r.text());return r.json();};
@@ -612,7 +617,7 @@ const openModal=(title,html,wide=false)=>{
   $("modal-box").style.width=wide?"680px":"520px";
   $("modal").classList.remove("hidden");
 };
-const closeModal=()=>$("modal").classList.add("hidden");
+const closeModal=()=>{if(window._modalBloqueado)return;$("modal").classList.add("hidden");};
 $("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal();});
 
 // ═══════════════════════════════════
@@ -1164,6 +1169,7 @@ async function intentarLogin(email,pass,esRestauracion){
 
     $("login-screen")?.classList.add("hidden");
     const role=CU.role;
+    if(CU.must_change_pass)setTimeout(()=>mostrarCambioPassObligatorio(),600);
     if(["superadmin","owner","coordinator"].includes(role)) initAdminApp();
     else if(["door_chief","door_staff","vip_staff","cashier"].includes(role)) initMobApp();
     else if(role==="ambassador_chief") initJefeApp();
@@ -1182,6 +1188,37 @@ async function intentarLogin(email,pass,esRestauracion){
   }
 }
 
+// Primer ingreso: obliga a crear una contraseña propia (no se puede cerrar hasta hacerlo)
+function mostrarCambioPassObligatorio(){
+  const u=CU;if(!u)return;
+  openModal("🔐 Crea tu contraseña",`
+    <div style="font-size:14px;color:#555;line-height:1.6;margin-bottom:12px">Hola <strong>${(u.name||"").split(" ")[0]}</strong>, entraste con una contraseña temporal. Para que no se te olvide, crea una propia ahora (mínimo 6 caracteres).</div>
+    <label class="form-label" style="margin-top:0">Nueva contraseña</label>
+    <input class="form-input" id="cp-1" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" style="font-size:16px">
+    <label class="form-label">Repite la contraseña</label>
+    <input class="form-input" id="cp-2" type="password" autocomplete="new-password" placeholder="Otra vez" style="font-size:16px">
+    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#666;margin-top:8px;cursor:pointer"><input type="checkbox" onchange="['cp-1','cp-2'].forEach(i=>{const e=document.getElementById(i);if(e)e.type=this.checked?'text':'password';})"> Mostrar contraseña</label>
+    <div id="cp-err" style="font-size:12px;color:#dc2626;font-weight:600;margin-top:8px;min-height:16px"></div>
+    <button class="btn btn-primary btn-full" id="cp-btn" style="margin-top:10px;font-size:15px;padding:12px;justify-content:center" onclick="guardarPassObligatoria()">Guardar y continuar →</button>`);
+  window._modalBloqueado=true;
+  document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="none";});
+  setTimeout(()=>$("cp-1")?.focus(),100);
+}
+async function guardarPassObligatoria(){
+  const p1=$("cp-1")?.value||"",p2=$("cp-2")?.value||"";const err=$("cp-err");
+  if(p1.length<6){err.textContent="Debe tener al menos 6 caracteres";return;}
+  if(p1!==p2){err.textContent="Las contraseñas no coinciden";return;}
+  if(p1===CU.pass){err.textContent="Elige una contraseña distinta a la temporal";return;}
+  const btn=$("cp-btn");if(btn){btn.disabled=true;btn.textContent="Guardando…";}
+  try{
+    try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
+    catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
+    CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
+    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1}));}catch(e){}
+    window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast("✅ Contraseña guardada. ¡Bienvenida!","ok");
+    try{await log("cambio_pass","user",CU.id,"Creó su contraseña en el primer ingreso");}catch(e){}
+  }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar y continuar →";}}
+}
 // Restaurar sesión guardada al cargar la página (auto-login silencioso)
 async function restaurarSesion(){
   try{
@@ -5576,9 +5613,9 @@ async function saveEmb(){
   if(!whatsapp){toast("Falta el WhatsApp (obligatorio para contactarlo)","error");return;}
   if(!instagram){toast("Falta el Instagram (obligatorio para contactarlo)","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const u={id:uid(),name,email,pass:$("ae2-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram};
+  const u={id:uid(),name,email,pass:$("ae2-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],whatsapp,instagram,must_change_pass:true};
   D.users.push(u);
-  try{await sbPost("users",[u]);await log("add_emb_interno","user",u.id,`Nuevo embajador interno: ${name}`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPostUserTolerante(u);await log("add_emb_interno","user",u.id,`Nuevo embajador interno: ${name}`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ "+name+" agregado","success");VIEWS.embajadores();
 }
 async function eliminarJefe(uid_){
@@ -7849,9 +7886,9 @@ async function saveJefeEmb(eqId){
   if(!email){toast("Falta el email","error");return;}
   if(!whatsapp){toast("Falta el WhatsApp (obligatorio)","error");return;}
   if(!instagram){toast("Falta el Instagram (obligatorio)","error");return;}
-  const u={id:uid(),name,email,pass:$("je-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:eqId||null,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram};
+  const u={id:uid(),name,email,pass:$("je-p")?.value||"guestly123",role:"embajador",puntos:0,equipo_id:eqId||null,productora_id:CU.productora_id,evento_ids:[],whatsapp,instagram,must_change_pass:true};
   D.users.push(u);
-  try{await sbPost("users",[u]);await log("add_user","user",u.id,`Jefe agrega: ${name} al grupo`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPostUserTolerante(u);await log("add_user","user",u.id,`Jefe agrega: ${name} al grupo`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ "+name+" agregado","success");jefeView("equipo");
 }
 function descargarPlantillaEmb(){
@@ -7998,8 +8035,14 @@ function renderEmbTareas(mc){
   const estado=t=>{const c=myCums.find(c=>c.tarea_id===t.id);return c?c.estado:"pendiente";};
   const pend=tareas.filter(t=>estado(t)==="pendiente");
   const comp=tareas.filter(t=>["subido","aprobado"].includes(estado(t)));
+  const hoyISO=new Date().toISOString().slice(0,10);
+  const proximos=(D.eventos||[]).filter(e=>(!u.productora_id||e.productora_id===u.productora_id)&&e.status!=="archived"&&e.date&&e.date>=hoyISO).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,3);
+  const fEv=e=>{const d=new Date(e.date+"T12:00:00");const dias=Math.round((d-new Date(hoyISO+"T12:00:00"))/864e5);return {txt:d.toLocaleDateString("es-CL",{weekday:"short",day:"numeric",month:"short"}),dias};};
+  const eventosHTML=proximos.length?`<div style="margin-bottom:14px"><div style="font-size:12px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Próximos eventos</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch">${proximos.map(e=>{const f=fEv(e);return `<div style="flex:0 0 auto;min-width:170px;max-width:230px;background:linear-gradient(135deg,#534AB7,#7c6ff0);color:#fff;border-radius:12px;padding:12px 14px"><div style="font-size:13px;font-weight:700;line-height:1.25;word-break:break-word">${e.name}</div><div style="font-size:11px;opacity:.9;margin-top:6px">${f.txt}${e.start_time?" · "+e.start_time:""}</div>${e.venue?`<div style="font-size:11px;opacity:.85">📍 ${e.venue}</div>`:""}<div style="font-size:11px;font-weight:700;margin-top:6px;background:rgba(255,255,255,.18);display:inline-block;padding:2px 8px;border-radius:6px">${f.dias===0?"¡Es hoy!":f.dias===1?"Mañana":"En "+f.dias+" días"}</div></div>`;}).join("")}</div></div>`:"";
   mc.innerHTML=`
-    <div style="margin-bottom:16px"><div style="font-size:18px;font-weight:600">Hola, ${u.name.split(" ")[0]} 👋</div><div style="font-size:12px;color:#999;margin-top:2px">${pend.length>0?pend.length+" campaña(s) pendiente(s)":"¡Estás al día! 🎉"}</div></div>
+    <div style="margin-bottom:14px"><div style="font-size:18px;font-weight:600">Hola, ${u.name.split(" ")[0]} 👋</div><div style="font-size:12px;color:#999;margin-top:2px">${pend.length>0?(pend.length===1?"Tienes 1 campaña pendiente":`Tienes ${pend.length} campañas pendientes`):"¡Estás al día! 🎉"}</div></div>
+    ${eventosHTML}
+    ${pend.length?`<div style="font-size:12px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">✓ Por hacer</div>`:""}
     ${pend.map(t=>{
       const ev=D.eventos.find(e=>e.id===t.event_id);
       let extras="";
@@ -8032,7 +8075,7 @@ function renderEmbTareas(mc){
         ${accion}
       </div>`;
     }).join("")}
-    ${comp.length?`<div style="font-size:13px;font-weight:600;color:#999;margin:8px 0">Completadas</div>${comp.map(t=>`<div class="card" style="margin-bottom:8px;opacity:.8"><div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:500">${t.name}</div>${badge(estado(t)==="aprobado"?"✓ Aprobada":"⏳ Revisando",estado(t)==="aprobado"?"green":"amber")}</div></div>`).join("")}`:""}
+    ${comp.length?`<div style="font-size:13px;font-weight:600;color:#999;margin:8px 0">Completadas</div>${comp.map(t=>`<div class="card" style="margin-bottom:8px;opacity:.8"><div style="display:flex;justify-content:space-between"><div style="font-size:13px;font-weight:500">${t.name}</div>${badge(estado(t)==="aprobado"?"✓ Aprobada":"⏳ En revisión",estado(t)==="aprobado"?"green":"amber")}</div></div>`).join("")}`:""}
     ${tareas.length===0?`<div style="text-align:center;padding:40px;color:#aaa">Sin campañas asignadas.</div>`:""}`;
 }
 // Marcar campaña como hecha sin comprobante (modo autoreporte)
@@ -12098,7 +12141,7 @@ window.embPreviewAprobacion=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
   const eqId=$("emb-ap-eq")?.value||"",pass=($("emb-ap-pass")?.value||"").trim()||"guestly123";
   const eq=(D.equipos||[]).find(e=>e.id===eqId);const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
-  const extra=`<p style="color:#555;font-size:14px;line-height:1.6">¡Bienvenida al equipo de embajadoras de <strong>${prod?.nombre||"la productora"}</strong>! 🌸${eq?` Quedaste en el equipo <strong>${eq.name}</strong>.`:""}<br>En la app verás tus campañas, puntos e incentivos.</p>`;
+  const extra=`<p style="color:#555;font-size:14px;line-height:1.6">¡Bienvenida al equipo de embajadoras de <strong>${prod?.nombre||"la productora"}</strong>! 🌸${eq?` Quedaste en el equipo <strong>${eq.name}</strong>.`:""}<br>En la app verás tus campañas pendientes, lo que tienes que subir, tus puntos y los próximos eventos.</p><p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:13px">🔐 Esta contraseña es temporal: al entrar por primera vez te pediremos crear la tuya.</p>`;
   const html=emailTemplates.credenciales(p.nombre,p.email,pass,extra);
   const asunto=`¡Eres embajadora de ${prod?.nombre||"The Project"}! 🌸 Tu acceso a Guestly`;
   window._embApr={id,eqId,pass,asunto,html};
@@ -12111,8 +12154,8 @@ window.embPreviewAprobacion=(id)=>{
 window.embConfirmarAprobacion=async()=>{
   const a=window._embApr;if(!a)return;const p=(D.emb_postulantes||[]).find(x=>x.id===a.id);if(!p)return;
   try{
-    const u={id:uid(),name:`${p.nombre} ${p.apellido}`.trim(),email:p.email,pass:a.pass,role:"embajador",puntos:0,equipo_id:a.eqId||null,productora_id:p.productora_id,evento_ids:p.eventos_interes||[],whatsapp:(p.whatsapp||"").replace(/\D/g,""),instagram:"@"+p.instagram};
-    await sbPost("users",[u]);D.users.push(u);
+    const u={id:uid(),name:`${p.nombre} ${p.apellido}`.trim(),email:p.email,pass:a.pass,role:"embajador",puntos:0,equipo_id:a.eqId||null,productora_id:p.productora_id,evento_ids:p.eventos_interes||[],whatsapp:(p.whatsapp||"").replace(/\D/g,""),instagram:"@"+p.instagram,must_change_pass:true};
+    await sbPostUserTolerante(u);D.users.push(u);
     const at=now();await sbPatch("emb_postulantes",`id=eq.${p.id}`,{estado:"aprobado",resuelto_at:at,resuelto_por:CU?.id||null,user_id:u.id});
     Object.assign(p,{estado:"aprobado",resuelto_at:at,user_id:u.id});
     const ok=await sendEmail(p.email,a.asunto,a.html);
