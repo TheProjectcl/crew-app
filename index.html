@@ -240,6 +240,9 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
         <div id="sb-name" style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
         <div id="sb-role-lbl" style="font-size:10px;color:var(--ink-4)"></div>
       </div>
+      <button class="theme-toggle" onclick="abrirMiCuenta()" title="Mi cuenta · cambiar contraseña" style="margin-right:2px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()" title="Cambiar tema">
         <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -260,7 +263,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="rt-dot" class="rt-dot" title="Tiempo real" style="width:9px;height:9px;border-radius:50%;background:#aaa"></div>
       <div id="mob-aforo-badge" class="badge b-purple" style="font-size:12px"></div>
       <span data-bell-slot></span>
-      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -281,7 +284,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div style="display:flex;gap:8px;align-items:center">
       <div id="emb-pts" class="badge b-amber" style="font-size:12px;padding:4px 12px;font-weight:600"></div>
       <span data-bell-slot></span>
-      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -301,7 +304,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <span data-bell-slot></span>
-      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">👤</button>
+      <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -1195,7 +1198,7 @@ async function intentarLogin(email,pass,esRestauracion){
 function abrirMiCuenta(){
   if(!CU)return;
   const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"};
-  openModal("👤 Mi cuenta",`
+  openModal("⚙️ Mi cuenta",`
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <div class="avatar" style="width:44px;height:44px;font-size:15px">${ini(CU.name||"?")}</div>
       <div><div style="font-size:15px;font-weight:700">${CU.name||""}</div><div style="font-size:12px;color:#888">${CU.email||""} · ${ROL[CU.role]||CU.role}</div></div>
