@@ -624,7 +624,12 @@ const openModal=(title,html,wide=false)=>{
   $("modal").classList.remove("hidden");
 };
 const closeModal=()=>{if(window._modalBloqueado)return;$("modal").classList.add("hidden");};
-$("modal").addEventListener("click",e=>{if(e.target===$("modal"))closeModal();});
+// Cerrar solo con un click real en el fondo: presionar Y soltar fuera de la ventana.
+// (Si arrastras o seleccionas texto desde adentro y sueltas afuera, NO se cierra.)
+let _modalDownFuera=false;
+$("modal").addEventListener("mousedown",e=>{_modalDownFuera=(e.target===$("modal"));});
+$("modal").addEventListener("mouseup",e=>{if(_modalDownFuera&&e.target===$("modal"))closeModal();_modalDownFuera=false;});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("modal").classList.contains("hidden")&&!window._modalBloqueado)closeModal();});
 
 // ═══════════════════════════════════
 // LOAD DATA
