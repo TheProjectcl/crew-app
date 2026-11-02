@@ -2071,7 +2071,11 @@ VIEWS.productoras=()=>{
         const mesasCerr=mesasProd.filter(m=>m.estado_reserva==="cerrada").length;
         return `<div class="prod-card" onclick="impersonateProd('${p.id}')">
           <div class="prod-color-bar" style="background:${p.color||"#534AB7"}"></div>
-          <div style="font-size:17px;font-weight:700;margin-bottom:4px">${p.nombre}</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">
+            <div onclick="event.stopPropagation();openLogoProductora('${p.id}')" title="Cambiar logo" style="width:44px;height:44px;border-radius:12px;flex-shrink:0;overflow:hidden;border:1px solid var(--line);background:#f4f4f6;display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer">${p.logo_url?`<img src="${p.logo_url}" style="width:100%;height:100%;object-fit:cover">`:"🖼"}</div>
+            <div style="font-size:17px;font-weight:700;flex:1">${p.nombre}</div>
+            <button class="btn" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();openLogoProductora('${p.id}')">🖼 Logo</button>
+          </div>
           <div style="font-size:12px;color:#888;margin-bottom:12px">${owner?.name||"Sin owner"} · ${owner?.email||""}</div>
           <div style="display:flex;gap:14px;font-size:12px;color:#555;margin-bottom:10px">
             <div><strong style="color:#0a0a0a">${evsActivos.length}</strong> eventos activos</div>
@@ -2089,13 +2093,19 @@ VIEWS.productoras=()=>{
 
 function openNuevaProd(){
   const COLORS=["#534AB7","#EF4444","#F59E0B","#10B981","#3B82F6","#EC4899","#F97316","#8B5CF6"];
-  window._prodColor="#534AB7";
+  window._prodColor="#534AB7";window._npLogoFile=null;
   openModal("Nueva productora",`
     <div class="alert alert-info">Al crear la productora, se crea automáticamente el usuario dueño y usuarios demo de cada rol para que pueda ver cómo funciona la plataforma.</div>
     <div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-bottom:14px">
       <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:10px">📋 Datos de la productora</div>
       <label class="form-label" style="margin-top:0">Nombre de la productora</label>
       <input class="form-input" id="np-nombre" placeholder="Ej: The Project, XYZ Productions">
+      <div style="margin-top:12px;font-size:11px;color:#999;margin-bottom:6px">Logo de la productora <span style="color:#bbb">(cuadrado, mín. 400×400, JPG/PNG — sale en las vistas previas de los links y en los formularios públicos)</span></div>
+      <div style="display:flex;gap:12px;align-items:center;margin-bottom:6px">
+        <div id="np-logo-prev" style="width:64px;height:64px;border-radius:14px;border:2px dashed #ccc;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;overflow:hidden;flex-shrink:0">Sin logo</div>
+        <input type="file" id="np-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="npLogoPreview(this)">{document.getElementById('np-logo-prev').innerHTML='<img src=\''+e.target.result+'\' style=\'width:100%;height:100%;object-fit:cover\'>';};r.readAsDataURL(this.files[0])">
+        <button type="button" class="btn" style="font-size:12px" onclick="document.getElementById('np-logo-file').click()">📤 Elegir logo</button>
+      </div>
       <div style="margin-top:10px;font-size:11px;color:#999;margin-bottom:6px">Color de la productora:</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         ${COLORS.map(c=>`<div onclick="window._prodColor='${c}';document.querySelectorAll('[data-pc2]').forEach(x=>x.style.border='2px solid transparent');this.style.border='3px solid #111'" data-pc2="${c}" style="width:28px;height:28px;border-radius:50%;background:${c};cursor:pointer;border:${c=="#534AB7"?"3px solid #111":"2px solid transparent"}"></div>`).join("")}
@@ -2118,6 +2128,7 @@ function openNuevaProd(){
     </div>`,true);
 }
 
+window.npLogoPreview=(input)=>{const f=input.files?.[0];if(!f)return;window._npLogoFile=f;const r=new FileReader();r.onload=e=>{const el=$("np-logo-prev");if(el)el.innerHTML=`<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;};r.readAsDataURL(f);};
 async function saveNuevaProd(){
   const nombre=($("np-nombre")?.value||"").trim();
   const ownerName=(($("np-owner-name")?.value||"")+" "+($("np-owner-apl")?.value||"")).trim();
@@ -2151,7 +2162,12 @@ async function saveNuevaProd(){
 
   // 2) Luego crear la productora (owner_id ya existe en users)
   const prod={id:prodId,nombre,owner_id:ownerId,color,created_at:now()};
-  try{await sbPost("productoras",[prod]);}catch(e){toast("Error: "+e.message,"error");return;}
+  if(window._npLogoFile){try{prod.logo_url=await subirLogoArchivo(prodId,window._npLogoFile);}catch(e){toast("Logo no subido: "+e.message,"warn");}}
+  try{await sbPost("productoras",[prod]);}
+  catch(e){
+    if(/logo_url/.test(e.message||"")){const {logo_url,...sin}=prod;try{await sbPost("productoras",[sin]);toast("Productora creada, pero falta la columna logo_url para guardar el logo (ver SQL)","warn");}catch(e2){toast("Error: "+e2.message,"error");return;}}
+    else{toast("Error: "+e.message,"error");return;}
+  }
 
   D.productoras.push(prod);
   D.users.push(ownerU);
@@ -12076,9 +12092,8 @@ VIEWS["emb-postulaciones"]=async()=>{
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button onclick="navigator.clipboard.writeText('${link}');toast('✅ Link copiado','ok')" style="background:#EC4899;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar link</button>
             <a href="${link}" target="_blank" style="background:rgba(255,255,255,.12);color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">👁 Ver formulario</a>
-            <button onclick="openLogoProductora('${prodId}')" style="background:rgba(255,255,255,.12);border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖼 Logo de la productora</button>
           </div>
-          <div style="font-size:11px;color:#9CA3AF;margin-top:8px">${(D.productoras||[]).find(x=>x.id===prodId)?.logo_url?"✓ Tu logo aparece en la vista previa del link (WhatsApp/Instagram) y en el formulario.":"⚠ Sin logo: la vista previa del link mostrará el logo de Guestly. Súbelo con el botón 🖼."}</div>
+          <div style="font-size:11px;color:#9CA3AF;margin-top:8px">${(D.productoras||[]).find(x=>x.id===prodId)?.logo_url?"✓ El logo de la productora aparece en la vista previa del link (WhatsApp/Instagram) y en el formulario.":"⚠ La productora no tiene logo: la vista previa del link mostrará el de Guestly. Lo carga el administrador de Guestly en Productoras."}</div>
         </div>
         <div style="display:flex;gap:8px">
           ${[["pendiente","#FBBF24","Pendientes"],["aprobado","#34D399","Aprobadas"],["rechazado","#F87171","Rechazadas"]].map(([e,c,l])=>`<div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;min-width:84px"><div style="font-size:24px;font-weight:700;color:${c}">${cnt(e)}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">${l}</div></div>`).join("")}
@@ -12136,23 +12151,27 @@ window.openLogoProductora=(prodId)=>{
     <div id="logo-msg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:#666"></div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
 };
+// Sube el archivo del logo al storage y devuelve su URL pública
+async function subirLogoArchivo(prodId,f){
+  if(f.size>4*1024*1024)throw new Error("La imagen pesa más de 4 MB");
+  const ext=(f.name.split(".").pop()||"png").toLowerCase().replace("jpeg","jpg");
+  const path=`logos/${prodId}_${Date.now()}.${ext}`;
+  const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":f.type||"image/png","x-upsert":"true"},body:f});
+  if(!up.ok)throw new Error(await up.text());
+  return `${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+}
 window.subirLogoProductora=async(prodId,input)=>{
   const f=input.files?.[0];if(!f)return;const msg=$("logo-msg");
-  if(f.size>4*1024*1024){msg.textContent="La imagen pesa más de 4 MB, usa una más liviana.";return;}
   msg.textContent="Subiendo…";
   try{
-    const ext=(f.name.split(".").pop()||"png").toLowerCase().replace("jpeg","jpg");
-    const path=`logos/${prodId}_${Date.now()}.${ext}`;
-    const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":f.type||"image/png","x-upsert":"true"},body:f});
-    if(!up.ok)throw new Error(await up.text());
-    const url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+    const url=await subirLogoArchivo(prodId,f);
     try{await sbPatch("productoras",`id=eq.${prodId}`,{logo_url:url});}
     catch(e){if(/logo_url/.test(e.message||""))throw new Error("Falta la columna logo_url en la tabla productoras (ver SQL).");throw e;}
     const prod=(D.productoras||[]).find(x=>x.id===prodId);if(prod)prod.logo_url=url;if(CP&&CP.id===prodId)CP.logo_url=url;
     $("logo-prev").innerHTML=`<img src="${url}" style="width:140px;height:140px;object-fit:cover;border-radius:16px;border:1px solid var(--line)">`;
     msg.style.color="#166534";msg.textContent="✅ Logo guardado. Las vistas previas pueden tardar unos minutos en actualizarse (WhatsApp guarda caché).";
     try{await log("logo_productora","productora",prodId,"Actualizó el logo de la productora");}catch(e){}
-    if(CURRENT_VIEW==="emb-postulaciones")setTimeout(()=>VIEWS["emb-postulaciones"](),1500);
+    if(CURRENT_VIEW==="productoras")setTimeout(()=>VIEWS.productoras(),1200);
   }catch(e){msg.style.color="#dc2626";msg.textContent="Error: "+e.message;}
 };
 // Aprobar: elegir equipo + contraseña → vista previa del correo → crear usuario embajador + enviar
