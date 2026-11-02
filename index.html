@@ -1286,6 +1286,7 @@ function buildSidebar(){
   ]});
   allSections.push({label:"Embajadores",items:[
     {v:"embajadores",icon:"users",label:"Equipos de Embajadores"},
+    {v:"emb-postulaciones",icon:"users",label:"Postulaciones"},
     {v:"tareas",icon:"megaphone",label:"Campañas"},
     {v:"incentivos",icon:"trophy",label:"Incentivos"},
     {v:"canjes",icon:"gift",label:"Canjes"},
@@ -11879,9 +11880,267 @@ else if(_bdayUrl.has("bday_panel")){
   })();
 }
 
+
+// ═══════════════════════════════════
+// POSTULACIONES A EMBAJADORA (link público por productora + panel de revisión)
+// Tabla: emb_postulantes
+// ═══════════════════════════════════
+function rutValido(r){
+  const t=String(r||"").replace(/[.\-\s]/g,"").toUpperCase();if(t.length<8)return false;
+  const cuerpo=t.slice(0,-1),dv=t.slice(-1);if(!/^\d+$/.test(cuerpo))return false;
+  let suma=0,m=2;for(let i=cuerpo.length-1;i>=0;i--){suma+=parseInt(cuerpo[i])*m;m=m===7?2:m+1;}
+  const res=11-(suma%11);const dvCalc=res===11?"0":res===10?"K":String(res);return dvCalc===dv;
+}
+function fmtRut(r){const t=String(r||"").replace(/[.\-\s]/g,"").toUpperCase();if(t.length<2)return t;return t.slice(0,-1).replace(/\B(?=(\d{3})+(?!\d))/g,".")+"-"+t.slice(-1);}
+function edadDesde(iso){if(!iso)return null;const d=new Date(iso+"T12:00:00");if(isNaN(d))return null;const h=new Date();let e=h.getFullYear()-d.getFullYear();const m=h.getMonth()-d.getMonth();if(m<0||(m===0&&h.getDate()<d.getDate()))e--;return e;}
+
+// ── Página pública: ?emb=PRODUCTORA_ID ──
+async function mostrarPostulacionEmb(prodId){
+  document.body.innerHTML=`<style>
+    body{margin:0;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;color:#fff}
+    .pe-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .pe-box{background:#111;border:1px solid #222;border-radius:18px;padding:28px 24px;max-width:480px;width:100%}
+    .pe-title{text-align:center;margin-bottom:18px}.pe-title h1{font-size:22px;margin:0 0 4px;letter-spacing:1px}.pe-title p{margin:0;color:#888;font-size:12px;letter-spacing:3px;text-transform:uppercase}
+    .pe-sub{color:#aaa;font-size:13px;text-align:center;margin-bottom:20px;line-height:1.5}
+    .pe-lbl{display:block;font-size:12px;font-weight:600;color:#ccc;margin:12px 0 5px}.pe-lbl span{color:#EC4899}
+    .pe-in{width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px 14px;color:#fff;font-size:15px;outline:none}.pe-in:focus{border-color:#EC4899}
+    .pe-in.err{border-color:#ef4444;background:#1f1416}.pe-err{font-size:11px;color:#f87171;margin-top:4px;font-weight:600}
+    .pe-row{display:flex;gap:8px}.pe-row>*{flex:1}
+    .pe-chk{display:flex;gap:10px;align-items:flex-start;font-size:12px;color:#bbb;margin-top:14px;line-height:1.5}.pe-chk input{margin-top:3px;width:16px;height:16px;accent-color:#EC4899}
+    .pe-btn{width:100%;margin-top:18px;background:#EC4899;border:none;color:#fff;padding:14px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer}.pe-btn:disabled{opacity:.6}
+    .pe-ok{text-align:center;padding:30px 10px}.pe-ok .ic{font-size:54px;margin-bottom:10px}.pe-ok h2{margin:0 0 8px;font-size:20px}.pe-ok p{color:#999;font-size:14px;line-height:1.6;margin:0}
+    .pe-ev{display:flex;gap:10px;align-items:center;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;font-size:13px}.pe-ev input{width:16px;height:16px;accent-color:#EC4899}
+    .pe-foto{border:1.5px dashed #444;border-radius:12px;padding:14px;text-align:center;color:#aaa;font-size:13px;cursor:pointer;background:#161616}.pe-foto img{max-height:170px;max-width:100%;border-radius:8px;display:block;margin:0 auto 8px}
+    .pe-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
+  </style><div class="pe-wrap"><div class="pe-box" id="pe-box"><div class="pe-ok"><div class="ic">⏳</div><p>Cargando…</p></div></div></div>`;
+  const box=document.getElementById("pe-box");
+  let prod,evs=[];
+  try{
+    const [pArr,eArr]=await Promise.all([sbGet("productoras",`id=eq.${prodId}`),sbGet("eventos",`productora_id=eq.${prodId}&order=date`)]);
+    prod=pArr[0];const hoy=new Date().toISOString().slice(0,10);
+    evs=(eArr||[]).filter(e=>e.status!=="archived"&&(!e.date||e.date>=hoy));
+  }catch(e){}
+  if(!prod){box.innerHTML=`<div class="pe-ok"><div class="ic">😕</div><h2>Link no válido</h2><p>Este link de postulación no existe.</p></div>`;return;}
+  const show=(h)=>{box.innerHTML=h;window.scrollTo(0,0);};
+  const form=()=>show(`
+    <div class="pe-title"><h1>${prod.nombre||"Productora"}</h1><p>Embajadoras</p></div>
+    <div class="pe-sub">Postula para ser embajadora de <strong style="color:#fff">${prod.nombre||""}</strong>. Revisaremos tu postulación y te avisaremos por correo.</div>
+    <div class="pe-row">
+      <div><label class="pe-lbl">Nombre <span>*</span></label><input class="pe-in" id="pe-nom" placeholder="Tu nombre"></div>
+      <div><label class="pe-lbl">Apellido <span>*</span></label><input class="pe-in" id="pe-ape" placeholder="Tu apellido"></div>
+    </div>
+    <label class="pe-lbl">Fecha de nacimiento <span>*</span></label>
+    <div class="pe-row">
+      <select class="pe-in" id="pe-fd"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>
+      <select class="pe-in" id="pe-fm" style="flex:1.6"><option value="">Mes</option>${["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m,i)=>`<option value="${String(i+1).padStart(2,"0")}">${m}</option>`).join("")}</select>
+      <select class="pe-in" id="pe-fy"><option value="">Año</option>${Array.from({length:50},(_,i)=>{const y=new Date().getFullYear()-15-i;return `<option value="${y}">${y}</option>`;}).join("")}</select>
+    </div>
+    <div><label class="pe-lbl">RUT <span>*</span></label><input class="pe-in" id="pe-rut" placeholder="12.345.678-9" maxlength="12" oninput="let v=this.value.replace(/[^0-9kK]/g,'');if(v.length>1)v=v.slice(0,-1).replace(/\\B(?=(\\d{3})+(?!\\d))/g,'.')+'-'+v.slice(-1);this.value=v.toUpperCase()"></div>
+    <div><label class="pe-lbl">WhatsApp <span>*</span></label>
+    <div style="display:flex"><span style="background:#222;border:1px solid #333;border-right:none;border-radius:10px 0 0 10px;padding:12px 12px;font-size:14px;color:#aaa;font-weight:600">+569</span><input class="pe-in" id="pe-wtsp" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 10px 10px 0" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,8)"></div></div>
+    <div><label class="pe-lbl">Correo <span>*</span></label><input class="pe-in" id="pe-email" type="email" placeholder="tu@correo.cl" autocapitalize="off"></div>
+    <div><label class="pe-lbl">Instagram <span>*</span></label><input class="pe-in" id="pe-ig" placeholder="@tuinstagram" autocapitalize="off"></div>
+    <label class="pe-lbl">TikTok <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pe-in" id="pe-tt" placeholder="@tutiktok" autocapitalize="off">
+    <div><label class="pe-lbl">Ciudad / comuna <span>*</span></label><input class="pe-in" id="pe-ciudad" placeholder="Ej: Providencia, Santiago"></div>
+    <label class="pe-lbl">¿Has sido embajadora antes? ¿De qué fiestas? <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pe-in" id="pe-exp" placeholder="Ej: Sí, de Club 40 y BRESH" maxlength="120">
+    ${evs.length?`<label class="pe-lbl">¿De qué evento te gustaría ser embajadora? <span>*</span></label><div id="pe-evs">${evs.map(e=>`<label class="pe-ev"><input type="checkbox" class="pe-ev-chk" value="${e.id}"><span><strong>${e.name}</strong>${e.date?` <span style="color:#888">· ${new Date(e.date+"T12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"long"})}</span>`:""}</span></label>`).join("")}</div>`:""}
+    <label class="pe-lbl">Foto de tu carnet <span>*</span></label>
+    <input type="file" id="pe-foto-file" accept="image/*" capture="environment" style="display:none" onchange="window._pePreview(this)">
+    <div class="pe-foto" id="pe-foto-box" onclick="document.getElementById('pe-foto-file').click()"><div id="pe-foto-prev"></div>📷 Tomar foto o subir desde galería<div style="font-size:11px;color:#777;margin-top:4px">Solo para verificar tu identidad y edad. No se comparte.</div></div>
+    <div id="pe-foto-err" class="pe-err"></div>
+    <label class="pe-chk"><input type="checkbox" id="pe-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para el proceso de selección de embajadoras de ${prod.nombre||"la productora"}.</span></label>
+    <button class="pe-btn" id="pe-btn" onclick="window._peEnviar()">Enviar postulación 🌸</button>
+    <div id="pe-msg" class="pe-err" style="text-align:center;margin-top:10px"></div>
+    <div class="pe-foot">POWERED BY GUESTLY</div>`);
+  window._peFotoFile=null;
+  window._pePreview=(inp)=>{const f=inp.files?.[0];if(!f)return;window._peFotoFile=f;const r=new FileReader();r.onload=e=>{document.getElementById("pe-foto-prev").innerHTML=`<img src="${e.target.result}">`;document.getElementById("pe-foto-err").textContent="";};r.readAsDataURL(f);};
+  const mark=(id,msg)=>{const el=document.getElementById(id);if(!el)return;el.classList.add("err");let wrap=el.parentElement;if(wrap&&getComputedStyle(wrap).display==="flex"&&id==="pe-wtsp")wrap=wrap.parentElement;let h=wrap.querySelector(".pe-err.auto");if(!h){h=document.createElement("div");h.className="pe-err auto";wrap.appendChild(h);}h.textContent=msg;el.addEventListener("input",()=>{el.classList.remove("err");h.remove();},{once:true});};
+  window._peEnviar=async()=>{
+    document.querySelectorAll(".pe-err.auto").forEach(e=>e.remove());document.querySelectorAll(".pe-in.err").forEach(e=>e.classList.remove("err"));
+    const g=id=>(document.getElementById(id)?.value||"").trim();
+    const nombre=g("pe-nom"),apellido=g("pe-ape"),rut=g("pe-rut"),wtsp=g("pe-wtsp"),email=g("pe-email").toLowerCase(),ig=normIG(g("pe-ig")),tt=normIG(g("pe-tt")),ciudad=g("pe-ciudad"),exp=g("pe-exp");
+    const fd=g("pe-fd"),fm=g("pe-fm"),fy=g("pe-fy");const fnac=fd&&fm&&fy?`${fy}-${fm}-${fd}`:"";
+    const evSel=[...document.querySelectorAll(".pe-ev-chk:checked")].map(c=>c.value);
+    let errs=0;
+    if(!nombre){mark("pe-nom","Falta tu nombre");errs++;}
+    if(!apellido){mark("pe-ape","Falta tu apellido");errs++;}
+    if(!fnac){mark("pe-fy","Completa tu fecha de nacimiento");errs++;}
+    else if(edadDesde(fnac)<18){mark("pe-fy","Debes ser mayor de 18 años");errs++;}
+    if(!rut){mark("pe-rut","Falta tu RUT");errs++;}else if(!rutValido(rut)){mark("pe-rut","RUT inválido, revísalo");errs++;}
+    if(wtsp.length!==8){mark("pe-wtsp","Deben ser 8 dígitos");errs++;}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("pe-email","Correo inválido");errs++;}
+    if(!ig){mark("pe-ig","Falta tu Instagram");errs++;}
+    if(!ciudad){mark("pe-ciudad","Falta tu ciudad o comuna");errs++;}
+    if(evs.length&&!evSel.length){document.getElementById("pe-msg").textContent="Selecciona al menos un evento";errs++;}
+    if(!window._peFotoFile){document.getElementById("pe-foto-err").textContent="⚠ Debes subir la foto de tu carnet";errs++;}
+    if(!document.getElementById("pe-mayor").checked){document.getElementById("pe-msg").textContent="Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos";errs++;}
+    if(errs){const first=document.querySelector(".pe-in.err, #pe-foto-err:not(:empty)");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    const btn=document.getElementById("pe-btn");btn.disabled=true;btn.textContent="Enviando…";
+    try{
+      const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
+      // ¿Ya es embajadora de esta productora?
+      const yaUsers=await sbGet("users",`productora_id=eq.${prodId}&role=eq.embajador&or=(email.ilike.${encodeURIComponent(email)},instagram.ilike.${encodeURIComponent("%"+ig+"%")})`);
+      if(yaUsers.length){show(`<div class="pe-ok"><div class="ic">🌸</div><h2>¡Ya eres embajadora!</h2><p>${nombre}, ya tienes una cuenta de embajadora en <strong style="color:#fff">${prod.nombre||""}</strong>.<br>Ingresa en <a href="${APP_URL}" style="color:#EC4899">guestly.cl</a> con tu correo. Si no recuerdas tu contraseña, habla con tu jefe de embajadores.</p></div>`);return;}
+      // ¿Ya postuló antes? (misma productora, por RUT, correo o Instagram)
+      const previas=await sbGet("emb_postulantes",`productora_id=eq.${prodId}&or=(rut.eq.${encodeURIComponent(rutN)},email.ilike.${encodeURIComponent(email)},instagram.ilike.${encodeURIComponent(ig)})&order=created_at.desc`);
+      const pendiente=(previas||[]).find(p=>p.estado==="pendiente");
+      if(pendiente){show(`<div class="pe-ok"><div class="ic">⏳</div><h2>Ya recibimos tu postulación</h2><p>Tu postulación del ${new Date(pendiente.created_at).toLocaleDateString("es-CL")} está en revisión. Te avisaremos por correo a <strong style="color:#fff">${pendiente.email}</strong>.</p></div>`);return;}
+      const fueAprobada=(previas||[]).some(p=>p.estado==="aprobado");
+      // ¿Fue embajadora y la eliminaron? (registro de actividad)
+      let fueEliminada=false;
+      try{const logs=await sbGet("audit_log",`action=eq.delete_emb&detail=ilike.${encodeURIComponent("%"+nombre+"%"+apellido+"%")}&limit=5`);fueEliminada=(logs||[]).length>0;}catch(e){}
+      // Subir foto carnet
+      const ext=(window._peFotoFile.name.split(".").pop()||"jpg").toLowerCase();
+      const path=`emb-carnet/${prodId}_${rutN}_${Date.now()}.${ext}`;
+      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":window._peFotoFile.type||"image/jpeg","x-upsert":"true"},body:window._peFotoFile});
+      if(!up.ok)throw new Error("No se pudo subir la foto: "+(await up.text()));
+      const foto_carnet=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+      const row={id:uid(),productora_id:prodId,nombre,apellido,fecha_nacimiento:fnac,rut:rutN,whatsapp:"+569"+wtsp,email,instagram:ig,tiktok:tt||null,ciudad,experiencia:exp||null,eventos_interes:evSel,foto_carnet,estado:"pendiente",reintegro:(fueAprobada||fueEliminada),created_at:now()};
+      await sbPost("emb_postulantes",[row]);
+      show(`<div class="pe-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod.nombre||""}</strong> revisará tu postulación y te avisará por correo a <strong style="color:#fff">${email}</strong>.</p><div class="pe-foot">POWERED BY GUESTLY</div></div>`);
+    }catch(e){
+      btn.disabled=false;btn.textContent="Enviar postulación 🌸";
+      document.getElementById("pe-msg").textContent="Error al enviar: "+(e.message||"intenta de nuevo");
+    }
+  };
+  form();
+}
+
+// ── Panel: Embajadores → Postulaciones ──
+VIEWS["emb-postulaciones"]=async()=>{
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const mc=$("main-content");
+  mc.innerHTML=`<div class="page-title">Postulaciones de embajadoras</div><div class="card" style="color:#999;padding:30px;text-align:center">Cargando…</div>`;
+  try{D.emb_postulantes=await sbGet("emb_postulantes",(prodId?`productora_id=eq.${prodId}&`:"")+"order=created_at.desc");}
+  catch(e){mc.innerHTML=`<div class="page-title">Postulaciones de embajadoras</div><div class="alert alert-warn">No se pudo cargar: ${e.message}<br><br>Si dice que la tabla <strong>emb_postulantes</strong> no existe, hay que crearla en Supabase (pídele el SQL a quien configuró Guestly).</div>`;return;}
+  window._embPostFiltro=window._embPostFiltro||"pendiente";window._embPostQ="";
+  const link=`${APP_URL}?emb=${prodId}`;
+  const render=()=>{
+    const all=D.emb_postulantes||[];
+    const nq=acrNorm(window._embPostQ||"");
+    const lista=all.filter(p=>window._embPostFiltro==="todos"||p.estado===window._embPostFiltro).filter(p=>!nq||[p.nombre+" "+p.apellido,p.rut,p.email,p.instagram,p.ciudad].some(v=>acrNorm(v).includes(nq)));
+    const cnt=e=>all.filter(p=>p.estado===e).length;
+    const evNom=id=>(D.eventos||[]).find(e=>e.id===id)?.name||"";
+    mc.innerHTML=`
+      <div class="page-title">Postulaciones de embajadoras</div>
+      <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);border-radius:16px;padding:20px 24px;margin-bottom:16px;color:#fff;display:flex;gap:20px;flex-wrap:wrap;align-items:center">
+        <div style="flex-shrink:0;background:#fff;border-radius:10px;padding:8px"><img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(link)}" width="100" height="100" style="display:block;border-radius:6px"></div>
+        <div style="flex:1;min-width:220px">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#a0aec0;margin-bottom:6px">🔗 Link de postulación (ponlo en tu bio)</div>
+          <div style="font-size:13px;font-family:monospace;background:rgba(255,255,255,.08);padding:10px 14px;border-radius:8px;word-break:break-all;margin-bottom:10px">${link}</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button onclick="navigator.clipboard.writeText('${link}');toast('✅ Link copiado','ok')" style="background:#EC4899;border:none;color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">📋 Copiar link</button>
+            <a href="${link}" target="_blank" style="background:rgba(255,255,255,.12);color:#fff;padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">👁 Ver formulario</a>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          ${[["pendiente","#FBBF24","Pendientes"],["aprobado","#34D399","Aprobadas"],["rechazado","#F87171","Rechazadas"]].map(([e,c,l])=>`<div style="text-align:center;background:rgba(255,255,255,.08);border-radius:10px;padding:10px 14px;min-width:84px"><div style="font-size:24px;font-weight:700;color:${c}">${cnt(e)}</div><div style="font-size:10px;color:#9CA3AF;text-transform:uppercase;letter-spacing:1px">${l}</div></div>`).join("")}
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        ${[["pendiente","Pendientes"],["aprobado","Aprobadas"],["rechazado","Rechazadas"],["todos","Todas"]].map(([k,l])=>`<button class="btn" style="font-size:12px;${window._embPostFiltro===k?"background:#534AB7;color:#fff":""}" onclick="window._embPostFiltro='${k}';window._embPostRender()">${l}${k!=="todos"?` (${cnt(k)})`:""}</button>`).join("")}
+        <input class="form-input" id="emb-post-q" placeholder="🔍 Nombre, RUT, correo, Instagram, ciudad…" style="flex:1;min-width:220px;margin:0;font-size:13px;padding:8px 12px" value="${(window._embPostQ||"").replace(/"/g,"&quot;")}" oninput="window._embPostQ=this.value;window._embPostRender(true)">
+      </div>
+      ${lista.length?lista.map(p=>{
+        const edad=edadDesde(p.fecha_nacimiento);
+        const yaEmb=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+        return `<div class="card" style="margin-bottom:10px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;border-left:4px solid ${p.estado==="aprobado"?"#22C55E":p.estado==="rechazado"?"#EF4444":p.reintegro?"#F59E0B":"#534AB7"}">
+          <a href="${p.foto_carnet||"#"}" target="_blank" title="Ver foto del carnet" style="flex-shrink:0"><img src="${p.foto_carnet||""}" style="width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line);background:#f4f4f6" onerror="this.style.display='none'"></a>
+          <div style="flex:1;min-width:240px">
+            <div style="font-size:15px;font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${p.nombre} ${p.apellido}
+              ${edad!==null?`<span style="font-size:11px;background:${edad>=18?"#dcfce7":"#fee2e2"};color:${edad>=18?"#166534":"#991b1b"};padding:2px 8px;border-radius:5px;font-weight:600">${edad} años</span>`:""}
+              ${p.reintegro?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;font-weight:700">🔁 Quiere reintegrarse (fue embajadora antes)</span>`:""}
+              ${yaEmb?`<span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700">✓ Ya es embajadora</span>`:""}
+              ${p.estado==="aprobado"?badge("Aprobada","green"):p.estado==="rechazado"?badge("Rechazada","red"):badge("Pendiente","amber")}
+            </div>
+            <div style="font-size:12px;color:#555;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
+              <span>🪪 ${fmtRut(p.rut)}</span><span>📍 ${p.ciudad||"—"}</span><span>🎂 ${p.fecha_nacimiento?new Date(p.fecha_nacimiento+"T12:00:00").toLocaleDateString("es-CL"):"—"}</span>
+            </div>
+            <div style="font-size:12px;margin-top:4px;display:flex;gap:12px;flex-wrap:wrap">
+              <a href="https://instagram.com/${p.instagram}" target="_blank" style="color:#E1306C;font-weight:600;text-decoration:none">📸 @${p.instagram}</a>
+              ${p.tiktok?`<a href="https://tiktok.com/@${p.tiktok}" target="_blank" style="color:#111;font-weight:600;text-decoration:none">🎵 @${p.tiktok}</a>`:""}
+              <a href="https://wa.me/${(p.whatsapp||"").replace(/\D/g,"")}" target="_blank" style="color:#25D366;font-weight:600;text-decoration:none">💬 ${p.whatsapp}</a>
+              <a href="mailto:${p.email}" style="color:#555;text-decoration:none">✉ ${p.email}</a>
+            </div>
+            ${(p.eventos_interes||[]).length?`<div style="font-size:12px;color:#534AB7;margin-top:6px">🎟 Le interesa: <strong>${(p.eventos_interes||[]).map(evNom).filter(Boolean).join(", ")||"—"}</strong></div>`:""}
+            ${p.experiencia?`<div style="font-size:12px;color:#555;margin-top:4px">⭐ Experiencia: ${p.experiencia}</div>`:""}
+            ${p.motivo_rechazo?`<div style="font-size:12px;color:#991b1b;margin-top:4px">Motivo rechazo: ${p.motivo_rechazo}</div>`:""}
+            <div style="font-size:11px;color:#aaa;margin-top:6px">Postuló ${fmtDT(p.created_at)}${p.resuelto_at?` · resuelta ${fmtDT(p.resuelto_at)}`:""}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+            ${p.estado==="pendiente"?`<button class="btn btn-success" style="font-size:12px" onclick="embAprobarPost('${p.id}')">✓ Aprobar</button><button class="btn" style="font-size:12px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="embRechazarPost('${p.id}')">✕ Rechazar</button>`:""}
+            ${p.estado==="rechazado"?`<button class="btn" style="font-size:12px" onclick="embReabrirPost('${p.id}')">↩ Volver a pendiente</button>`:""}
+            <button class="btn btn-danger" style="font-size:12px;padding:4px 10px" onclick="embEliminarPost('${p.id}')">🗑</button>
+          </div>
+        </div>`;}).join(""):`<div class="card" style="color:#999;text-align:center;padding:30px">${nq?"Sin resultados.":window._embPostFiltro==="pendiente"?"No hay postulaciones pendientes. Comparte el link para recibir postulaciones.":"Nada aquí todavía."}</div>`}`;
+    const inp=$("emb-post-q");if(inp&&window._embPostFocus){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);window._embPostFocus=false;}
+  };
+  window._embPostRender=(fromInput)=>{window._embPostFocus=!!fromInput;render();};
+  render();
+};
+// Aprobar: elegir equipo + contraseña → vista previa del correo → crear usuario embajador + enviar
+window.embAprobarPost=(id)=>{
+  const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
+  const prodId=p.productora_id;
+  const equipos=(D.equipos||[]).filter(e=>!prodId||e.productora_id===prodId);
+  const yaEmb=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+  if(yaEmb){alert(`${p.nombre} ya tiene cuenta de embajadora (${yaEmb.email}). Si quiere volver, solo hay que asignarla a un equipo en Equipos de Embajadores.`);return;}
+  const pass=Math.random().toString(36).slice(2,8);
+  openModal(`Aprobar a ${p.nombre} ${p.apellido}`,`
+    ${p.reintegro?`<div class="alert alert-warn" style="margin-top:0">🔁 Fue embajadora antes y quiere reintegrarse.</div>`:""}
+    <label class="form-label" style="margin-top:0">Equipo</label>
+    <select class="form-select" id="emb-ap-eq"><option value="">— Embajadora interna (sin equipo) —</option>${equipos.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}</select>
+    <label class="form-label">Contraseña inicial</label><input class="form-input" id="emb-ap-pass" value="${pass}">
+    <div style="font-size:12px;color:#666;margin-top:8px">Se creará su usuario de embajadora con WhatsApp e Instagram ya cargados, y le llegará un correo con su acceso. Verás el correo antes de enviarlo.</div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="embPreviewAprobacion('${id}')">Siguiente: ver correo →</button></div>`);
+};
+window.embPreviewAprobacion=(id)=>{
+  const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
+  const eqId=$("emb-ap-eq")?.value||"",pass=($("emb-ap-pass")?.value||"").trim()||"guestly123";
+  const eq=(D.equipos||[]).find(e=>e.id===eqId);const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
+  const extra=`<p style="color:#555;font-size:14px;line-height:1.6">¡Bienvenida al equipo de embajadoras de <strong>${prod?.nombre||"la productora"}</strong>! 🌸${eq?` Quedaste en el equipo <strong>${eq.name}</strong>.`:""}<br>En la app verás tus campañas, puntos e incentivos.</p>`;
+  const html=emailTemplates.credenciales(p.nombre,p.email,pass,extra);
+  const asunto=`¡Eres embajadora de ${prod?.nombre||"The Project"}! 🌸 Tu acceso a Guestly`;
+  window._embApr={id,eqId,pass,asunto,html};
+  openModal(`Vista previa — se enviará a ${p.email}`,`
+    <div style="font-size:12px;color:#555;margin-bottom:8px"><strong>Para:</strong> ${p.nombre} ${p.apellido} &lt;${p.email}&gt;<br><strong>Asunto:</strong> ${asunto}</div>
+    <iframe id="emb-ap-prev" style="width:100%;height:420px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6"></iframe>
+    <div class="modal-footer"><button class="btn" onclick="embAprobarPost('${id}')">← Volver</button><button class="btn btn-primary" onclick="this.disabled=true;this.textContent='Creando y enviando…';embConfirmarAprobacion()">✓ Aprobar, crear usuario y enviar</button></div>`);
+  setTimeout(()=>{const f=$("emb-ap-prev");if(f)f.srcdoc=html;},30);
+};
+window.embConfirmarAprobacion=async()=>{
+  const a=window._embApr;if(!a)return;const p=(D.emb_postulantes||[]).find(x=>x.id===a.id);if(!p)return;
+  try{
+    const u={id:uid(),name:`${p.nombre} ${p.apellido}`.trim(),email:p.email,pass:a.pass,role:"embajador",puntos:0,equipo_id:a.eqId||null,productora_id:p.productora_id,evento_ids:p.eventos_interes||[],whatsapp:(p.whatsapp||"").replace(/\D/g,""),instagram:"@"+p.instagram};
+    await sbPost("users",[u]);D.users.push(u);
+    const at=now();await sbPatch("emb_postulantes",`id=eq.${p.id}`,{estado:"aprobado",resuelto_at:at,resuelto_por:CU?.id||null,user_id:u.id});
+    Object.assign(p,{estado:"aprobado",resuelto_at:at,user_id:u.id});
+    const ok=await sendEmail(p.email,a.asunto,a.html);
+    await log("emb_postulacion_aprobada","user",u.id,`Embajadora aprobada desde postulación: ${u.name}${a.eqId?" → equipo":""}`);
+    closeModal();toast(ok?`✅ ${p.nombre} ya es embajadora. Correo enviado.`:`✅ ${p.nombre} creada, pero el correo no se pudo enviar`,ok?"ok":"warn");
+    VIEWS["emb-postulaciones"]();
+  }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+e.message);}
+};
+window.embRechazarPost=async(id)=>{
+  const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
+  const motivo=prompt(`Motivo del rechazo de ${p.nombre} (interno, opcional):`);if(motivo===null)return;
+  const avisar=confirm("¿Avisarle por correo que no fue seleccionada esta vez?\n\nAceptar = enviar correo · Cancelar = rechazar sin avisar");
+  const at=now();
+  try{
+    await sbPatch("emb_postulantes",`id=eq.${id}`,{estado:"rechazado",motivo_rechazo:motivo||null,resuelto_at:at,resuelto_por:CU?.id||null});
+    Object.assign(p,{estado:"rechazado",motivo_rechazo:motivo||null,resuelto_at:at});
+    if(avisar){const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
+      await sendEmail(p.email,`Tu postulación a embajadora — ${prod?.nombre||""}`,`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8"><div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div><h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Hola ${p.nombre} 🌸</h2><p style="color:#555;font-size:14px;line-height:1.6">Gracias por postular a ser embajadora de <strong>${prod?.nombre||""}</strong>. Por ahora no tenemos cupos para sumarte al equipo, pero guardamos tus datos y te avisaremos si se abren nuevas vacantes.</p><p style="color:#555;font-size:14px;line-height:1.6">¡Nos vemos en la pista! 💃</p>${GL_POWERED}</div></div>`);}
+    toast("Postulación rechazada","warn");VIEWS["emb-postulaciones"]();
+  }catch(e){toast("Error: "+e.message,"error");}
+};
+window.embReabrirPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;await sbPatch("emb_postulantes",`id=eq.${id}`,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});Object.assign(p,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});VIEWS["emb-postulaciones"]();};
+window.embEliminarPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p||!confirm(`¿Eliminar la postulación de ${p.nombre} ${p.apellido}?`))return;await sbDelete("emb_postulantes",`id=eq.${id}`);D.emb_postulantes=D.emb_postulantes.filter(x=>x.id!==id);toast("Eliminada");VIEWS["emb-postulaciones"]();};
+
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
-if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
+if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
+else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
 
@@ -11900,7 +12159,7 @@ else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb"].some(k=>_pub.has(k));
   if(!_esLinkPublico) await restaurarSesion();
 })();
 </script>
