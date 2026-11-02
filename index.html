@@ -2150,7 +2150,7 @@ function openNuevaProd(){
       <div style="margin-top:12px;font-size:11px;color:#999;margin-bottom:6px">Logo de la productora <span style="color:#bbb">(cuadrado, mín. 400×400, JPG/PNG — sale en las vistas previas de los links y en los formularios públicos)</span></div>
       <div style="display:flex;gap:12px;align-items:center;margin-bottom:6px">
         <div id="np-logo-prev" style="width:64px;height:64px;border-radius:14px;border:2px dashed #ccc;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:11px;overflow:hidden;flex-shrink:0">Sin logo</div>
-        <input type="file" id="np-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="npLogoPreview(this)">{document.getElementById('np-logo-prev').innerHTML='<img src=\''+e.target.result+'\' style=\'width:100%;height:100%;object-fit:cover\'>';};r.readAsDataURL(this.files[0])">
+        <input type="file" id="np-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="npLogoPreview(this)">
         <button type="button" class="btn" style="font-size:12px" onclick="document.getElementById('np-logo-file').click()">📤 Elegir logo</button>
       </div>
       <div style="margin-top:10px;font-size:11px;color:#999;margin-bottom:6px">Color de la productora:</div>
