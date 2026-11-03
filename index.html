@@ -2659,8 +2659,8 @@ VIEWS.puerta=async()=>{
         <div><div class="sec-title">Carga masiva — <span style="color:#534AB7">${ev.name}</span></div></div>
         <div style="display:flex;gap:8px">
           <button class="btn" onclick="descargarPlantilla()">Plantilla</button>
-          <button class="btn btn-primary" onclick="$('csv-up').click()">Cargar CSV</button>
-          <input type="file" id="csv-up" accept=".csv" style="display:none" onchange="cargarCSV(this)">
+          <button class="btn btn-primary" onclick="$('csv-up').click()">Cargar CSV / Excel</button>
+          <input type="file" id="csv-up" accept=".csv,.xlsx,.xls" style="display:none" onchange="cargarCSV(this)">
         </div>
       </div>
       <div style="font-size:12px;color:#888">Columnas: <strong>${pulseras.map(p=>p.nombre).join(" · ")||"Sin pulseras — configúralas en Eventos"}</strong></div>
@@ -5203,15 +5203,7 @@ async function exportarBloqueo(){
   lista.forEach(b=>rows.push([b.nombre||"",b.rut||"",b.motivo||"",b.vence?fmtF(b.vence):"Permanente",(!b.vence||b.vence>=hoyISO)?"Vigente":"Vencido",b.email||"",b.created_at?fmtF(b.created_at.slice(0,10)):""]));
   const prodNom=((D.productoras||[]).find(p=>p.id===prodId)?.nombre||"productora").replace(/[^\w\dáéíóúñ ]/gi,"").trim().replace(/\s+/g,"_");
   const fname=`lista_bloqueo_${prodNom}_${hoyISO}`;
-  if(await cargarSheetJS()){
-    const ws=XLSX.utils.aoa_to_sheet(rows);ws["!cols"]=[{wch:30},{wch:16},{wch:34},{wch:14},{wch:10},{wch:26},{wch:12}];
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Lista de bloqueo");
-    XLSX.writeFile(wb,fname+".xlsx");
-  }else{
-    const esc=v=>{const t=String(v??"");return /[";\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
-    const csv="\uFEFF"+rows.map(r=>r.map(esc).join(";")).join("\r\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);a.download=fname+".csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
-  }
+  descargarTabla(fname,rows,"Lista de bloqueo",{titulo:"lista de bloqueo"});
   toast(`✓ ${lista.length} persona${lista.length===1?"":"s"} exportada${lista.length===1?"":"s"}`,"success");
 }
 function openImportBloqueo(){
@@ -5240,6 +5232,54 @@ async function cargarSheetJS(){
   try{await new Promise((ok,fail)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=ok;sc.onerror=fail;document.head.appendChild(sc);});return true;}
   catch(e){return false;}
 }
+// ═══ Descarga universal: el usuario elige CSV o Excel ═══
+function descargarCSV(nombre,rows){
+  const esc=v=>{const t=String(v??"");return /[";\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
+  const csv="\uFEFF"+rows.map(r=>r.map(esc).join(";")).join("\r\n"); // ; → Excel en español abre en columnas
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");a.href=url;a.download=nombre+".csv";document.body.appendChild(a);a.click();document.body.removeChild(a);setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+async function descargarXLSX(nombre,rows,hoja){
+  if(!(await cargarSheetJS())){toast("No se pudo cargar el generador de Excel, se descarga CSV","warn");return descargarCSV(nombre,rows);}
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const anchos=[];rows.slice(0,200).forEach(r=>r.forEach((c,i)=>{anchos[i]=Math.max(anchos[i]||8,Math.min(50,String(c??"").length+2));}));
+  ws["!cols"]=anchos.map(w=>({wch:w}));
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,(hoja||"Datos").slice(0,31));
+  XLSX.writeFile(wb,nombre+".xlsx");
+}
+// Muestra un selector flotante (funciona también encima de un modal) y descarga en el formato elegido
+function descargarTabla(nombre,rows,hoja,opts={}){
+  if(!rows||(rows.length<2&&!opts.permitirVacio)){toast("No hay datos para exportar","warn");return;}
+  document.getElementById("dl-chooser")?.remove();
+  const d=document.createElement("div");d.id="dl-chooser";
+  d.style.cssText="position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;padding:20px";
+  d.innerHTML=`<div style="background:var(--surface,#fff);color:var(--ink,#111);border-radius:16px;padding:22px 24px;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px">⬇ Descargar ${opts.titulo||"archivo"}</div>
+    <div style="font-size:12px;color:var(--ink-4,#888);margin-bottom:14px">${rows.length-1} fila${rows.length-1===1?"":"s"} · elige el formato</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button id="dl-xlsx" class="btn btn-primary" style="padding:14px;font-size:14px">📊 Excel<br><span style="font-size:11px;font-weight:400;opacity:.85">.xlsx</span></button>
+      <button id="dl-csv" class="btn" style="padding:14px;font-size:14px">📄 CSV<br><span style="font-size:11px;font-weight:400;opacity:.7">.csv</span></button>
+    </div>
+    <div style="text-align:center;margin-top:12px"><button id="dl-cancel" style="background:none;border:none;color:var(--ink-4,#888);font-size:12px;cursor:pointer;text-decoration:underline">Cancelar</button></div>
+  </div>`;
+  document.body.appendChild(d);
+  const cerrar=()=>d.remove();
+  d.addEventListener("mousedown",e=>{if(e.target===d)cerrar();});
+  d.querySelector("#dl-cancel").onclick=cerrar;
+  d.querySelector("#dl-csv").onclick=()=>{descargarCSV(nombre,rows);cerrar();toast("✓ CSV descargado","success");};
+  d.querySelector("#dl-xlsx").onclick=async()=>{d.querySelector("#dl-xlsx").textContent="Generando…";await descargarXLSX(nombre,rows,hoja);cerrar();toast("✓ Excel descargado","success");};
+}
+// ═══ Importación universal: CSV o Excel → texto CSV con ; (lo que ya entienden los lectores) ═══
+async function archivoATexto(file){
+  if(!file)return "";
+  if(/\.(xlsx|xls|xlsm)$/i.test(file.name)){
+    if(!(await cargarSheetJS()))throw new Error("No se pudo cargar el lector de Excel. Guarda el archivo como CSV e inténtalo de nuevo.");
+    const wb=XLSX.read(await file.arrayBuffer(),{type:"array",cellDates:true});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_csv(ws,{FS:";",RS:"\n",blankrows:false,dateNF:"dd-mm-yyyy"});
+  }
+  return await file.text();
+}
 const PLANTILLA_BLOQUEO_ROWS=[
   ["Nombre y apellido","RUT","Motivo de bloqueo","Vence (Permanente o fecha DD-MM-AAAA)"],
   ["Juan Pérez González","12.345.678-9","Comportamiento agresivo","Permanente"],
@@ -5247,23 +5287,7 @@ const PLANTILLA_BLOQUEO_ROWS=[
   ["Pedro Ramírez","18.222.333-4","Ingreso con documento falso","Permanente"]
 ];
 async function descargarPlantillaBloqueo(){
-  const ok=await cargarSheetJS();
-  if(ok){
-    const ws=XLSX.utils.aoa_to_sheet(PLANTILLA_BLOQUEO_ROWS);
-    ws["!cols"]=[{wch:28},{wch:16},{wch:34},{wch:38}];
-    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Lista de bloqueo");
-    XLSX.writeFile(wb,"lista_bloqueo_plantilla.xlsx");
-    toast("✓ Plantilla Excel descargada","success");
-    return;
-  }
-  // Fallback CSV con ; (Excel en español lo abre en columnas)
-  const esc=v=>{const t=String(v??"");return /[";\n]/.test(t)?`"${t.replace(/"/g,'""')}"`:t;};
-  const csv="\uFEFF"+PLANTILLA_BLOQUEO_ROWS.map(r=>r.map(esc).join(";")).join("\r\n");
-  const a=document.createElement("a");
-  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
-  a.download="lista_bloqueo_plantilla.csv";
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  toast("✓ Plantilla descargada","success");
+  descargarTabla("lista_bloqueo_plantilla",PLANTILLA_BLOQUEO_ROWS,"Lista de bloqueo",{titulo:"plantilla de lista de bloqueo"});
 }
 async function importBloqueoCSV(){
   const file=$("bl-file")?.files?.[0];if(!file)return;
@@ -5534,27 +5558,10 @@ function descargarPlantillaLista(lid){
   if(!puls.length){toast("Este evento no tiene pulseras configuradas","error");return;}
   // Plantilla CSV simple: solo header + UN ejemplo por tipo de pulsera.
   // Sin comentarios ni instrucciones (eso se muestra en el modal, no en el archivo).
-  const lineas=["nombre;rut;pulsera;entradas;notas"];
-  // Ejemplos: uno por cada tipo de pulsera del evento
-  const ejemplos=[
-    ["Juan Pérez","12.345.678-9","1",""],
-    ["María González","19.876.543-K","2",""],
-    ["Felipe Soto","15.555.444-3","1",""],
-    ["Camila Rojas","18.222.111-K","1",""],
-    ["Diego Muñoz","17.999.888-2","1",""],
-  ];
-  puls.forEach((p,i)=>{
-    const ej=ejemplos[i%ejemplos.length];
-    lineas.push(`${ej[0]};${ej[1]};${p.nombre};${ej[2]};${ej[3]}`);
-  });
-  const csv=lineas.join("\n");
-  const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url;
-  a.download=`plantilla-${l.name.replace(/[^a-z0-9]+/gi,"_").toLowerCase()}.csv`;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const rowsPl=[["nombre","rut","pulsera","entradas","notas"]];
+  const ejemplos=[["Juan Pérez","12.345.678-9","1",""],["María González","19.876.543-K","2",""],["Felipe Soto","15.555.444-3","1",""],["Camila Rojas","18.222.111-K","1",""],["Diego Muñoz","17.999.888-2","1",""]];
+  puls.forEach((p,i)=>{const ej=ejemplos[i%ejemplos.length];rowsPl.push([ej[0],ej[1],p.nombre,ej[2],ej[3]]);});
+  descargarTabla(`plantilla-${l.name.replace(/[^a-z0-9]+/gi,"_").toLowerCase()}`,rowsPl,"Lista",{titulo:"plantilla de la lista"});
   toast("✓ Plantilla descargada","success");
 }
 
@@ -5570,7 +5577,7 @@ function abrirImportLista(lid){
       <strong>2.</strong> Reemplaza los ejemplos por tus invitados reales (no toques los encabezados de la fila 1).<br>
       <strong>3.</strong> Guarda como CSV y súbelo aquí.
     </div>
-    <button class="btn btn-full" style="margin-bottom:14px" onclick="descargarPlantillaLista('${lid}')">📥 Descargar plantilla CSV</button>
+    <button class="btn btn-full" style="margin-bottom:14px" onclick="descargarPlantillaLista('${lid}')">📥 Descargar plantilla (CSV / Excel)</button>
 
     <div style="background:#fafafa;border:1px solid #e8e8e8;border-radius:10px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:600;margin-bottom:8px">📋 Campos obligatorios:</div>
@@ -5586,8 +5593,8 @@ function abrirImportLista(lid){
       <div style="font-size:11px;color:#888;margin-top:10px">Campos opcionales: <strong>entradas</strong> (default 1) · <strong>notas</strong></div>
     </div>
 
-    <label class="form-label">Archivo CSV</label>
-    <input type="file" id="il-file" accept=".csv,text/csv" class="form-input" onchange="procesarImportLista('${lid}')">
+    <label class="form-label">Archivo CSV o Excel</label>
+    <input type="file" id="il-file" accept=".csv,.xlsx,.xls" class="form-input" onchange="procesarImportLista('${lid}')">
     <div id="il-preview" style="margin-top:14px"></div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -5600,8 +5607,8 @@ async function procesarImportLista(lid){
   const puls=ev?.pulseras||[];
   const pulsNames=puls.map(p=>p.nombre.toLowerCase().trim());
   const file=$("il-file")?.files?.[0];
-  if(!file){toast("Selecciona un archivo CSV","error");return;}
-  const text=await file.text();
+  if(!file){toast("Selecciona un archivo CSV o Excel","error");return;}
+  let text="";try{text=await archivoATexto(file);}catch(e){toast(e.message,"error");return;}
   // Parser CSV simple — separador ; con fallback a ,
   const sep=text.split("\n").find(l=>l.includes(";"))?";":",";
   const filas=text.split(/\r?\n/).map(r=>r.trim()).filter(r=>r&&!r.startsWith("#"));
@@ -6118,7 +6125,7 @@ VIEWS.canjes=()=>{
   const prodId=CU.role==="superadmin"?null:CU.productora_id;
   const filtered=canjes.filter(c=>{const u=D.users.find(u=>u.id===c.user_id);return prodId===null||u?.productora_id===prodId;});
   $("main-content").innerHTML=`
-    <div class="sec-header"><div class="page-title">Reporte de Canjes</div><button class="btn" onclick="exportCanjes()">CSV</button></div>
+    <div class="sec-header"><div class="page-title">Reporte de Canjes</div><button class="btn" onclick="exportCanjes()">⬇ Exportar (CSV / Excel)</button></div>
     <div class="alert alert-info" style="margin-bottom:16px">ℹ️ Los canjes se generan automáticamente al alcanzar los puntos necesarios.</div>
     <div class="card">${filtered.length?`<div class="table-wrap"><table class="data-table">
       <thead><tr><th>Embajador</th><th>Beneficio</th><th>Pts req.</th><th>Desbloqueado</th></tr></thead>
@@ -6130,9 +6137,7 @@ VIEWS.canjes=()=>{
 function exportCanjes(){
   const canjes=D.cumplimientos.filter(c=>c.tarea_id?.startsWith("canje_")&&c.estado==="aprobado");
   const rows=[["Embajador","Email","Pts","Beneficio","Descripción","Fecha"],...canjes.map(c=>{const u=D.users.find(u=>u.id===c.user_id)||{name:"?",email:"?"};const r=D.recompensas.find(r=>r.id===c.tarea_id.replace("canje_",""))||{name:"?",descripcion:"?"};return[u.name,u.email,u.puntos||0,r.name,r.descripcion,fmtDT(c.at)];})];
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
-  const b64=btoa(unescape(encodeURIComponent("\uFEFF"+csv)));
-  const a=document.createElement("a");a.href="data:text/csv;charset=utf-8;base64,"+b64;a.download="canjes.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
+  descargarTabla("canjes",rows,"Canjes",{titulo:"canjes"});
   log("export_report","canjes","all","Exportó canjes");
 }
 
@@ -6334,14 +6339,17 @@ async function restaurarEvento(evId){
 function openGestionUsuariosEvento(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const prodUsers=D.users.filter(u=>!["superadmin","owner","embajador"].includes(u.role)&&(prodId===null||u.productora_id===prodId));
+  // Solo roles operativos (gente con poder para validar, ver info, gestionar). Clientes (cumpleañeros, compradores de mesa, embajadoras) NO van aquí.
+  const ROLES_EQUIPO=["coordinator","door_chief","door_staff","vip_staff","cashier","ambassador_chief"];
+  const prodUsers=D.users.filter(u=>ROLES_EQUIPO.includes(u.role)&&(prodId===null||u.productora_id===prodId)).sort((a,b)=>(a.name||"").localeCompare(b.name||"","es"));
   const asignados=prodUsers.filter(u=>(u.evento_ids||[]).includes(evId));
   const noAsignados=prodUsers.filter(u=>!(u.evento_ids||[]).includes(evId));
   openModal(`👥 Equipo — ${ev.name}`,`
     <div style="font-size:13px;font-weight:600;margin-bottom:10px">Usuarios asignados a este evento</div>
     <div style="margin-bottom:14px">${asignados.length?asignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px;font-weight:500">${u.name}</div><div style="font-size:11px;color:#888">${u.email}</div></div></div><div style="display:flex;gap:6px;align-items:center">${badge(rmU(u).label,rmU(u).badge)}<button class="btn btn-danger" style="padding:3px 8px;font-size:11px" onclick="desasignarUsuario('${u.id}','${evId}')">✕</button></div></div>`).join(""):`<div style="font-size:12px;color:#aaa">Sin usuarios asignados.</div>`}</div>
     <div style="border-top:1px solid #f0f0f0;padding-top:12px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Agregar usuario al evento</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">Agregar usuario al evento</div>
+      <div style="font-size:11px;color:#888;margin-bottom:8px">Solo roles de equipo: coordinadores, jefes de puerta, validadores, staff VIP, caja y jefes de embajadores. Los clientes (cumpleañeros, mesas, embajadoras) no se asignan aquí.</div>
       ${noAsignados.length?noAsignados.map(u=>`<div class="row-item"><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><div style="font-size:13px">${u.name}</div><div style="font-size:11px;color:#888">${rmU(u).label}</div></div></div><button class="btn btn-primary" style="padding:4px 10px;font-size:11px" onclick="asignarUsuario('${u.id}','${evId}')">+ Asignar</button></div>`).join(""):`<div style="font-size:12px;color:#aaa">Todos los usuarios están asignados.</div>`}
     </div>`,true);
 }
@@ -6979,19 +6987,12 @@ function descargarPlantilla(){
       p.acceso||""
     ])
   ];
-  // Escapar campos CSV (comillas si tienen coma/comilla/salto)
-  const esc=v=>{const s=String(v??"");return /[",\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;};
-  const csv="\uFEFF"+rows.map(r=>r.map(esc).join(",")).join("\r\n"); // BOM para que Excel respete acentos
-  const a=document.createElement("a");
-  a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
-  a.download=`acreditacion_${ev.name.replace(/\s+/g,"_")}_${ev.date}.csv`;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);
-  toast("✓ Plantilla CSV descargada","success");
+  descargarTabla(`plantilla_acreditacion_${ev.name.replace(/\s+/g,"_")}_${ev.date}`,rows,"Acreditación",{titulo:"plantilla de carga"});
 }
 function cargarCSV(input){
   const file=input.files?.[0];if(!file)return;
   const st=$("upload-status");if(st)st.innerHTML=`<div class="alert alert-info">⏳ Procesando...</div>`;
-  const reader=new FileReader();reader.onload=e=>procesarCSV(e.target.result);reader.readAsText(file,"UTF-8");input.value="";
+  archivoATexto(file).then(t=>procesarCSV(t)).catch(e=>{if(st)st.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`;});input.value="";
 }
 function parseCSVRow(line,sep=","){const res=[];let cur="",inQ=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}else if(c===sep&&!inQ){res.push(cur.trim());cur="";}else cur+=c;}res.push(cur.trim());return res;}
 async function procesarCSV(text){
@@ -8229,9 +8230,9 @@ function openJefeAddEmb(){
       <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveJefeEmb('${jefeGrupoSel}')">Agregar</button></div>
     </div>
     <div id="jadd-masivo" class="hidden">
-      <div class="alert alert-info" style="margin-top:0">Sube un CSV con columnas: <strong>nombre · rut · whatsapp · correo · instagram</strong></div>
-      <button class="btn btn-full" style="margin-bottom:10px" onclick="descargarPlantillaEmb()">Descargar plantilla CSV</button>
-      <input type="file" id="je-csv" accept=".csv" class="form-input">
+      <div class="alert alert-info" style="margin-top:0">Sube un CSV o Excel con columnas: <strong>nombre · rut · whatsapp · correo · instagram</strong></div>
+      <button class="btn btn-full" style="margin-bottom:10px" onclick="descargarPlantillaEmb()">Descargar plantilla (CSV / Excel)</button>
+      <input type="file" id="je-csv" accept=".csv,.xlsx,.xls" class="form-input">
       <div id="je-csv-status" style="margin-top:8px"></div>
       <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button><button class="btn btn-primary" onclick="importEmbCSV('${jefeGrupoSel}')">Importar</button></div>
     </div>`);
@@ -8260,17 +8261,12 @@ function descargarPlantillaEmb(){
   const rows=[["nombre","rut","whatsapp","correo","instagram"],
     ["Martina Vargas","12345678-9","56912345678","martina@correo.cl","@martina.v"],
     ["Diego Soto","19876543-2","56987654321","diego@correo.cl","@diegosoto"]];
-  const esc=v=>{const s=String(v??"");return /[";,\n]/.test(s)?`"${s.replace(/"/g,'""')}"`:s;};
-  // Usamos ; como separador (Excel en español lo divide en columnas automáticamente)
-  const csv="\uFEFF"+rows.map(r=>r.map(esc).join(";")).join("\r\n");
-  const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,"+encodeURIComponent(csv);
-  a.download="embajadores_plantilla.csv";document.body.appendChild(a);a.click();document.body.removeChild(a);
-  toast("✓ Plantilla descargada","success");
+  descargarTabla("embajadores_plantilla",rows,"Embajadores",{titulo:"plantilla de embajadores"});
 }
 async function importEmbCSV(eqId){
-  const f=$("je-csv")?.files?.[0];if(!f){toast("Selecciona un archivo CSV","error");return;}
+  const f=$("je-csv")?.files?.[0];if(!f){toast("Selecciona un archivo CSV o Excel","error");return;}
   const st=$("je-csv-status");
-  const text=await f.text();
+  let text="";try{text=await archivoATexto(f);}catch(e){if(st)st.innerHTML=`<div class="alert alert-danger">❌ ${e.message}</div>`;return;}
   const sep=text.includes(";")?";":",";
   const lines=text.split(/\r?\n/).map(l=>l.trim()).filter(l=>l);
   const normH=s=>(s||"").toLowerCase().trim().replace(/[áä]/g,"a").replace(/[éë]/g,"e").replace(/[íï]/g,"i").replace(/[óö]/g,"o").replace(/[úü]/g,"u");
@@ -10269,7 +10265,7 @@ VIEWS.cfPlanilla = async()=>{
         <div style="font-size:14px;font-weight:600">Listado completo</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <input class="form-input cf-buscar" placeholder="Buscar..." style="width:180px;font-size:12px" autocomplete="off">
-          <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">Exportar CSV</button>
+          <button class="btn" style="font-size:12px" onclick="cfExportarCSV()">⬇ Exportar (CSV / Excel)</button>
           <button class="btn" style="font-size:12px;background:#FEF3C7;color:#92400E;border-color:#FCD34D" onclick="cfReenviarRecordatorio()">⏰ Aviso de cierre / recordatorio pagos</button>
         </div>
       </div>
@@ -10303,8 +10299,7 @@ VIEWS.cfPlanilla = async()=>{
       const aprobador=D.users?.find(u=>u.id===p.aprobado_por);
       rows.push([p.nombre,p.apellido,p.rut,p.instagram,p.whatsapp,p.email,p.estado,ord?.codigo||"",ord?.cantidad||0,ord?.monto_total||0,ord?.estado||"",aprobador?.name||"",p.created_at?.slice(0,10)||""]);
     }
-    const csv=rows.map(r=>r.map(c=>`"${c}"`).join(",")).join("\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="close_friends.csv";a.click();
+    descargarTabla("close_friends",rows,"Close Friends",{titulo:"Close Friends"});
   };
 
 };
@@ -10874,7 +10869,7 @@ VIEWS["base-datos"]=async()=>{
           <input type="text" id="bd-cumple-hasta" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
         </div>
         <span id="bd-count" style="font-size:12px;color:var(--ink-4)"></span>
-        <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar CSV</button>
+        <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar (CSV / Excel)</button>
         <button class="btn btn-primary" style="font-size:12px;padding:5px 12px" onclick="window._bdCampana()">✉ Enviar campaña</button>
       </div>
       <div id="bd-campana-panel" style="display:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px">
@@ -10906,8 +10901,7 @@ VIEWS["base-datos"]=async()=>{
   window._bdExportar=()=>{
     const f=window._bdFiltrados||[];
     const rows=[["Nombre","Apellido","RUT","Email","Instagram","WhatsApp","Fecha nacimiento","Género","Fuentes","Eventos","Eventos a los que ingresó"],...f.map(p=>[p.nombre,p.apellido,p.rut?fmtRut(p.rut):"",p.email,p.instagram?"@"+p.instagram:"",p.whatsapp,p.fecha_nacimiento,p.genero==="m"?"H":p.genero==="f"?"M":"",[...p.origenes].map(o=>ORIG[o]?.[1]||o).join(" | "),[...p.eventos].map(evNombre).filter(Boolean).join(" | "),[...p.ingresos].map(evNombre).filter(Boolean).join(" | ")])];
-    const csv=rows.map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download=`base_datos_${(CP?.nombre||"guestly").replace(/\s+/g,"_").toLowerCase()}.csv`;a.click();
+    descargarTabla(`base_datos_${(CP?.nombre||"guestly").replace(/\s+/g,"_").toLowerCase()}`,rows,"Base de datos",{titulo:"base de datos"});
   };
   window._bdEnviarCampana=async()=>{
     const asunto=($("bd-camp-asunto")||{}).value?.trim();
