@@ -12287,8 +12287,18 @@ window.embAprobarPost=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
   const prodId=p.productora_id;
   const equipos=(D.equipos||[]).filter(e=>!prodId||e.productora_id===prodId);
-  const yaEmb=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
-  if(yaEmb){alert(`${p.nombre} ya tiene cuenta de embajadora (${yaEmb.email}). Si quiere volver, solo hay que asignarla a un equipo en Equipos de Embajadores.`);return;}
+  const yaUser=(D.users||[]).find(u=>(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+  if(yaUser){
+    const esEmb=yaUser.role==="embajador";const rolTxt={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"}[yaUser.role]||yaUser.role;
+    openModal(`Aprobar a ${p.nombre} ${p.apellido}`,`
+      <div class="alert alert-warn" style="margin-top:0">⚠️ El correo <strong>${p.email}</strong> ya tiene una cuenta en Guestly: <strong>${yaUser.name||""}</strong> (${rolTxt}${yaUser.equipo_id?" · equipo "+((D.equipos||[]).find(e=>e.id===yaUser.equipo_id)?.name||""):""}). No se puede crear otra con el mismo correo.</div>
+      ${esEmb?`<div style="font-size:13px;color:#555;margin-bottom:10px">Puedes <strong>usar esa misma cuenta</strong>: la asignas al equipo y le avisamos por correo que ya puede entrar con su clave de siempre (si no la recuerda, la cambias desde Usuarios).</div>`
+             :`<div style="font-size:13px;color:#555;margin-bottom:10px">Esa cuenta no es de embajadora (es ${rolTxt}). Si solo estás probando, usa otro correo en la postulación. Si de verdad quiere ser embajadora con este correo, puedes asignar esa cuenta a un equipo igual, pero su rol seguirá siendo ${rolTxt}.</div>`}
+      <label class="form-label">Equipo</label>
+      <select class="form-select" id="emb-ap-eq"><option value="">— Embajadora interna (sin equipo) —</option>${equipos.map(e=>`<option value="${e.id}" ${yaUser.equipo_id===e.id?"selected":""}>${e.name}</option>`).join("")}</select>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="this.disabled=true;embVincularExistente('${id}','${yaUser.id}')">Usar la cuenta existente y aprobar</button></div>`);
+    return;
+  }
   const pass=Math.random().toString(36).slice(2,8);
   openModal(`Aprobar a ${p.nombre} ${p.apellido}`,`
     ${p.reintegro?`<div class="alert alert-warn" style="margin-top:0">🔁 Fue embajadora antes y quiere reintegrarse.</div>`:""}
@@ -12297,6 +12307,25 @@ window.embAprobarPost=(id)=>{
     <label class="form-label">Contraseña inicial</label><input class="form-input" id="emb-ap-pass" value="${pass}">
     <div style="font-size:12px;color:#666;margin-top:8px">Se creará su usuario de embajadora con WhatsApp e Instagram ya cargados, y le llegará un correo con su acceso. Verás el correo antes de enviarlo.</div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="embPreviewAprobacion('${id}')">Siguiente: ver correo →</button></div>`);
+};
+window.embVincularExistente=async(id,userId)=>{
+  const p=(D.emb_postulantes||[]).find(x=>x.id===id);const u=(D.users||[]).find(x=>x.id===userId);if(!p||!u)return;
+  const eqId=$("emb-ap-eq")?.value||"";const eq=(D.equipos||[]).find(e=>e.id===eqId);const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
+  try{
+    const patch={equipo_id:eqId||null,active:true};
+    if(!u.productora_id&&p.productora_id)patch.productora_id=p.productora_id;
+    try{await sbPatch("users",`id=eq.${u.id}`,patch);}catch(e){if(/active/.test(e.message||"")){delete patch.active;await sbPatch("users",`id=eq.${u.id}`,patch);}else throw e;}
+    Object.assign(u,patch);
+    const at=now();await sbPatch("emb_postulantes",`id=eq.${p.id}`,{estado:"aprobado",resuelto_at:at,resuelto_por:CU?.id||null,user_id:u.id});
+    Object.assign(p,{estado:"aprobado",resuelto_at:at,user_id:u.id});
+    let ok=true;
+    if(u.role==="embajador"){
+      ok=await sendEmail(p.email,`¡Bienvenida de vuelta a ${prod?.nombre||"The Project"}! 🌸`,`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8"><div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div><h2 style="font-size:18px;font-weight:700;text-align:center;color:#1a1a1a">¡Hola ${p.nombre}, ya estás dentro! 🌸</h2><p style="color:#555;font-size:14px;line-height:1.6;text-align:center;margin-top:12px">Tu postulación a embajadora de <strong>${prod?.nombre||""}</strong> fue aprobada${eq?` y quedaste en el equipo <strong>${eq.name}</strong>`:""}. Entra con tu cuenta de siempre (<strong>${p.email}</strong>); si no recuerdas tu contraseña, escríbenos y te la cambiamos.</p><div style="text-align:center;margin-top:20px"><a href="${CF_APP_URL}" style="display:inline-block;background:#534AB7;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:600">Ingresar a Guestly →</a></div>${GL_POWERED}</div></div>`);
+    }
+    await log("emb_postulacion_aprobada","user",u.id,`Postulación aprobada vinculada a cuenta existente: ${u.name}${eq?" → "+eq.name:""}`);
+    closeModal();toast(ok?`✅ ${p.nombre} aprobada con su cuenta existente`:`✅ Aprobada, pero el correo no se pudo enviar`,ok?"ok":"warn");
+    VIEWS["emb-postulaciones"]();
+  }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+e.message);}
 };
 window.embPreviewAprobacion=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
@@ -12315,6 +12344,9 @@ window.embPreviewAprobacion=(id)=>{
 window.embConfirmarAprobacion=async()=>{
   const a=window._embApr;if(!a)return;const p=(D.emb_postulantes||[]).find(x=>x.id===a.id);if(!p)return;
   try{
+    let dup=(D.users||[]).find(u=>(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+    if(!dup){try{dup=(await sbGet("users",`email=eq.${encodeURIComponent(p.email)}`))[0];if(dup&&!D.users.some(x=>x.id===dup.id))D.users.push(dup);}catch(e){}}
+    if(dup){closeModal();embAprobarPost(p.id);toast("Ese correo ya tiene cuenta: elige cómo continuar","warn");return;}
     const u={id:uid(),name:`${p.nombre} ${p.apellido}`.trim(),email:p.email,pass:a.pass,role:"embajador",puntos:0,equipo_id:a.eqId||null,productora_id:p.productora_id,evento_ids:p.eventos_interes||[],whatsapp:(p.whatsapp||"").replace(/\D/g,""),instagram:"@"+p.instagram,must_change_pass:true};
     await sbPostUserTolerante(u);D.users.push(u);
     const at=now();await sbPatch("emb_postulantes",`id=eq.${p.id}`,{estado:"aprobado",resuelto_at:at,resuelto_por:CU?.id||null,user_id:u.id});
