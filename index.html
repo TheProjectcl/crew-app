@@ -12432,6 +12432,26 @@ function qrDescribir(r){
   const n=qrCantidad(r.tipo,r.obj);
   return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev};
 }
+// ¿Hasta cuándo es válido este ticket? Devuelve {hasta:Date, txt, caducado} o null si no tiene límite
+function qrVencimiento(r){
+  let hasta=null,txt="";
+  if(r.tipo==="entry"){
+    const l=(D.acc_lists||[]).find(l=>l.id===r.obj.list_id);
+    if(l?.deadline){
+      if(l.deadline.includes("T")||l.deadline.includes("-"))hasta=new Date(l.deadline);
+      else{const[h,m]=l.deadline.split(":").map(Number);hasta=new Date();hasta.setHours(h,m,0,0);}
+      txt=fmtDeadline(l.deadline);
+    }
+  }else if(r.tipo==="cumple"||r.tipo==="inv"){
+    const c=r.tipo==="cumple"?r.obj:(D.bday_cumpleaneros||[]).find(x=>x.id===r.obj.cumpleanero_id);
+    const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);
+    const ev=(D.eventos||[]).find(e=>e.id===c?.evento_id);
+    const f=ben?.fecha_validez||ev?.date||"",h=ben?.hora_validez||"";
+    if(f&&h){hasta=new Date(`${f}T${h.length===5?h:h+":00"}:00`);txt=bdayFmtFechaHora(f,h,ev?.date||"");}
+  }
+  if(!hasta||isNaN(hasta.getTime()))return null;
+  return{hasta,txt,caducado:new Date()>hasta};
+}
 // ¿Ese token/persona ya ingresó?
 function qrYaUsado(r){
   const t=r.obj.qr_tokens?.[r.i];
@@ -12469,7 +12489,7 @@ window.qrVerModal=async function(tipo,id,extra,extra2){
         <div style="display:flex;justify-content:center">${svgs[i]}</div>
         <div style="font-size:12px;font-weight:700;margin-top:8px">${toks.length>1?`Entrada ${i+1} de ${toks.length}`:d.nombre}</div>
         <div style="font-family:monospace;font-size:11px;color:#888;margin-top:2px">${t.t}</div>
-        ${t.usado_at?`<div style="font-size:11px;color:#166534;font-weight:600;margin-top:4px">✓ Usada ${fmtT(t.usado_at)}</div>`:""}
+        ${t.usado_at?`<div style="font-size:11px;color:#166534;font-weight:600;margin-top:4px">✔️ Validado a las ${fmtT(t.usado_at)} hrs</div>`:""}
         <div style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap">
           <button class="btn" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${qrLink(t.t)}').then(()=>toast('Link copiado','ok'))">📋 Copiar link</button>
           <a class="btn" style="padding:4px 8px;font-size:11px;text-decoration:none;background:#25D366;color:#fff" target="_blank" href="https://wa.me/?text=${waTxt(i+1)}">📱 WhatsApp</a>
@@ -12539,7 +12559,7 @@ function qrMostrarResultado(tipo,titulo,detalle,acciones){
   </div>`;
   if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
 }
-window.qrProcesarToken=async function(tok,manual){
+window.qrProcesarToken=async function(tok,manual,manual_forzar){
   if(_qrProcesando)return;_qrProcesando=true;
   try{
     const r=qrResolverLocal(tok);
@@ -12548,7 +12568,9 @@ window.qrProcesarToken=async function(tok,manual){
     if(d.evId&&currentEvId&&d.evId!==currentEvId)return qrMostrarResultado("err","Es de otro evento",`${d.nombre} · este QR corresponde a <strong>${d.ev?.name||"otro evento"}</strong>.`);
     const sub=`${d.origen} · Pulsera <strong>${d.pulsera}</strong>${d.n>1?` · entrada ${d.k} de ${d.n}`:""}`;
     const usado=qrYaUsado(r);
-    if(usado)return qrMostrarResultado("warn",`${d.nombre} — YA INGRESÓ`,`${sub}<br>Este QR ya fue usado${usado!=="sí"?" a las "+fmtT(usado):""}.`);
+    if(usado)return qrMostrarResultado("warn",`${d.nombre} — TICKET YA VALIDADO`,`${sub}<br>Este ticket ya fue validado${usado!=="sí"?" a las <strong>"+fmtT(usado)+"</strong>":""}. No vuelve a entrar con el mismo QR.`);
+    const venc=qrVencimiento(r);
+    if(venc?.caducado&&(r.tipo==="cumple"||r.tipo==="inv")&&!manual_forzar)return qrMostrarResultado("warn",`${d.nombre} — TICKET CADUCADO`,`${sub}<br>El beneficio era válido hasta <strong>${venc.txt}</strong> (fuera de horario).`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrProcesarToken('${tok}',true,true)">Dejar entrar igual</button>`);
     const at=now();
     if(r.tipo==="entry"){
       const e=r.obj;
@@ -12556,7 +12578,7 @@ window.qrProcesarToken=async function(tok,manual){
       const res=await runCheckin(e.id,1);
       if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
       if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
-      if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("warn",`${d.nombre} — fuera de horario`,`${sub}<br>${res.msg}`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrForzarEntry('${e.id}',${r.i})">Validar igual</button>`);
+      if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("warn",`${d.nombre} — TICKET CADUCADO`,`${sub}<br>La lista era válida hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario).`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrForzarEntry('${e.id}',${r.i})">Validar igual</button>`);
       return qrMostrarResultado("err",d.nombre,`${sub}<br>${res.msg}`);
     }
     if(r.tipo==="cf"){
@@ -12656,6 +12678,7 @@ async function mostrarEntradaQR(tok){
     const prod=ev?.productora_id?(await sbGet("productoras",`id=eq.${ev.productora_id}`))[0]:null;
     const d=qrDescribir(r);
     const usado=qrYaUsado(r);
+    const venc=qrVencimiento(r);
     const svg=await qrHtml(tok,240);
     const fecha=ev?.date?new Date(ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):"";
     show(`<div style="max-width:400px;width:100%">
@@ -12669,10 +12692,11 @@ async function mostrarEntradaQR(tok){
         <div style="padding:20px;text-align:center">
           <div style="font-size:22px;font-weight:800;color:#111">${d.nombre}</div>
           <div style="font-size:13px;color:#666;margin-top:2px">Pulsera: <strong style="color:#111">${d.pulsera}</strong>${d.n>1?` · Entrada ${d.k} de ${d.n}`:""}</div>
-          <div style="display:flex;justify-content:center;margin:18px 0 10px;${usado?"opacity:.35;filter:grayscale(1)":""}">${svg}</div>
+          <div style="display:flex;justify-content:center;margin:18px 0 10px;${usado||venc?.caducado?"opacity:.35;filter:grayscale(1)":""}">${svg}</div>
           <div style="font-family:monospace;font-size:12px;color:#999">${tok}</div>
-          ${usado?`<div style="background:#FEF3C7;color:#92400E;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">⚠️ Este QR ya fue usado${usado!=="sí"?" a las "+fmtT(usado):""}</div>`
-                 :`<div style="background:#DCFCE7;color:#166534;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✅ Entrada válida — muéstrala en la puerta</div>`}
+          ${usado?`<div style="background:#DBEAFE;color:#1E3A8A;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✔️ Este ticket ya fue validado${usado!=="sí"?" a las "+fmtT(usado)+" hrs":""}</div>`
+            :venc?.caducado?`<div style="background:#FEE2E2;color:#991B1B;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">⛔ Ticket caducado — era válido hasta ${venc.txt}</div><div style="font-size:11px;color:#991B1B;margin-top:6px">Fuera de horario. Consulta en la puerta si aún puedes ingresar.</div>`
+            :`<div style="background:#DCFCE7;color:#166534;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✅ Entrada válida — muéstrala en la puerta</div>${venc?`<div style="font-size:11px;color:#92400E;margin-top:6px">⏰ Válida hasta <strong>${venc.txt}</strong></div>`:""}`}
           <div style="font-size:11px;color:#888;margin-top:12px;line-height:1.5">Sube el brillo de tu pantalla al mostrar el QR. Lleva tu carnet de identidad: sin carnet no podemos validar tu entrada.</div>
         </div>
       </div>
