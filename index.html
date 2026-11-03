@@ -10683,90 +10683,136 @@ window.cfEliminarPostulante=async(id)=>{
 // ── Vista: Base de Datos ──
 VIEWS["base-datos"]=async()=>{
   const mc=$("main-content");
-  mc.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><h2 style="margin:0">📋 Base de Datos</h2><div id="bd-loading" style="font-size:12px;color:var(--ink-4)">Cargando...</div></div><div id="bd-content"></div>`;
+  mc.innerHTML=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px"><h2 style="margin:0">📋 Base de Datos</h2><div id="bd-loading" style="font-size:12px;color:var(--ink-4)">Cargando todas las fuentes…</div></div><div id="bd-content"></div>`;
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  await loadCF(prodId);
-  const posts=D.cf_postulantes||[];
-  const evs=D.eventos||[];
-  // Filtros
-  let bdFiltroEv="todos", bdFiltroEstado="todos", bdBusqueda="";
-  let bdFiltroGenero="todos", bdCumpleDesde="", bdCumpleHasta="";
-  // renderTabla: solo actualiza la tabla, sin tocar los controles (evita perder foco del input)
+  const evs=(D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId);
+  const evIds=evs.map(e=>e.id);
+  const evIn=evIds.length?`in.(${evIds.join(",")})`:null;
+  const evNombre=id=>evs.find(e=>e.id===id)?.name||"";
+  // ── 1) Traer TODAS las fuentes de la productora (todos los eventos, no solo el actual) ──
+  let cfPosts=[],cfOrds=[],cumps=[],invs=[],entries=[],mesas=[],embs=[],compradores=[];
+  try{
+    const q=prodId?`productora_id=eq.${prodId}`:"";
+    [cfPosts,cfOrds,cumps,entries,mesas,embs,compradores]=await Promise.all([
+      evIn?sbGet("cf_postulantes",`evento_id=${evIn}`):[],
+      evIn?sbGet("cf_ordenes",`evento_id=${evIn}&select=id,postulante_id,evento_id,estado,ingreso_at`):[],
+      evIn?sbGet("bday_cumpleaneros",`evento_id=${evIn}`):[],
+      evIn?sbGet("acc_entries",`event_id=${evIn}&select=id,event_id,list_id,name,rut,status,entradas_usadas,checked_in_at`):[],
+      evIn?sbGet("vip_tables",`event_id=${evIn}&select=id,event_id,table_num,comprador_id,perfiles,estado_reserva,solicitudes_pulseras`):[],
+      prodId?sbGet("emb_postulantes",q):sbGet("emb_postulantes",""),
+      prodId?sbGet("users",`productora_id=eq.${prodId}&role=in.(comprador,embajador)&select=id,name,email,whatsapp,instagram,role,productora_id`):sbGet("users",`role=in.(comprador,embajador)&select=id,name,email,whatsapp,instagram,role,productora_id`),
+    ]);
+    if(cumps.length)invs=await sbGet("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);
+  }catch(e){toast("Error cargando la base de datos: "+e.message,"error");}
+  // ── 2) Unificar personas: misma persona = mismo RUT, o mismo correo, o mismo Instagram, o mismo WhatsApp ──
+  const personas=[];const idx={rut:{},email:{},ig:{},wa:{}};
+  const kRut=r=>{const n=normRut(r);return n.length>=7?n:"";};
+  const kMail=m=>(m||"").trim().toLowerCase();
+  const kIg=i=>igHandle(i||"").toLowerCase();
+  const kWa=w=>{const d=(w||"").replace(/\D/g,"");return d.length>=8?d.slice(-8):"";};
+  const splitNombre=full=>{const p=(full||"").trim().split(/\s+/);return p.length>1?{nombre:p.slice(0,-1).join(" "),apellido:p[p.length-1]}:{nombre:p[0]||"",apellido:""};};
+  function agregar(src){
+    // src: {nombre,apellido,rut,email,instagram,whatsapp,fecha_nacimiento,genero,origen,evento_id,ingreso(bool),fecha}
+    const kr=kRut(src.rut),km=kMail(src.email),ki=kIg(src.instagram),kw=kWa(src.whatsapp);
+    let p=(kr&&idx.rut[kr])||(km&&idx.email[km])||(ki&&idx.ig[ki])||(kw&&idx.wa[kw])||null;
+    if(!p){p={nombre:"",apellido:"",rut:"",email:"",instagram:"",whatsapp:"",fecha_nacimiento:"",genero:"",origenes:new Set(),eventos:new Set(),ingresos:new Set(),ultima:"",estadoCF:"",fuentes:0};personas.push(p);}
+    // Completar campos vacíos (la primera fuente con dato gana; el RUT formateado siempre)
+    if(!p.nombre&&src.nombre)p.nombre=src.nombre;
+    if(!p.apellido&&src.apellido)p.apellido=src.apellido;
+    if(!p.rut&&kr)p.rut=src.rut;
+    if(!p.email&&km)p.email=src.email.trim();
+    if(!p.instagram&&ki)p.instagram=ki;
+    if(!p.whatsapp&&kw)p.whatsapp=src.whatsapp;
+    if(!p.fecha_nacimiento&&src.fecha_nacimiento)p.fecha_nacimiento=src.fecha_nacimiento;
+    if(!p.genero&&src.genero)p.genero=src.genero;
+    if(src.estadoCF)p.estadoCF=src.estadoCF;
+    p.origenes.add(src.origen);if(src.evento_id)p.eventos.add(src.evento_id);if(src.ingreso&&src.evento_id)p.ingresos.add(src.evento_id);
+    if(src.fecha&&src.fecha>p.ultima)p.ultima=src.fecha;p.fuentes++;
+    if(kr)idx.rut[kr]=p;if(km)idx.email[km]=p;if(ki)idx.ig[ki]=p;if(kw)idx.wa[kw]=p;
+    return p;
+  }
+  // Close Friends
+  cfPosts.forEach(x=>{const o=cfOrds.find(o=>o.postulante_id===x.id&&["pagado","conciliado"].includes(o.estado));agregar({...x,origen:"cf",evento_id:x.evento_id,ingreso:!!o?.ingreso_at,fecha:x.created_at||"",estadoCF:x.estado});});
+  // Cumpleañeros e invitados
+  cumps.forEach(c=>agregar({...c,origen:"cumple",evento_id:c.evento_id,ingreso:!!c.llego,fecha:c.created_at||""}));
+  invs.forEach(i=>{const c=cumps.find(x=>x.id===i.cumpleanero_id);agregar({...i,origen:"inv_cumple",evento_id:c?.evento_id,ingreso:!!i.llego,fecha:i.created_at||""});});
+  // Listas / staff (solo nombre y RUT)
+  entries.forEach(e=>agregar({...splitNombre(e.name),rut:e.rut,origen:"lista",evento_id:e.event_id,ingreso:(e.entradas_usadas||0)>0||e.status==="checked_in",fecha:e.checked_in_at||""}));
+  // Mesas VIP: comprador + invitados de mesa + pulseras extra
+  mesas.forEach(m=>{
+    const comp=compradores.find(u=>u.id===m.comprador_id);
+    if(comp)agregar({...splitNombre(comp.name),email:comp.email,whatsapp:comp.whatsapp,instagram:comp.instagram,origen:"mesa_comprador",evento_id:m.event_id,ingreso:false,fecha:""});
+    (m.perfiles||[]).filter(p=>p.estado!=="rechazado").forEach(p=>agregar({nombre:p.nombre||p.name||"",apellido:p.apellido||"",rut:p.rut,instagram:p.instagram,origen:"mesa",evento_id:m.event_id,ingreso:!!p.llego,fecha:p.llego_at||p.created_at||""}));
+    (m.solicitudes_pulseras||[]).forEach(l=>(l.personas||[]).forEach(pp=>agregar({nombre:pp.nombre||"",apellido:pp.apellido||"",rut:pp.rut,instagram:pp.instagram,origen:"mesa",evento_id:m.event_id,ingreso:!!pp.llego,fecha:pp.llego_at||""})));
+  });
+  // Embajadoras (postulaciones) y usuarias embajadoras
+  embs.forEach(x=>agregar({...x,origen:"embajadora",evento_id:null,ingreso:false,fecha:x.created_at||""}));
+  compradores.filter(u=>u.role==="embajador").forEach(u=>agregar({...splitNombre(u.name),email:u.email,whatsapp:u.whatsapp,instagram:u.instagram,origen:"embajadora",evento_id:null,ingreso:false,fecha:""}));
+  personas.forEach(p=>{if(p.nombre&&!p.apellido){const s=splitNombre(p.nombre);p.nombre=s.nombre;p.apellido=s.apellido;}});
+  window._bdPersonas=personas;
+  const ORIG={cf:["🌸","Close Friends","#EC4899"],cumple:["🎂","Cumpleañero/a","#854d0e"],inv_cumple:["🎂","Invitado cumple","#b45309"],lista:["👥","Lista / staff","#534AB7"],mesa:["🍾","Mesa VIP","#0e7490"],mesa_comprador:["🍾","Comprador mesa","#0e7490"],embajadora:["📣","Embajadora","#7c3aed"]};
+  // ── 3) Filtros y tabla ──
+  let fOrigen="todos",fEv="todos",fGenero="todos",fContacto="todos",fDesde="",fHasta="",q="";
   const renderTabla=()=>{
-    let filtrados=posts;
-    if(bdFiltroEv!=="todos") filtrados=filtrados.filter(p=>p.evento_id===bdFiltroEv);
-    if(bdFiltroEstado!=="todos") filtrados=filtrados.filter(p=>p.estado===bdFiltroEstado);
-    if(bdFiltroGenero!=="todos") filtrados=filtrados.filter(p=>(p.genero||"")===bdFiltroGenero);
-    if(bdCumpleDesde||bdCumpleHasta){
-      // Filtrar por rango de mes-día de nacimiento (sin importar el año)
-      filtrados=filtrados.filter(p=>{
-        if(!p.fecha_nacimiento)return false;
-        const fn=p.fecha_nacimiento.slice(5); // "MM-DD"
-        if(bdCumpleDesde&&bdCumpleHasta){
-          if(bdCumpleDesde<=bdCumpleHasta) return fn>=bdCumpleDesde&&fn<=bdCumpleHasta;
-          else return fn>=bdCumpleDesde||fn<=bdCumpleHasta; // rango cruza año nuevo
-        }
-        if(bdCumpleDesde) return fn>=bdCumpleDesde;
-        if(bdCumpleHasta) return fn<=bdCumpleHasta;
-        return true;
-      });
-    }
-    if(bdBusqueda){
-      const q=bdBusqueda.toLowerCase();
-      filtrados=filtrados.filter(p=>(p.nombre||"").toLowerCase().includes(q)||(p.apellido||"").toLowerCase().includes(q)||(p.email||"").toLowerCase().includes(q)||(p.instagram||"").toLowerCase().includes(q)||(p.whatsapp||"").includes(q));
-    }
-    window._bdFiltrados=filtrados;
-    const count=filtrados.length;
-    const el=$("bd-camp-count");if(el)el.textContent=count;
-    const countEl=$("bd-count");if(countEl)countEl.textContent=count+" contacto"+(count!==1?"s":"");
-    const campBtn=$("bd-camp-send-btn");if(campBtn)campBtn.textContent=`📨 Enviar a ${count} contacto${count!==1?"s":""}`;
-    const tbody=$("bd-tbody");
-    if(!tbody)return;
-    tbody.innerHTML=filtrados.length?filtrados.map(p=>{
-      const ev=evs.find(e=>e.id===p.evento_id);
+    let f=personas;
+    if(fOrigen!=="todos")f=f.filter(p=>p.origenes.has(fOrigen));
+    if(fEv!=="todos")f=f.filter(p=>p.eventos.has(fEv));
+    if(fGenero!=="todos")f=f.filter(p=>(p.genero||"")===fGenero);
+    if(fContacto==="email")f=f.filter(p=>p.email);
+    if(fContacto==="whatsapp")f=f.filter(p=>p.whatsapp);
+    if(fContacto==="ingreso")f=f.filter(p=>p.ingresos.size>0);
+    if(fDesde||fHasta)f=f.filter(p=>{if(!p.fecha_nacimiento)return false;const fn=p.fecha_nacimiento.slice(5);if(fDesde&&fHasta)return fDesde<=fHasta?(fn>=fDesde&&fn<=fHasta):(fn>=fDesde||fn<=fHasta);if(fDesde)return fn>=fDesde;return fn<=fHasta;});
+    if(q){const nq=acrNorm(q);f=f.filter(p=>[p.nombre+" "+p.apellido,p.rut,p.email,p.instagram,p.whatsapp].some(v=>acrNorm(v||"").includes(nq)));}
+    f=[...f].sort((a,b)=>(a.nombre+" "+a.apellido).localeCompare(b.nombre+" "+b.apellido,"es"));
+    window._bdFiltrados=f;
+    const conMail=f.filter(p=>p.email).length;
+    const cnt=$("bd-count");if(cnt)cnt.textContent=`${f.length} persona${f.length!==1?"s":""} · ${conMail} con correo`;
+    const el=$("bd-camp-count");if(el)el.textContent=conMail;
+    const campBtn=$("bd-camp-send-btn");if(campBtn)campBtn.textContent=`📨 Enviar a ${conMail} contacto${conMail!==1?"s":""}`;
+    const tbody=$("bd-tbody");if(!tbody)return;
+    const MAX=500;
+    tbody.innerHTML=f.length?f.slice(0,MAX).map(p=>{
       const fnac=p.fecha_nacimiento?p.fecha_nacimiento.slice(5).replace("-","/")+` (${p.fecha_nacimiento.slice(0,4)})`:"—";
       const genLbl=p.genero==="m"?"♂ H":p.genero==="f"?"♀ M":"—";
+      const evsTxt=[...p.eventos].map(evNombre).filter(Boolean);
       return `<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut||""}</div></td>
-        <td style="padding:8px">${p.email||"—"}</td>
-        <td style="padding:8px"><a href="https://instagram.com/${(p.instagram||"").replace("@","")}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
-        <td style="padding:8px">${p.whatsapp||"—"}</td>
+        <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut?fmtRut(p.rut):""}</div></td>
+        <td style="padding:8px;font-size:12px">${p.email||"—"}</td>
+        <td style="padding:8px;font-size:12px">${p.instagram?`<a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram}</a>`:"—"}</td>
+        <td style="padding:8px;font-size:12px">${p.whatsapp||"—"}</td>
         <td style="padding:8px;font-size:11px">${fnac}</td>
         <td style="padding:8px;font-size:12px">${genLbl}</td>
-        <td style="padding:8px;font-size:11px;color:var(--ink-3)">${ev?.name||"—"}</td>
-        <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":p.estado==="falta_info"?"Falta info":p.estado==="docs_recibidos"?"Docs recibidos":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":p.estado==="falta_info"?"purple":p.estado==="docs_recibidos"?"blue":"amber")}</td>
-      </tr>`;
-    }).join(""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin contactos.</td></tr>`;
+        <td style="padding:8px"><div style="display:flex;gap:3px;flex-wrap:wrap">${[...p.origenes].map(o=>{const d=ORIG[o]||["•",o,"#555"];return `<span title="${d[1]}" style="font-size:10px;font-weight:700;color:${d[2]};background:${d[2]}18;border-radius:5px;padding:1px 6px;white-space:nowrap">${d[0]} ${d[1]}</span>`;}).join("")}</div></td>
+        <td style="padding:8px;font-size:11px;color:var(--ink-3)" title="${evsTxt.join(" · ")}">${evsTxt.length?`<strong>${evsTxt.length}</strong> evento${evsTxt.length!==1?"s":""}${p.ingresos.size?` · <span style="color:#166534">${p.ingresos.size} ingres${p.ingresos.size!==1?"os":"o"}</span>`:""}<div style="color:var(--ink-4);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${evsTxt.join(" · ")}</div>`:"—"}</td>
+      </tr>`;}).join("")+(f.length>MAX?`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:14px;font-size:12px">Mostrando ${MAX} de ${f.length}. Afina el filtro o exporta el CSV para ver todo.</td></tr>`:""):`<tr><td colspan="8" style="text-align:center;color:var(--ink-4);padding:24px">Sin personas con esos filtros.</td></tr>`;
   };
+  const totales=Object.keys(ORIG).map(k=>[k,personas.filter(p=>p.origenes.has(k)).length]);
   const render=()=>{
+    $("bd-loading").textContent="";
     $("bd-content").innerHTML=`
+      <div class="card" style="margin-bottom:12px;background:#f8fafc;padding:12px 16px;border-left:4px solid #534AB7">
+        <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:13px">
+          <span>👤 <strong>${personas.length}</strong> personas únicas de <strong>${evs.length}</strong> eventos</span>
+          <span style="color:#166534">✉ ${personas.filter(p=>p.email).length} con correo</span>
+          <span style="color:#166534">📱 ${personas.filter(p=>p.whatsapp).length} con WhatsApp</span>
+          <span style="color:#888">🎂 ${personas.filter(p=>p.fecha_nacimiento).length} con cumpleaños</span>
+          <span style="color:#888;font-size:12px">${totales.map(([k,n])=>`${ORIG[k][0]} ${n}`).join(" · ")}</span>
+        </div>
+        <div style="font-size:11px;color:#888;margin-top:6px">Se unen todas las fuentes de ${CP?.nombre||"la productora"} (Close Friends, cumpleaños, listas, mesas VIP, embajadoras) de todos los eventos. La misma persona se detecta por RUT, correo, Instagram o WhatsApp y se muestra una sola vez.</div>
+      </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
-        <input class="form-input" id="bd-search-inp" style="max-width:190px;margin:0" placeholder="🔍 Nombre, email, WA...">
-        <select class="form-input" id="bd-sel-ev" style="max-width:170px;margin:0">
-          <option value="todos">Todos los eventos</option>
-          ${evs.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}
-        </select>
-        <select class="form-input" id="bd-sel-estado" style="max-width:150px;margin:0">
-          <option value="todos">Todos los estados</option>
-          <option value="pendiente">Pendiente</option>
-          <option value="aprobado">Aprobado</option>
-          <option value="rechazado">Rechazado</option>
-          <option value="falta_info">Falta info</option>
-          <option value="docs_recibidos">Docs recibidos</option>
-        </select>
-        <select class="form-input" id="bd-sel-genero" style="max-width:130px;margin:0">
-          <option value="todos">♀♂ Todos</option>
-          <option value="m">♂ Hombres</option>
-          <option value="f">♀ Mujeres</option>
-        </select>
+        <input class="form-input" id="bd-search-inp" style="max-width:200px;margin:0" placeholder="🔍 Nombre, RUT, email, IG, WA…">
+        <select class="form-input" id="bd-sel-origen" style="max-width:170px;margin:0"><option value="todos">Todas las fuentes</option>${Object.entries(ORIG).map(([k,d])=>`<option value="${k}">${d[0]} ${d[1]}</option>`).join("")}</select>
+        <select class="form-input" id="bd-sel-ev" style="max-width:180px;margin:0"><option value="todos">Todos los eventos</option>${[...evs].sort((a,b)=>(b.date||"").localeCompare(a.date||"")).map(e=>`<option value="${e.id}">${e.name}${e.date?" · "+e.date.slice(5):""}</option>`).join("")}</select>
+        <select class="form-input" id="bd-sel-genero" style="max-width:120px;margin:0"><option value="todos">♀♂ Todos</option><option value="m">♂ Hombres</option><option value="f">♀ Mujeres</option></select>
+        <select class="form-input" id="bd-sel-contacto" style="max-width:160px;margin:0"><option value="todos">Con o sin contacto</option><option value="email">Solo con correo</option><option value="whatsapp">Solo con WhatsApp</option><option value="ingreso">Solo quienes ingresaron</option></select>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 10px">
-          <span style="font-size:11px;color:var(--ink-4);white-space:nowrap">🎂 Cumple entre</span>
-          <input type="date" id="bd-cumple-desde" class="form-input" style="margin:0;padding:4px 8px;font-size:12px;width:140px;border:none;background:transparent" placeholder="Desde">
-          <span style="font-size:11px;color:var(--ink-4)">y</span>
-          <input type="date" id="bd-cumple-hasta" class="form-input" style="margin:0;padding:4px 8px;font-size:12px;width:140px;border:none;background:transparent" placeholder="Hasta">
-          <button id="bd-cumple-clear" class="btn" style="font-size:11px;padding:2px 8px;display:none">✕</button>
+          <span style="font-size:12px;color:var(--ink-4)">🎂 Cumple entre</span>
+          <input type="text" id="bd-cumple-desde" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
+          <span style="font-size:12px;color:var(--ink-4)">y</span>
+          <input type="text" id="bd-cumple-hasta" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
         </div>
         <span id="bd-count" style="font-size:12px;color:var(--ink-4)"></span>
         <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar CSV</button>
@@ -10774,7 +10820,7 @@ VIEWS["base-datos"]=async()=>{
       </div>
       <div id="bd-campana-panel" style="display:none;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:20px;margin-bottom:16px">
         <div style="font-weight:600;margin-bottom:12px">✉ Nueva campaña de email</div>
-        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">0</strong> contactos con los filtros actuales.</div>
+        <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">0</strong> contactos con correo según los filtros actuales (las personas sin correo quedan fuera).</div>
         <div style="margin-bottom:10px"><label class="form-label">Asunto</label><input class="form-input" id="bd-camp-asunto" placeholder="Ej: ¡Te invitamos a nuestro próximo evento!"></div>
         <div style="margin-bottom:10px"><label class="form-label">Mensaje (HTML o texto)</label><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
         <div style="display:flex;gap:8px">
@@ -10782,70 +10828,46 @@ VIEWS["base-datos"]=async()=>{
           <button class="btn" onclick="document.getElementById('bd-campana-panel').style.display='none'">Cancelar</button>
         </div>
       </div>
-      <div style="overflow-x:auto">
-      <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <div class="card" style="padding:0;overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead><tr style="background:var(--line-2)">
-          <th style="padding:8px;text-align:left">Nombre</th>
-          <th style="padding:8px;text-align:left">Email</th>
-          <th style="padding:8px;text-align:left">Instagram</th>
-          <th style="padding:8px;text-align:left">WhatsApp</th>
-          <th style="padding:8px;text-align:left">Cumpleaños</th>
-          <th style="padding:8px;text-align:left">Género</th>
-          <th style="padding:8px;text-align:left">Evento</th>
-          <th style="padding:8px;text-align:left">Estado</th>
+          <th style="padding:8px;text-align:left">Nombre</th><th style="padding:8px;text-align:left">Email</th><th style="padding:8px;text-align:left">Instagram</th><th style="padding:8px;text-align:left">WhatsApp</th><th style="padding:8px;text-align:left">Cumpleaños</th><th style="padding:8px;text-align:left">Género</th><th style="padding:8px;text-align:left">Fuente</th><th style="padding:8px;text-align:left">Eventos</th>
         </tr></thead>
         <tbody id="bd-tbody"></tbody>
       </table></div>`;
-    // Vincular eventos sin re-renderizar controles
-    const inp=$("bd-search-inp");
-    if(inp){inp.value=bdBusqueda;inp.addEventListener("input",e=>{bdBusqueda=e.target.value;renderTabla();});}
-    const selEv=$("bd-sel-ev");
-    if(selEv){selEv.value=bdFiltroEv;selEv.addEventListener("change",e=>{bdFiltroEv=e.target.value;renderTabla();});}
-    const selEst=$("bd-sel-estado");
-    if(selEst){selEst.value=bdFiltroEstado;selEst.addEventListener("change",e=>{bdFiltroEstado=e.target.value;renderTabla();});}
-    const selGen=$("bd-sel-genero");
-    if(selGen){selGen.value=bdFiltroGenero;selGen.addEventListener("change",e=>{bdFiltroGenero=e.target.value;renderTabla();});}
-    const desdInp=$("bd-cumple-desde");
-    const hastaInp=$("bd-cumple-hasta");
-    const clearBtn=$("bd-cumple-clear");
-    const actualizarClearBtn=()=>{if(clearBtn)clearBtn.style.display=(bdCumpleDesde||bdCumpleHasta)?"inline-flex":"none";};
-    if(desdInp){desdInp.value=bdCumpleDesde;desdInp.addEventListener("change",e=>{bdCumpleDesde=e.target.value;actualizarClearBtn();renderTabla();});}
-    if(hastaInp){hastaInp.value=bdCumpleHasta;hastaInp.addEventListener("change",e=>{bdCumpleHasta=e.target.value;actualizarClearBtn();renderTabla();});}
-    if(clearBtn){clearBtn.addEventListener("click",()=>{bdCumpleDesde="";bdCumpleHasta="";if(desdInp)desdInp.value="";if(hastaInp)hastaInp.value="";clearBtn.style.display="none";renderTabla();});actualizarClearBtn();}
-    $("bd-loading").textContent="";
+    $("bd-search-inp").addEventListener("input",e=>{q=e.target.value;renderTabla();});
+    $("bd-sel-origen").addEventListener("change",e=>{fOrigen=e.target.value;renderTabla();});
+    $("bd-sel-ev").addEventListener("change",e=>{fEv=e.target.value;renderTabla();});
+    $("bd-sel-genero").addEventListener("change",e=>{fGenero=e.target.value;renderTabla();});
+    $("bd-sel-contacto").addEventListener("change",e=>{fContacto=e.target.value;renderTabla();});
+    $("bd-cumple-desde").addEventListener("input",e=>{fDesde=e.target.value.trim();renderTabla();});
+    $("bd-cumple-hasta").addEventListener("input",e=>{fHasta=e.target.value.trim();renderTabla();});
     renderTabla();
   };
-  window._bdBuscar=(v)=>{ bdBusqueda=v; renderTabla(); };
-  window._bdFiltroEv=(v)=>{ bdFiltroEv=v; renderTabla(); };
-  window._bdFiltroEstado=(v)=>{ bdFiltroEstado=v; renderTabla(); };
-  window._bdCampana=()=>{ const p=$("bd-campana-panel"); if(p)p.style.display=p.style.display==="none"?"block":"none"; };
+  window._bdCampana=()=>{const p=$("bd-campana-panel");if(p)p.style.display=p.style.display==="none"?"block":"none";};
   window._bdExportar=()=>{
     const f=window._bdFiltrados||[];
-    const rows=[["Nombre","Apellido","Email","RUT","Instagram","WhatsApp","Evento","Estado"],...f.map(p=>{
-      const ev=evs.find(e=>e.id===p.evento_id);
-      return[p.nombre,p.apellido,p.email,p.rut,p.instagram,p.whatsapp,ev?.name||"",p.estado];
-    })];
-    const csv=rows.map(r=>r.map(c=>`"${(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
-    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download="base_datos_cf.csv";a.click();
+    const rows=[["Nombre","Apellido","RUT","Email","Instagram","WhatsApp","Fecha nacimiento","Género","Fuentes","Eventos","Eventos a los que ingresó"],...f.map(p=>[p.nombre,p.apellido,p.rut?fmtRut(p.rut):"",p.email,p.instagram?"@"+p.instagram:"",p.whatsapp,p.fecha_nacimiento,p.genero==="m"?"H":p.genero==="f"?"M":"",[...p.origenes].map(o=>ORIG[o]?.[1]||o).join(" | "),[...p.eventos].map(evNombre).filter(Boolean).join(" | "),[...p.ingresos].map(evNombre).filter(Boolean).join(" | ")])];
+    const csv=rows.map(r=>r.map(c=>`"${String(c||"").replace(/"/g,'""')}"`).join(",")).join("\n");
+    const a=document.createElement("a");a.href="data:text/csv;charset=utf-8,﻿"+encodeURIComponent(csv);a.download=`base_datos_${(CP?.nombre||"guestly").replace(/\s+/g,"_").toLowerCase()}.csv`;a.click();
   };
   window._bdEnviarCampana=async()=>{
     const asunto=($("bd-camp-asunto")||{}).value?.trim();
     const cuerpo=($("bd-camp-cuerpo")||{}).value?.trim();
-    const contactos=window._bdFiltrados||[];
+    const contactos=(window._bdFiltrados||[]).filter(p=>p.email);
     if(!asunto||!cuerpo){toast("Completa asunto y mensaje","warn");return;}
-    if(!contactos.length){toast("No hay contactos con los filtros actuales","warn");return;}
+    if(!contactos.length){toast("No hay contactos con correo en los filtros actuales","warn");return;}
     if(!confirm(`¿Enviar correo a ${contactos.length} contacto${contactos.length!==1?"s":""}?`))return;
-    const btn=document.querySelector("#bd-campana-panel .btn-primary");
+    const btn=$("bd-camp-send-btn");
     if(btn){btn.disabled=true;btn.textContent="Enviando...";}
     let ok=0,fail=0;
     for(const p of contactos){
-      const html=`<div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px"><div style="text-align:center">${GL_EMAIL_LOGO}</div><div style="margin-top:20px">${cuerpo.replace(/\{nombre\}/gi,p.nombre||"").replace(/\n/g,"<br>")}</div></div></div>`;
+      const html=`<div style="font-family:system-ui;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px"><div style="text-align:center">${GL_EMAIL_LOGO}</div><div style="margin-top:20px;font-size:14px;color:#333;line-height:1.6">${cuerpo.replace(/\{nombre\}/gi,p.nombre||"").replace(/\n/g,"<br>")}</div>${GL_POWERED}</div></div>`;
       const sent=await sendEmail(p.email,asunto.replace(/\{nombre\}/gi,p.nombre||""),html);
       if(sent)ok++;else fail++;
     }
     if(btn){btn.disabled=false;btn.textContent=`📨 Enviar a ${contactos.length} contacto${contactos.length!==1?"s":""}`;}
     toast(`✅ ${ok} enviados${fail?`, ⚠️ ${fail} fallaron`:""}`,ok?"ok":"warn");
-    await log("cf_campana","cf_postulantes",null,`Campaña enviada: "${asunto}" → ${ok} ok, ${fail} fallaron`);
+    await log("bd_campana","base_datos",null,`Campaña enviada: "${asunto}" → ${ok} ok, ${fail} fallaron`);
   };
   render();
 };
