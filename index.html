@@ -8031,7 +8031,18 @@ function jefeView(v){
   else if(v==="ranking")renderJefeRanking(mc);
 }
 let jefeGrupoSel=null; // grupo/equipo seleccionado por el jefe
+async function guardarWtspGrupo(gid){
+  const g=D.equipos.find(e=>e.id===gid);if(!g)return;
+  const v=($("jefe-wtsp-link")?.value||"").trim();
+  if(v&&!/^https?:\/\//i.test(v)){toast("Pega el link completo del grupo (empieza con https://)","error");return;}
+  try{await sbPatch("equipos",`id=eq.${gid}`,{wtsp_link:v||null});g.wtsp_link=v||null;toast("✓ Link de WhatsApp guardado","success");jefeView("equipo");}
+  catch(e){toast("Error: "+e.message,"error");if(/wtsp_link/.test(e.message||""))alert("Falta la columna wtsp_link en la tabla equipos (ver SQL).");}
+}
 function renderJefeEquipo(mc){
+  // Postulaciones de mis grupos (lazy, una vez)
+  if(!D._jefePostLoaded){D._jefePostLoaded=true;
+    sbGet("emb_postulantes",`jefe_id=eq.${CU.id}&order=created_at.desc`).then(r=>{D.emb_postulantes=[...(D.emb_postulantes||[]).filter(p=>p.jefe_id!==CU.id),...(r||[])];if($("jefe-content"))renderJefeEquipo($("jefe-content"));}).catch(()=>{});
+  }
   // Todos los grupos de este jefe
   const misGrupos=D.equipos.filter(e=>e.jefe_id===CU.id);
   if(!jefeGrupoSel||!misGrupos.find(g=>g.id===jefeGrupoSel))jefeGrupoSel=misGrupos[0]?.id||null;
@@ -8052,6 +8063,40 @@ function renderJefeEquipo(mc){
           <button class="btn" style="font-size:11px;padding:6px 10px" onclick="renombrarGrupoJefe('${eq?.id}')">✏️</button>
         </div>
       </div>
+      ${eq?(()=>{
+        const link=`${CF_APP_URL}/?emb=${CU.productora_id}&grupo=${eq.id}`;
+        const posts=(D.emb_postulantes||[]).filter(p=>p.equipo_id===eq.id);
+        const pend=posts.filter(p=>p.estado==="pendiente");
+        const waTxt=encodeURIComponent(`Hola! Postula para ser embajadora de ${CP?.nombre||"nuestra productora"} en mi grupo ${eq.name} 🌸 Llena este formulario: ${link}`);
+        return `
+      <div class="card" style="margin-bottom:12px;background:linear-gradient(135deg,#1a1a2e,#2d2b55);color:#fff">
+        <div style="font-size:13px;font-weight:700;margin-bottom:4px">🔗 Link de postulación de ${eq.name}</div>
+        <div style="font-size:11px;opacity:.8;margin-bottom:10px;line-height:1.5">Envíaselo a quien quieras sumar: llena el formulario, tú la apruebas aquí mismo y le llega un correo con su acceso y el link de tu grupo de WhatsApp.</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn" style="font-size:12px;background:#fff;color:#1a1a2e;border:none" onclick="navigator.clipboard.writeText('${link}').then(()=>toast('Link copiado','ok'))">📋 Copiar link</button>
+          <a class="btn" style="font-size:12px;background:#25D366;color:#fff;border:none;text-decoration:none" target="_blank" href="https://wa.me/?text=${waTxt}">📱 Enviar por WhatsApp</a>
+        </div>
+        <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,.15)">
+          <div style="font-size:12px;font-weight:600;margin-bottom:6px">💬 Link de tu grupo de WhatsApp <span style="font-weight:400;opacity:.7">(va en el correo de bienvenida)</span></div>
+          <div style="display:flex;gap:6px">
+            <input class="form-input" id="jefe-wtsp-link" placeholder="https://chat.whatsapp.com/…" value="${(eq.wtsp_link||"").replace(/"/g,"&quot;")}" style="flex:1;font-size:12px;background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.25)">
+            <button class="btn" style="font-size:12px;background:#fff;color:#1a1a2e;border:none" onclick="guardarWtspGrupo('${eq.id}')">Guardar</button>
+          </div>
+          ${!eq.wtsp_link?`<div style="font-size:11px;color:#fde68a;margin-top:6px">⚠️ Sin link: en el correo no saldrá el grupo de WhatsApp.</div>`:""}
+        </div>
+      </div>
+      ${pend.length?`<div class="card" style="margin-bottom:12px;border-left:4px solid #F59E0B">
+        <div style="font-size:14px;font-weight:600;margin-bottom:10px">📥 Postulaciones pendientes (${pend.length})</div>
+        ${pend.map(p=>{const edad=edadDesde(p.fecha_nacimiento);return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid #eee;border-radius:10px;margin-bottom:8px">
+          <a href="${p.foto_carnet||"#"}" target="_blank"><img src="${p.foto_carnet||""}" style="width:54px;height:54px;object-fit:cover;border-radius:8px;background:#f4f4f6" onerror="this.style.display='none'"></a>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:13px;font-weight:700">${p.nombre} ${p.apellido} ${edad!==null?`<span style="font-size:11px;color:${edad>=18?"#166534":"#991b1b"}">· ${edad} años</span>`:""}${p.reintegro?' <span style="font-size:11px;color:#92400E">· 🔁 reintegro</span>':""}</div>
+            <div style="font-size:11px;color:#666;margin-top:2px">🪪 ${fmtRut(p.rut)} · 📍 ${p.ciudad||"—"}</div>
+            <div style="font-size:11px;margin-top:2px;display:flex;gap:8px;flex-wrap:wrap"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:#E1306C;text-decoration:none;font-weight:600">📸 @${p.instagram}</a><a href="https://wa.me/${(p.whatsapp||"").replace(/\D/g,"")}" target="_blank" style="color:#25D366;text-decoration:none;font-weight:600">💬 ${p.whatsapp}</a></div>
+            ${p.experiencia?`<div style="font-size:11px;color:#555;margin-top:2px">⭐ ${p.experiencia}</div>`:""}
+            <div style="display:flex;gap:6px;margin-top:8px"><button class="btn btn-success" style="font-size:11px;padding:4px 10px" onclick="embAprobarPost('${p.id}')">✓ Aprobar</button><button class="btn" style="font-size:11px;padding:4px 10px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="embRechazarPost('${p.id}')">✕ Rechazar</button></div>
+          </div></div>`;}).join("")}
+      </div>`:""}`;})():""}
       <div class="card">
         <div style="display:flex;justify-content:space-between;margin-bottom:12px">
           <div style="font-size:14px;font-weight:600">${eq?.name||""} · ${miembros.length} embajadores</div>
@@ -12258,17 +12303,20 @@ async function mostrarPostulacionEmb(prodId){
     .pe-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
   </style><div class="pe-wrap"><div class="pe-box" id="pe-box"><div class="pe-ok"><div class="ic">⏳</div><p>Cargando…</p></div></div></div>`;
   const box=document.getElementById("pe-box");
-  let prod,evs=[];
+  let prod,evs=[],grupo=null,jefe=null;
+  const grupoId=new URLSearchParams(window.location.search).get("grupo");
   try{
-    const [pArr,eArr]=await Promise.all([sbGet("productoras",`id=eq.${prodId}`),sbGet("eventos",`productora_id=eq.${prodId}&order=date`)]);
+    const [pArr,eArr,gArr]=await Promise.all([sbGet("productoras",`id=eq.${prodId}`),sbGet("eventos",`productora_id=eq.${prodId}&order=date`),grupoId?sbGet("equipos",`id=eq.${grupoId}`):[]]);
     prod=pArr[0];const hoy=new Date().toISOString().slice(0,10);
     evs=(eArr||[]).filter(e=>e.status!=="archived"&&(!e.date||e.date>=hoy));
+    grupo=gArr[0]||null;
+    if(grupo?.jefe_id){try{jefe=(await sbGet("users",`id=eq.${grupo.jefe_id}&select=id,name`))[0]||null;}catch(e){}}
   }catch(e){}
   if(!prod){box.innerHTML=`<div class="pe-ok"><div class="ic">😕</div><h2>Link no válido</h2><p>Este link de postulación no existe.</p></div>`;return;}
   const show=(h)=>{box.innerHTML=h;window.scrollTo(0,0);};
   const form=()=>show(`
     <div class="pe-title">${prod.logo_url?`<img src="${prod.logo_url}" alt="${prod.nombre||""}" style="width:88px;height:88px;object-fit:cover;border-radius:20px;display:block;margin:0 auto 12px;border:1px solid #222">`:""}<h1>${prod.nombre||"Productora"}</h1><p>Embajadoras</p></div>
-    <div class="pe-sub">Postula para ser embajadora de <strong style="color:#fff">${prod.nombre||""}</strong>. Revisaremos tu postulación y te avisaremos por correo.</div>
+    <div class="pe-sub">Postula para ser embajadora de <strong style="color:#fff">${prod.nombre||""}</strong>${grupo?` en el grupo <strong style="color:#EC4899">${grupo.name}</strong>${jefe?` de ${jefe.name}`:""}`:""}. ${grupo?"Tu jefe de grupo revisará tu postulación":"Revisaremos tu postulación"} y te avisaremos por correo.</div>
     <div class="pe-row">
       <div><label class="pe-lbl">Nombre <span>*</span></label><input class="pe-in" id="pe-nom" placeholder="Tu nombre"></div>
       <div><label class="pe-lbl">Apellido <span>*</span></label><input class="pe-in" id="pe-ape" placeholder="Tu apellido"></div>
@@ -12339,8 +12387,9 @@ async function mostrarPostulacionEmb(prodId){
       const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":window._peFotoFile.type||"image/jpeg","x-upsert":"true"},body:window._peFotoFile});
       if(!up.ok)throw new Error("No se pudo subir la foto: "+(await up.text()));
       const foto_carnet=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
-      const row={id:uid(),productora_id:prodId,nombre,apellido,fecha_nacimiento:fnac,rut:rutN,whatsapp:"+569"+wtsp,email,instagram:ig,tiktok:tt||null,ciudad,experiencia:exp||null,eventos_interes:evSel,foto_carnet,estado:"pendiente",reintegro:(fueAprobada||fueEliminada),created_at:now()};
-      await sbPost("emb_postulantes",[row]);
+      const row={id:uid(),productora_id:prodId,nombre,apellido,fecha_nacimiento:fnac,rut:rutN,whatsapp:"+569"+wtsp,email,instagram:ig,tiktok:tt||null,ciudad,experiencia:exp||null,eventos_interes:evSel,foto_carnet,equipo_id:grupo?.id||null,jefe_id:grupo?.jefe_id||null,estado:"pendiente",reintegro:(fueAprobada||fueEliminada),created_at:now()};
+      try{await sbPost("emb_postulantes",[row]);}
+      catch(e){if(/equipo_id|jefe_id/.test(e.message||"")){delete row.equipo_id;delete row.jefe_id;await sbPost("emb_postulantes",[row]);}else throw e;}
       show(`<div class="pe-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod.nombre||""}</strong> revisará tu postulación y te avisará por correo a <strong style="color:#fff">${email}</strong>.</p><div class="pe-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div></div>`);
     }catch(e){
       btn.disabled=false;btn.textContent="Enviar postulación 🌸";
@@ -12395,6 +12444,7 @@ VIEWS["emb-postulaciones"]=async()=>{
             <div style="font-size:15px;font-weight:700;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${p.nombre} ${p.apellido}
               ${edad!==null?`<span style="font-size:11px;background:${edad>=18?"#dcfce7":"#fee2e2"};color:${edad>=18?"#166534":"#991b1b"};padding:2px 8px;border-radius:5px;font-weight:600">${edad} años</span>`:""}
               ${p.reintegro?`<span style="font-size:11px;background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:5px;font-weight:700">🔁 Quiere reintegrarse (fue embajadora antes)</span>`:""}
+              ${p.equipo_id?(()=>{const g=(D.equipos||[]).find(e=>e.id===p.equipo_id);const j=g?(D.users||[]).find(u=>u.id===g.jefe_id):null;return `<span style="font-size:11px;background:#EDE9FE;color:#534AB7;padding:2px 8px;border-radius:5px;font-weight:700">📣 Grupo ${g?.name||"—"}${j?" · jefe "+j.name:""}</span>`;})():""}
               ${yaEmb?`<span style="font-size:11px;background:#dcfce7;color:#166534;padding:2px 8px;border-radius:5px;font-weight:700">✓ Ya es embajadora</span>`:""}
               ${p.estado==="aprobado"?badge("Aprobada","green"):p.estado==="rechazado"?badge("Rechazada","red"):badge("Pendiente","amber")}
             </div>
@@ -12458,10 +12508,12 @@ window.subirLogoProductora=async(prodId,input)=>{
   }catch(e){msg.style.color="#dc2626";msg.textContent="Error: "+e.message;}
 };
 // Aprobar: elegir equipo + contraseña → vista previa del correo → crear usuario embajador + enviar
+function embRefrescarPostulaciones(){if(CU?.role==="ambassador_chief"){jefeView("equipo");}else{VIEWS["emb-postulaciones"]();}}
 window.embAprobarPost=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
   const prodId=p.productora_id;
-  const equipos=(D.equipos||[]).filter(e=>!prodId||e.productora_id===prodId);
+  const esJefe=CU?.role==="ambassador_chief";
+  const equipos=(D.equipos||[]).filter(e=>(!prodId||e.productora_id===prodId)&&(!esJefe||e.jefe_id===CU.id));
   const yaUser=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
   if(yaUser){
     const esEmb=true;const rolTxt={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"}[yaUser.role]||yaUser.role;
@@ -12478,7 +12530,8 @@ window.embAprobarPost=(id)=>{
   openModal(`Aprobar a ${p.nombre} ${p.apellido}`,`
     ${p.reintegro?`<div class="alert alert-warn" style="margin-top:0">🔁 Fue embajadora antes y quiere reintegrarse.</div>`:""}
     <label class="form-label" style="margin-top:0">Equipo</label>
-    <select class="form-select" id="emb-ap-eq"><option value="">— Embajadora interna (sin equipo) —</option>${equipos.map(e=>`<option value="${e.id}">${e.name}</option>`).join("")}</select>
+    <select class="form-select" id="emb-ap-eq">${esJefe?"":`<option value="">— Embajadora interna (sin equipo) —</option>`}${equipos.map(e=>`<option value="${e.id}" ${(p.equipo_id||(esJefe?jefeGrupoSel:""))===e.id?"selected":""}>${e.name}</option>`).join("")}</select>
+    ${p.equipo_id&&!equipos.some(e=>e.id===p.equipo_id)?`<div style="font-size:11px;color:#92400E;margin-top:4px">Postuló a un grupo que ya no existe o no es tuyo.</div>`:""}
     <label class="form-label">Contraseña inicial</label><input class="form-input" id="emb-ap-pass" value="${pass}">
     <div style="font-size:12px;color:#666;margin-top:8px">Se creará su usuario de embajadora con WhatsApp e Instagram ya cargados, y le llegará un correo con su acceso. Verás el correo antes de enviarlo.</div>
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="embPreviewAprobacion('${id}')">Siguiente: ver correo →</button></div>`);
@@ -12499,14 +12552,16 @@ window.embVincularExistente=async(id,userId)=>{
     }
     await log("emb_postulacion_aprobada","user",u.id,`Postulación aprobada vinculada a cuenta existente: ${u.name}${eq?" → "+eq.name:""}`);
     closeModal();toast(ok?`✅ ${p.nombre} aprobada con su cuenta existente`:`✅ Aprobada, pero el correo no se pudo enviar`,ok?"ok":"warn");
-    VIEWS["emb-postulaciones"]();
+    embRefrescarPostulaciones();
   }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+e.message);}
 };
 window.embPreviewAprobacion=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
   const eqId=$("emb-ap-eq")?.value||"",pass=($("emb-ap-pass")?.value||"").trim()||"guestly123";
   const eq=(D.equipos||[]).find(e=>e.id===eqId);const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
-  const extra=`<p style="color:#555;font-size:14px;line-height:1.6">¡Bienvenida al equipo de embajadoras de <strong>${prod?.nombre||"la productora"}</strong>! 🌸${eq?` Quedaste en el equipo <strong>${eq.name}</strong>.`:""}<br>En la app verás tus campañas pendientes, lo que tienes que subir, tus puntos y los próximos eventos.</p><p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:13px">🔐 Esta contraseña es temporal: al entrar por primera vez te pediremos crear la tuya.</p>`;
+  const jefeEq=eq?.jefe_id?(D.users||[]).find(u=>u.id===eq.jefe_id):null;
+  const wtspBloque=eq?.wtsp_link?`</p><div style="background:#DCFCE7;border-radius:10px;padding:14px;margin:14px 0;text-align:center"><div style="font-size:13px;font-weight:700;color:#166534;margin-bottom:8px">💬 Únete al grupo de WhatsApp de ${eq.name}</div><a href="${eq.wtsp_link}" style="display:inline-block;background:#25D366;color:#fff;padding:10px 20px;border-radius:10px;text-decoration:none;font-weight:700;font-size:13px">Pedir unirme al grupo →</a><div style="font-size:11px;color:#166534;margin-top:8px">Pide unirte y ${jefeEq?jefeEq.name:"tu jefe de grupo"} te aceptará. Por ahí se coordinan las campañas.</div></div><p style="color:#555;font-size:14px;line-height:1.6">`:"";
+  const extra=`<p style="color:#555;font-size:14px;line-height:1.6">¡Bienvenida al equipo de embajadoras de <strong>${prod?.nombre||"la productora"}</strong>! 🌸${eq?` Quedaste en el grupo <strong>${eq.name}</strong>${jefeEq?` (jefe: ${jefeEq.name})`:""}.`:""}${wtspBloque}<br>En la app verás tus campañas pendientes, lo que tienes que subir, tus puntos y los próximos eventos.</p><p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:10px 14px;font-size:13px">🔐 Esta contraseña es temporal: al entrar por primera vez te pediremos crear la tuya.</p>`;
   const html=emailTemplates.credenciales(p.nombre,p.email,pass,extra);
   const asunto=`¡Eres embajadora de ${prod?.nombre||"The Project"}! 🌸 Tu acceso a Guestly`;
   window._embApr={id,eqId,pass,asunto,html};
@@ -12529,7 +12584,7 @@ window.embConfirmarAprobacion=async()=>{
     const ok=await sendEmail(p.email,a.asunto,a.html);
     await log("emb_postulacion_aprobada","user",u.id,`Embajadora aprobada desde postulación: ${u.name}${a.eqId?" → equipo":""}`);
     closeModal();toast(ok?`✅ ${p.nombre} ya es embajadora. Correo enviado.`:`✅ ${p.nombre} creada, pero el correo no se pudo enviar`,ok?"ok":"warn");
-    VIEWS["emb-postulaciones"]();
+    embRefrescarPostulaciones();
   }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+(/users_email_key/.test(e.message||"")?"Ese correo ya tiene otra cuenta y la base de datos todavía no permite dos cuentas con el mismo correo.\n\nEjecuta en Supabase:\nALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;":e.message));}
 };
 window.embRechazarPost=async(id)=>{
@@ -12542,7 +12597,7 @@ window.embRechazarPost=async(id)=>{
     Object.assign(p,{estado:"rechazado",motivo_rechazo:motivo||null,resuelto_at:at});
     if(avisar){const prod=(D.productoras||[]).find(x=>x.id===p.productora_id);
       await sendEmail(p.email,`Tu postulación a embajadora — ${prod?.nombre||""}`,`<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px"><div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8"><div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div><h2 style="font-size:18px;font-weight:700;margin-bottom:8px">Hola ${p.nombre} 🌸</h2><p style="color:#555;font-size:14px;line-height:1.6">Gracias por postular a ser embajadora de <strong>${prod?.nombre||""}</strong>. Por ahora no tenemos cupos para sumarte al equipo, pero guardamos tus datos y te avisaremos si se abren nuevas vacantes.</p><p style="color:#555;font-size:14px;line-height:1.6">¡Nos vemos en la pista! 💃</p>${GL_POWERED}</div></div>`);}
-    toast("Postulación rechazada","warn");VIEWS["emb-postulaciones"]();
+    toast("Postulación rechazada","warn");embRefrescarPostulaciones();
   }catch(e){toast("Error: "+e.message,"error");}
 };
 window.embReabrirPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;await sbPatch("emb_postulantes",`id=eq.${id}`,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});Object.assign(p,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});VIEWS["emb-postulaciones"]();};

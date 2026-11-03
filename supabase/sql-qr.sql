@@ -15,3 +15,7 @@ ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
 
 -- Resumen de cierre automático del evento (snapshot al finalizar)
 ALTER TABLE eventos ADD COLUMN IF NOT EXISTS cierre JSONB;
+
+-- Postulación de embajadoras por grupo (link del jefe) + link del grupo de WhatsApp
+ALTER TABLE emb_postulantes ADD COLUMN IF NOT EXISTS equipo_id TEXT, ADD COLUMN IF NOT EXISTS jefe_id TEXT;
+ALTER TABLE equipos ADD COLUMN IF NOT EXISTS wtsp_link TEXT;
