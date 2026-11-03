@@ -248,6 +248,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
         <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:var(--ink-4);font-size:14px">🔀</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:var(--ink-4);font-size:14px" title="Salir">⏻</button>
     </div>
   </div>
@@ -265,6 +266,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="mob-aforo-badge" class="badge b-purple" style="font-size:12px"></div>
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -286,6 +288,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="emb-pts" class="badge b-amber" style="font-size:12px;padding:4px 12px;font-weight:600"></div>
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -306,6 +309,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div style="display:flex;gap:8px;align-items:center">
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -1169,7 +1173,7 @@ async function intentarLogin(email,pass,esRestauracion){
     }
     $("li-err")?.classList.add("hidden");
     // Una persona puede tener más de una cuenta con el mismo correo (p.ej. embajadora + compradora de mesa)
-    let elegido=res[0];
+    let elegido=res[0];window._multiPerfil=res.length>1;
     if(res.length>1){
       let uidGuardado=null;try{uidGuardado=JSON.parse(localStorage.getItem("crew-session")||"{}").uid;}catch(e){}
       const f=uidGuardado&&res.find(u=>u.id===uidGuardado);
@@ -1189,14 +1193,22 @@ function elegirCuentaLogin(cuentas,email,pass){
   const ICO={embajador:"🌸",comprador:"🍾",cumpleanero:"🎂",owner:"🏢",coordinator:"🏢",superadmin:"👑"};
   window._cuentasLogin=cuentas;
   openModal("¿Con qué perfil quieres entrar?",`
-    <div style="font-size:13px;color:#666;margin-bottom:12px">Tu correo <strong>${email}</strong> tiene más de un perfil en Guestly. Elige uno (puedes cambiar después saliendo y volviendo a entrar).</div>
+    <div style="font-size:13px;color:#666;margin-bottom:12px">Tu correo <strong>${email}</strong> tiene más de un perfil en Guestly. Elige uno; después puedes volver aquí con el botón 🔀 "Cambiar de perfil".</div>
     <div style="display:grid;gap:8px">${cuentas.map((u,i)=>{const prod=(D.productoras||[]).find(p=>p.id===u.productora_id);return `
       <button class="btn" style="display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;justify-content:flex-start" onclick="entrarConCuenta(${i},'${email.replace(/'/g,"")}')">
         <span style="font-size:24px">${ICO[u.role]||"👤"}</span>
         <span><span style="font-weight:700;display:block">${ROL[u.role]||u.role}</span><span style="font-size:12px;color:#888">${u.name||""}${prod?" · "+prod.nombre:""}</span></span>
       </button>`;}).join("")}</div>
-    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button></div>`);
+    <div class="modal-footer"><button class="btn" onclick="closeModal();try{localStorage.removeItem('crew-session')}catch(e){}">Cancelar</button></div>`);
   window._passLogin=pass;
+}
+// Volver al inicio para elegir otro perfil (misma clave, otro rol)
+function cambiarPerfil(){
+  let ses={};try{ses=JSON.parse(localStorage.getItem("crew-session")||"{}");}catch(e){}
+  if(!ses.email||!ses.pass){doLogout();return;}
+  try{localStorage.setItem("crew-session",JSON.stringify({email:ses.email,pass:ses.pass}));}catch(e){}
+  if(realtimeChannel&&sbClient){try{sbClient.removeChannel(realtimeChannel);}catch(e){}}
+  location.href=location.pathname;
 }
 window.entrarConCuenta=async(i,email)=>{
   const u=(window._cuentasLogin||[])[i];if(!u)return;closeModal();showLoading(true);
@@ -1236,6 +1248,7 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
     iniciarRealtime();
     iniciarRespaldoAcreditacion();
     iniciarInactividad();
+    document.querySelectorAll(".btn-cambiar-perfil").forEach(b=>b.style.display=window._multiPerfil?"":"none");
     return true;
   }catch(e){
     showLoading(false);
@@ -1248,7 +1261,8 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
 function abrirMiCuenta(){
   if(!CU)return;
   const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"};
-  openModal("⚙️ Mi cuenta",`
+  const btnPerfil=window._multiPerfil?`<button class="btn" style="width:100%;margin-bottom:12px" onclick="cambiarPerfil()">🔀 Cambiar de perfil (volver al inicio)</button>`:"";
+  openModal("⚙️ Mi cuenta",`${btnPerfil}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <div class="avatar" style="width:44px;height:44px;font-size:15px">${ini(CU.name||"?")}</div>
       <div><div style="font-size:15px;font-weight:700">${CU.name||""}</div><div style="font-size:12px;color:#888">${CU.email||""} · ${ROL[CU.role]||CU.role}</div></div>
@@ -7210,6 +7224,7 @@ function initCompradorApp(){
           ${glLogo("neg",20)}
           <div style="font-size:10px;color:#555;margin-top:2px">MIS MESAS</div>
         </div>
+        ${window._multiPerfil?`<button onclick="cambiarPerfil()" title="Cambiar de perfil" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">🔀</button>`:""}
         <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">⏻</button>
       </div>
       <div style="padding:16px">
@@ -7309,6 +7324,7 @@ function renderCompradorApp(mesaId){
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
           ${badge(est.label,est.badge)}
           <span data-bell-slot></span>
+          ${window._multiPerfil?`<button onclick="cambiarPerfil()" title="Cambiar de perfil" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">🔀</button>`:""}
           <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px" title="Cerrar sesión">⏻</button>
         </div>
       </div>
