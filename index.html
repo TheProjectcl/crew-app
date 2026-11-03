@@ -668,7 +668,7 @@ async function loadAll(prodId=null){
     ]);
     D={productoras,users,equipos,eventos,acc_lists,acc_entries,vip_tables,capacity_log,tareas,cumplimientos,recompensas,audit_log,mesa_tipos:mesa_tipos||[],lista_bloqueo:lista_bloqueo||[]};
     if(!currentEvId&&D.eventos.length){
-      const active=D.eventos.find(e=>e.status==="active");
+      const active=D.eventos.filter(e=>esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""))[0]||D.eventos.find(e=>e.status==="active");
       currentEvId=(active||D.eventos[0]).id;
     }
     // MIGRACIÓN ÚNICA: si hay entries con RUT escondido en el campo `role` ("RUT: 12345678-9"),
@@ -715,22 +715,29 @@ async function autoFinalizarEventosPasados(){
       finEv.setDate(finEv.getDate()+1);
       finEv.setHours(6,0,0,0);
     }
-    const finOperativo=new Date(finEv.getTime()+48*60*60*1000);
-    return ahora>=finOperativo;
+    return ahora>=finEv; // apenas termina el evento (hora de término, o 06:00 del día siguiente si no tiene)
   });
   if(!aFinalizar.length)return;
-  console.log(`[auto-finalizar] ${aFinalizar.length} evento(s) pasaron 48h después del término, marcando como closed...`);
+  console.log(`[auto-finalizar] ${aFinalizar.length} evento(s) terminaron: marcando como Finalizado y archivando...`);
   for(const ev of aFinalizar){
-    ev.status="closed";
+    ev.status="closed";ev.archivado=true;
     try{
-      await sbPatch("eventos",`id=eq.${ev.id}`,{status:"closed"});
-      await log("auto_close_event","evento",ev.id,`Auto-finalizado por sistema: ${ev.name} (48h después del término)`);
+      try{await sbPatch("eventos",`id=eq.${ev.id}`,{status:"closed",archivado:true});}
+      catch(e){if(/archivado/.test(e.message||"")){await sbPatch("eventos",`id=eq.${ev.id}`,{status:"closed"});}else throw e;}
+      await log("auto_close_event","evento",ev.id,`Finalizado automáticamente por sistema: ${ev.name}`);
     }catch(err){console.warn("[auto-finalizar] falla en",ev.id,err.message);}
+  }
+  // Si el evento seleccionado fue finalizado, pasar al siguiente evento operativo y refrescar la vista
+  if(aFinalizar.some(ev=>ev.id===currentEvId)){
+    const prodId=CU?.role==="superadmin"?(CP?.id||null):CU?.productora_id;
+    const sig=D.eventos.filter(e=>(prodId===null||!prodId||e.productora_id===prodId)&&esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""))[0];
+    currentEvId=sig?.id||null;
+    try{if(typeof CURRENT_VIEW!=="undefined"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();}catch(e){}
   }
 }
 
-// Se ejecuta cada 30 minutos en sesiones largas (ej: equipo de oficina con la app abierta todo el día)
-setInterval(()=>{if(CU)autoFinalizarEventosPasados();},30*60*1000);
+// Se revisa cada 5 minutos en sesiones largas (ej: equipo de oficina con la app abierta todo el día)
+setInterval(()=>{if(CU)autoFinalizarEventosPasados();},5*60*1000);
 
 // ═══════════════════════════════════
 // MESA TIPOS + BLOQUEO helpers
@@ -1252,7 +1259,7 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
       await loadAll(CU.productora_id);
       CP=D.productoras.find(p=>p.id===CU.productora_id)||null;
       const evs=D.eventos.filter(e=>e.productora_id===CU.productora_id);
-      if(evs.length) currentEvId=evs.find(e=>e.status==="active")?.id||evs[0].id;
+      if(evs.length) currentEvId=(evs.filter(e=>esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""))[0]||evs.find(e=>e.status==="active")||evs[0]).id;
     }
 
     // Guardar sesión para auto-login posterior
@@ -2500,7 +2507,7 @@ VIEWS.dashboard=()=>{
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
       <div style="font-size:20px;font-weight:600"><span class="live-dot"></span>${ev.name}</div>
       <div style="font-size:13px;color:#999">${ev.date} · ${ev.venue}</div>
-      ${badge({active:"Activo",draft:"Borrador",closed:"Cerrado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray"}[ev.status]||"gray")}
+      ${badge({active:"Activo",draft:"Borrador",closed:"Finalizado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray"}[ev.status]||"gray")}
       <select style="margin-left:4px;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff" onchange="currentEvId=this.value;VIEWS.dashboard()">
         ${prodEvs.filter(esEventoOperativo).map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name}</option>`).join("")}
       </select>
@@ -6093,9 +6100,8 @@ function esEventoOperativo(ev){
     finEv.setDate(finEv.getDate()+1);
     finEv.setHours(6,0,0,0);
   }
-  // El evento sigue siendo operativo hasta 48h después de su término
-  const finOperativo=new Date(finEv.getTime()+48*60*60*1000);
-  return ahora<finOperativo;
+  // El evento es operativo hasta su hora de término; después pasa a Finalizado y se archiva solo
+  return ahora<finEv;
 }
 
 // Asegura que currentEvId apunte a un evento operativo de la productora actual.
@@ -6144,7 +6150,7 @@ VIEWS.eventos=()=>{
             <div style="font-size:12px;color:#888;margin-top:2px">${checked}/${entries.length} acreditados · ${D.vip_tables.filter(t=>t.event_id===ev.id).length} mesas</div>
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
-            ${badge({active:"Activo",draft:"Borrador",closed:"Cerrado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
+            ${badge({active:"Activo",draft:"Borrador",closed:"🏁 Finalizado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
             ${pasado
               ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>`
               : `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="openEditarEvento('${ev.id}')">Editar</button>
@@ -6357,7 +6363,7 @@ function openEditarEvento(evId){
     <label class="form-label">Estado del evento</label>
     <select class="form-select" id="ee-status">
       <option value="active" ${ev.status==="active"?"selected":""}>🟢 Activo</option>
-      <option value="closed" ${ev.status==="closed"?"selected":""}>🔒 Cerrado (finalizado)</option>
+      <option value="closed" ${ev.status==="closed"?"selected":""}>🏁 Finalizado</option>
       <option value="cancelled" ${ev.status==="cancelled"?"selected":""}>❌ Cancelado</option>
       ${ev.status==="draft"?`<option value="draft" selected>📝 Borrador (estado antiguo)</option>`:""}
     </select>
