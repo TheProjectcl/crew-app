@@ -248,7 +248,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
         <svg id="theme-icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
         <svg id="theme-icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
-      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:var(--ink-4);font-size:14px">🔀</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Volver al inicio" style="display:none;background:none;border:1px solid var(--line);border-radius:8px;padding:4px 8px;cursor:pointer;color:var(--ink-3);font-size:11px;white-space:nowrap">← Inicio</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:var(--ink-4);font-size:14px" title="Salir">⏻</button>
     </div>
   </div>
@@ -266,7 +266,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="mob-aforo-badge" class="badge b-purple" style="font-size:12px"></div>
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
-      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" style="display:none;background:rgba(255,255,255,.12);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;color:#ddd;font-size:11px;font-weight:600;white-space:nowrap">← Volver al inicio</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -288,7 +288,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
       <div id="emb-pts" class="badge b-amber" style="font-size:12px;padding:4px 12px;font-weight:600"></div>
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
-      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" style="display:none;background:rgba(255,255,255,.12);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;color:#ddd;font-size:11px;font-weight:600;white-space:nowrap">← Volver al inicio</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -309,7 +309,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div style="display:flex;gap:8px;align-items:center">
       <span data-bell-slot></span>
       <button onclick="abrirMiCuenta()" title="Mi cuenta" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⚙️</button>
-      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" title="Cambiar de perfil (volver al inicio)" style="display:none;background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">🔀</button>
+      <button class="btn-cambiar-perfil" onclick="cambiarPerfil()" style="display:none;background:rgba(255,255,255,.12);border:none;border-radius:8px;padding:5px 10px;cursor:pointer;color:#ddd;font-size:11px;font-weight:600;white-space:nowrap">← Volver al inicio</button>
       <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#aaa;font-size:16px">⏻</button>
     </div>
   </div>
@@ -1187,22 +1187,48 @@ async function intentarLogin(email,pass,esRestauracion){
     return false;
   }
 }
-// Varias cuentas con el mismo correo y clave: preguntar con cuál entrar
-function elegirCuentaLogin(cuentas,email,pass){
-  const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador/a de mesa",cumpleanero:"Cumpleañero/a"};
-  const ICO={embajador:"🌸",comprador:"🍾",cumpleanero:"🎂",owner:"🏢",coordinator:"🏢",superadmin:"👑"};
-  window._cuentasLogin=cuentas;
-  openModal("¿Con qué perfil quieres entrar?",`
-    <div style="font-size:13px;color:#666;margin-bottom:12px">Tu correo <strong>${email}</strong> tiene más de un perfil en Guestly. Elige uno; después puedes volver aquí con el botón 🔀 "Cambiar de perfil".</div>
-    <div style="display:grid;gap:8px">${cuentas.map((u,i)=>{const prod=(D.productoras||[]).find(p=>p.id===u.productora_id);return `
-      <button class="btn" style="display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;justify-content:flex-start" onclick="entrarConCuenta(${i},'${email.replace(/'/g,"")}')">
-        <span style="font-size:24px">${ICO[u.role]||"👤"}</span>
-        <span><span style="font-weight:700;display:block">${ROL[u.role]||u.role}</span><span style="font-size:12px;color:#888">${u.name||""}${prod?" · "+prod.nombre:""}</span></span>
-      </button>`;}).join("")}</div>
-    <div class="modal-footer"><button class="btn" onclick="closeModal();try{localStorage.removeItem('crew-session')}catch(e){}">Cancelar</button></div>`);
-  window._passLogin=pass;
+// Varias cuentas con el mismo correo y clave: pantalla de INICIO con lo que tiene la persona (su mesa, su perfil de embajadora, etc.)
+async function elegirCuentaLogin(cuentas,email,pass){
+  window._cuentasLogin=cuentas;window._passLogin=pass;
+  const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Staff de puerta",vip_staff:"Staff VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajadora",comprador:"Comprador/a de mesa",cumpleanero:"Cumpleañero/a"};
+  const ICO={embajador:"🌸",comprador:"🍾",cumpleanero:"🎂",owner:"🏢",coordinator:"🏢",superadmin:"👑",ambassador_chief:"📣"};
+  let mesas=[],prods=[],evs=[];
+  try{
+    const ids=cuentas.filter(u=>u.role==="comprador").map(u=>u.id);
+    const pids=[...new Set(cuentas.map(u=>u.productora_id).filter(Boolean))];
+    [mesas,prods]=await Promise.all([ids.length?sbGet("vip_tables",`comprador_id=in.(${ids.join(",")})`):[],pids.length?sbGet("productoras",`id=in.(${pids.join(",")})`):[]]);
+    const eids=[...new Set(mesas.map(m=>m.event_id).filter(Boolean))];
+    if(eids.length)evs=await sbGet("eventos",`id=in.(${eids.join(",")})`);
+  }catch(e){}
+  const nombre=(cuentas.find(u=>u.name)?.name||"").split(" ")[0];
+  const tarjetas=cuentas.map((u,i)=>{
+    const prod=prods.find(p=>p.id===u.productora_id);
+    let titulo,sub,ico=ICO[u.role]||"👤";
+    if(u.role==="comprador"){
+      const mis=mesas.filter(m=>m.comprador_id===u.id);
+      if(mis.length){const m=mis[0];const ev=evs.find(e=>e.id===m.event_id);titulo=`MESA VIP ${m.table_num}${mis.length>1?` (+${mis.length-1} más)`:""}`;sub=`${ev?.name||""}${ev?.date?" · "+new Date(ev.date+"T12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"short"}):""}`;}
+      else{titulo="MESA VIP";sub=prod?.nombre||"";}
+    }else{titulo=`PERFIL ${ROL[u.role]||u.role}`;sub=prod?.nombre||"Guestly";}
+    return `<button onclick="entrarConCuenta(${i},'${email.replace(/'/g,"")}')" style="width:100%;display:flex;align-items:center;gap:14px;background:#fff;border:1px solid #e8e8e8;border-radius:16px;padding:18px;text-align:left;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.05)">
+      <span style="font-size:30px;width:44px;text-align:center">${ico}</span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-weight:800;font-size:16px;color:#111;letter-spacing:.3px">${titulo}</span><span style="display:block;font-size:12px;color:#777;margin-top:2px">${sub}</span></span>
+      <span style="color:#534AB7;font-size:18px">→</span>
+    </button>`;}).join("");
+  let scr=$("inicio-perfiles");
+  if(!scr){scr=document.createElement("div");scr.id="inicio-perfiles";document.body.appendChild(scr);}
+  scr.style.cssText="position:fixed;inset:0;z-index:9000;background:#f4f4f6;overflow:auto;font-family:system-ui,sans-serif";
+  scr.innerHTML=`<div style="max-width:440px;margin:0 auto;padding:40px 20px">
+    <div style="text-align:center;margin-bottom:26px">
+      <div style="font-size:12px;letter-spacing:2px;color:#888;font-weight:600">INICIO</div>
+      <div style="font-size:22px;font-weight:800;color:#111;margin-top:6px">Hola${nombre?", "+nombre:""} 👋</div>
+      <div style="font-size:13px;color:#666;margin-top:4px">¿Qué quieres ver hoy?</div>
+    </div>
+    <div style="display:grid;gap:12px">${tarjetas}</div>
+    <div style="text-align:center;margin-top:28px"><button onclick="document.getElementById('inicio-perfiles').remove();try{localStorage.removeItem('crew-session')}catch(e){};location.href=location.pathname" style="background:none;border:none;color:#888;font-size:13px;cursor:pointer;text-decoration:underline">Cerrar sesión</button></div>
+    <div style="text-align:center;margin-top:20px"><span style="font-size:11px;color:#bbb;letter-spacing:.5px">Powered by <a href="https://guestly.cl" style="color:#534AB7;text-decoration:none;font-weight:600">Guestly.cl</a></span></div>
+  </div>`;
 }
-// Volver al inicio para elegir otro perfil (misma clave, otro rol)
+// Volver al inicio para elegir otra cosa (misma clave, otro perfil)
 function cambiarPerfil(){
   let ses={};try{ses=JSON.parse(localStorage.getItem("crew-session")||"{}");}catch(e){}
   if(!ses.email||!ses.pass){doLogout();return;}
@@ -1211,7 +1237,7 @@ function cambiarPerfil(){
   location.href=location.pathname;
 }
 window.entrarConCuenta=async(i,email)=>{
-  const u=(window._cuentasLogin||[])[i];if(!u)return;closeModal();showLoading(true);
+  const u=(window._cuentasLogin||[])[i];if(!u)return;$("inicio-perfiles")?.remove();showLoading(true);
   try{await finalizarLogin(u,email,window._passLogin,false);}catch(e){showLoading(false);toast("Error: "+e.message,"error");}
 };
 async function finalizarLogin(usuario,email,pass,esRestauracion){
@@ -1261,7 +1287,7 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
 function abrirMiCuenta(){
   if(!CU)return;
   const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"};
-  const btnPerfil=window._multiPerfil?`<button class="btn" style="width:100%;margin-bottom:12px" onclick="cambiarPerfil()">🔀 Cambiar de perfil (volver al inicio)</button>`:"";
+  const btnPerfil=window._multiPerfil?`<button class="btn" style="width:100%;margin-bottom:12px" onclick="cambiarPerfil()">← Volver al inicio</button>`:"";
   openModal("⚙️ Mi cuenta",`${btnPerfil}
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
       <div class="avatar" style="width:44px;height:44px;font-size:15px">${ini(CU.name||"?")}</div>
@@ -7224,7 +7250,7 @@ function initCompradorApp(){
           ${glLogo("neg",20)}
           <div style="font-size:10px;color:#555;margin-top:2px">MIS MESAS</div>
         </div>
-        ${window._multiPerfil?`<button onclick="cambiarPerfil()" title="Cambiar de perfil" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">🔀</button>`:""}
+        ${window._multiPerfil?`<button onclick="cambiarPerfil()" style="background:#EDE9FE;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;color:#534AB7;font-size:11px;font-weight:700;white-space:nowrap">← Volver al inicio</button>`:""}
         <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">⏻</button>
       </div>
       <div style="padding:16px">
@@ -7324,7 +7350,7 @@ function renderCompradorApp(mesaId){
         <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
           ${badge(est.label,est.badge)}
           <span data-bell-slot></span>
-          ${window._multiPerfil?`<button onclick="cambiarPerfil()" title="Cambiar de perfil" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px">🔀</button>`:""}
+          ${window._multiPerfil?`<button onclick="cambiarPerfil()" style="background:#EDE9FE;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;color:#534AB7;font-size:11px;font-weight:700;white-space:nowrap">← Volver al inicio</button>`:""}
           <button onclick="doLogout()" style="background:none;border:none;cursor:pointer;color:#555;font-size:16px" title="Cerrar sesión">⏻</button>
         </div>
       </div>
