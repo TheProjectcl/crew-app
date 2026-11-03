@@ -725,6 +725,7 @@ async function autoFinalizarEventosPasados(){
       try{await sbPatch("eventos",`id=eq.${ev.id}`,{status:"closed",archivado:true});}
       catch(e){if(/archivado/.test(e.message||"")){await sbPatch("eventos",`id=eq.${ev.id}`,{status:"closed"});}else throw e;}
       await log("auto_close_event","evento",ev.id,`Finalizado automáticamente por sistema: ${ev.name}`);
+      await cerrarPendientesEvento(ev);
     }catch(err){console.warn("[auto-finalizar] falla en",ev.id,err.message);}
   }
   // Si el evento seleccionado fue finalizado, pasar al siguiente evento operativo y refrescar la vista
@@ -757,7 +758,62 @@ const ESTADO_MESA = {
   comprobante:  {label:"Comprobante subido",badge:"purple"},
   cerrada:      {label:"✓ Cerrada",     badge:"green"},
   rechazada:    {label:"Rechazada",     badge:"red"},
+  no_vendida:   {label:"No vendida (cierre del evento)", badge:"gray"},
 };
+
+// ── Hora de término de un evento (end_time, o 06:00 del día siguiente) ──
+function horaFinEvento(ev){
+  if(!ev?.date)return null;
+  let fin;
+  if(ev.end_time){const[h,m]=ev.end_time.split(":").map(Number);fin=new Date(ev.date+"T00:00:00");const sh=parseInt((ev.start_time||"23:00").split(":")[0])||23;if(h<sh)fin.setDate(fin.getDate()+1);fin.setHours(h,m||0,0,0);}
+  else{fin=new Date(ev.date+"T00:00:00");fin.setDate(fin.getDate()+1);fin.setHours(6,0,0,0);}
+  return isNaN(fin.getTime())?null:fin;
+}
+// ── Pendientes de un evento (lo que debería estar saldado antes de que termine) ──
+function pendientesEvento(evId){
+  const cfPend=(D.cf_ordenes||[]).filter(o=>o.evento_id===evId&&o.estado==="pendiente");
+  const cfComp=(D.cf_ordenes||[]).filter(o=>o.evento_id===evId&&o.estado==="pagado"); // comprobante subido, falta conciliar
+  const mesasProc=(D.vip_tables||[]).filter(m=>m.event_id===evId&&["reservada","perfiles","revision","pago_pendiente"].includes(m.estado_reserva));
+  const mesasComp=(D.vip_tables||[]).filter(m=>m.event_id===evId&&m.estado_reserva==="comprobante");
+  const tareasEv=(D.tareas||[]).filter(t=>t.event_id===evId).map(t=>t.id);
+  const cumplSub=(D.cumplimientos||[]).filter(c=>c.estado==="subido"&&tareasEv.includes(c.tarea_id));
+  const total=cfPend.length+cfComp.length+mesasProc.length+mesasComp.length+cumplSub.length;
+  return{cfPend,cfComp,mesasProc,mesasComp,cumplSub,total};
+}
+// ── Cierre de un evento: deja todo saldado SIN borrar nada (la info queda para revisar) ──
+async function cerrarPendientesEvento(ev){
+  const at=now();
+  // Traer de la BD lo que no esté cargado (CF y cumpleaños se cargan por vista)
+  try{
+    const [ords,cumps]=await Promise.all([sbGet("cf_ordenes",`evento_id=eq.${ev.id}`),sbGet("bday_cumpleaneros",`evento_id=eq.${ev.id}`)]);
+    D.cf_ordenes=[...(D.cf_ordenes||[]).filter(o=>o.evento_id!==ev.id),...ords];
+    D.bday_cumpleaneros=[...(D.bday_cumpleaneros||[]).filter(c=>c.evento_id!==ev.id),...cumps];
+    if(cumps.length){const invs=await sbGet("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);const ids=new Set(cumps.map(c=>c.id));D.bday_invitados=[...(D.bday_invitados||[]).filter(i=>!ids.has(i.cumpleanero_id)),...invs];}
+  }catch(e){console.warn("cierre: no se pudieron cargar datos CF/bday",e.message);}
+  const pend=pendientesEvento(ev.id);
+  // Órdenes CF que nunca se pagaron → vencidas (liberan cupo; se mantienen con todos sus datos)
+  if(pend.cfPend.length){
+    try{await sbPatch("cf_ordenes",`evento_id=eq.${ev.id}&estado=eq.pendiente`,{estado:"vencido"});pend.cfPend.forEach(o=>o.estado="vencido");}catch(e){console.warn("cierre cf",e.message);}
+  }
+  // Mesas que quedaron a medio camino sin abono → "no vendida" (se conserva quién la reservó y sus perfiles)
+  if(pend.mesasProc.length){
+    try{await sbPatch("vip_tables",`event_id=eq.${ev.id}&estado_reserva=in.(reservada,perfiles,revision,pago_pendiente)`,{estado_reserva:"no_vendida"});pend.mesasProc.forEach(m=>m.estado_reserva="no_vendida");}catch(e){console.warn("cierre mesas",e.message);}
+  }
+  // Resumen de cierre (snapshot) — las mesas/órdenes con comprobante sin revisar NO se tocan: quedan listadas para que las revises
+  const mesas=(D.vip_tables||[]).filter(m=>m.event_id===ev.id);const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===ev.id);
+  const entries=(D.acc_entries||[]).filter(e=>e.event_id===ev.id);
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===ev.id);const invs=(D.bday_invitados||[]).filter(i=>cumps.some(c=>c.id===i.cumpleanero_id));
+  const resumen={at,
+    mesas_total:mesas.length,mesas_vendidas:mesas.filter(m=>m.estado_reserva==="cerrada").length,mesas_no_vendidas:mesas.filter(m=>m.estado_reserva==="no_vendida").length,mesas_comprobante_sin_revisar:pend.mesasComp.length,
+    cf_pagadas:ords.filter(o=>o.estado==="conciliado").length,cf_comprobante_sin_conciliar:pend.cfComp.length,cf_vencidas:ords.filter(o=>o.estado==="vencido").length,cf_vencidas_por_cierre:pend.cfPend.length,
+    listas_personas:entries.length,listas_entradas:entries.reduce((t,e)=>t+1+(e.companions||0),0),listas_ingresadas:entries.reduce((t,e)=>t+(e.entradas_usadas||0),0),
+    bday_cumples:cumps.length,bday_cumples_ingresaron:cumps.filter(c=>c.llego).length,bday_invitados:invs.filter(i=>i.estado==="aprobado").length,bday_invitados_ingresaron:invs.filter(i=>i.llego).length,
+    comprobantes_emb_sin_revisar:pend.cumplSub.length};
+  ev.cierre=resumen;
+  try{await sbPatch("eventos",`id=eq.${ev.id}`,{cierre:resumen});}catch(e){console.warn("cierre resumen (falta columna eventos.cierre?)",e.message);}
+  try{await log("cierre_evento","evento",ev.id,`Cierre automático: ${pend.cfPend.length} órdenes CF vencidas, ${pend.mesasProc.length} mesas no vendidas`);}catch(e){}
+  return resumen;
+}
 
 function chequearBloqueo(nombre, rut, prodId){
   const lista = D.lista_bloqueo||[];
@@ -2483,6 +2539,11 @@ function renderUGTabla(){
 // ── DASHBOARD ──
 VIEWS.dashboard=()=>{
   asegurarEventoOperativo();
+  // Datos de Close Friends / Cumpleaños (lazy): cargarlos una vez para que el dashboard muestre los pendientes reales
+  if(!window._dashLazyLoading&&(!D._cfLoaded||!D._bdayLoaded)){
+    window._dashLazyLoading=true;const pid=CU?.role==="superadmin"?(CP?.id||null):CU?.productora_id;
+    Promise.all([!D._cfLoaded?loadCF(pid).catch(()=>{}):null,(!D._bdayLoaded&&pid)?loadBday(pid).catch(()=>{}):null]).then(()=>{window._dashLazyLoading=false;if(CURRENT_VIEW==="dashboard")VIEWS.dashboard();});
+  }
   const ev=D.eventos.find(e=>e.id===currentEvId)||D.eventos[0];
   if(!ev){
     $("main-content").innerHTML=`<div class="page-title">Sin eventos</div><div class="card" style="color:#999">No hay eventos para esta productora. <button class="btn btn-primary" onclick="goView('eventos')">Crear evento</button></div>`;
@@ -2498,8 +2559,21 @@ VIEWS.dashboard=()=>{
   const alerts=[];
   if(pct>=80&&pct<100)alerts.push({type:"warn",msg:`⚠️ Aforo al ${pct}% — quedan ${max-aforo} lugares.`});
   if(pct>=100)alerts.push({type:"danger",msg:"⛔ AFORO COMPLETO."});
-  unpaid.forEach(t=>alerts.push({type:"warn",msg:`⚠️ Mesa ${t.table_num} sin abono — ${fmtM(t.deposit_50)}.`}));
-  if(subidos.length)alerts.push({type:"info",msg:`ℹ️ ${subidos.length} comprobante(s) pendiente(s) de revisión.`});
+  // Mesas sin abono: solo las que tienen comprador (una mesa que nadie reservó no es una deuda)
+  unpaid.filter(t=>t.comprador_id&&!["disponible","no_vendida","cerrada"].includes(t.estado_reserva)).forEach(t=>alerts.push({type:"warn",msg:`⚠️ Mesa ${t.table_num} sin abono — ${fmtM(t.deposit_50)}.`}));
+  // Pendientes por saldar antes del término del evento (el evento se cierra solo a su hora de término)
+  (()=>{const fin=horaFinEvento(ev);if(!fin)return;const pend=pendientesEvento(ev.id);if(!pend.total)return;
+    const hrs=(fin-new Date())/36e5;const finTxt=fin.toLocaleString("es-CL",{weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false});
+    const partes=[];
+    if(pend.cfPend.length)partes.push(`<a href="#" onclick="goView('cf-ordenes');return false" style="color:inherit;font-weight:700">${pend.cfPend.length} orden${pend.cfPend.length===1?"":"es"} Close Friends sin pagar</a>`);
+    if(pend.cfComp.length)partes.push(`<a href="#" onclick="goView('cf-ordenes');return false" style="color:inherit;font-weight:700">${pend.cfComp.length} comprobante${pend.cfComp.length===1?"":"s"} CF sin conciliar</a>`);
+    if(pend.mesasProc.length)partes.push(`<a href="#" onclick="goView('vip');return false" style="color:inherit;font-weight:700">${pend.mesasProc.length} mesa${pend.mesasProc.length===1?"":"s"} VIP sin cerrar</a>`);
+    if(pend.mesasComp.length)partes.push(`<a href="#" onclick="goView('vip');return false" style="color:inherit;font-weight:700">${pend.mesasComp.length} comprobante${pend.mesasComp.length===1?"":"s"} de mesa sin revisar</a>`);
+    if(pend.cumplSub.length)partes.push(`<a href="#" onclick="goView('tareas');return false" style="color:inherit;font-weight:700">${pend.cumplSub.length} comprobante${pend.cumplSub.length===1?"":"s"} de embajadoras sin revisar</a>`);
+    const urgente=hrs<=12;
+    alerts.push({type:urgente?"danger":"warn",msg:`${urgente?"🚨":"⏳"} El evento termina el ${finTxt}${hrs>0?` (en ${hrs<1?Math.max(1,Math.round(hrs*60))+" min":Math.round(hrs)+" h"})`:""} y se cerrará solo. Pendientes por saldar: ${partes.join(" · ")}. Lo que quede sin pagar pasará a vencido / no vendido.`});
+  })();
+  if(subidos.length&&!pendientesEvento(ev.id).cumplSub.length)alerts.push({type:"info",msg:`ℹ️ ${subidos.length} comprobante(s) pendiente(s) de revisión.`});
   const recent=[...entries.filter(e=>e.status==="checked_in")].sort((a,b)=>new Date(b.checked_in_at)-new Date(a.checked_in_at)).slice(0,8);
 
   const prodEvs=D.eventos.filter(e=>CU.role==="superadmin"?true:e.productora_id===CU.productora_id);
@@ -6146,8 +6220,16 @@ VIEWS.eventos=()=>{
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
           <div style="cursor:pointer" onclick="currentEvId='${ev.id}';goView('dashboard')">
             <div style="font-size:16px;font-weight:600">${ev.name} ${ev.id===currentEvId?badge("● Activo","green"):""}${ev.archivado?badge("🗄 Archivado","gray"):""}</div>
-            <div style="font-size:12px;color:#888;margin-top:3px">${ev.date} · ${ev.start_time||"23:00"}–${ev.end_time||"06:00"} · ${ev.venue} · ${ev.max_capacity} máx</div>
+            <div style="font-size:12px;color:#888;margin-top:3px">${ev.date} · ${ev.start_time||"23:00"}–${ev.end_time||"06:00"}${ev.venue?" · "+ev.venue:""}${ev.max_capacity?" · "+ev.max_capacity+" máx":""}</div>
             <div style="font-size:12px;color:#888;margin-top:2px">${checked}/${entries.length} acreditados · ${D.vip_tables.filter(t=>t.event_id===ev.id).length} mesas</div>
+            ${pasado&&ev.cierre?(()=>{const c=ev.cierre;const warn=(c.mesas_comprobante_sin_revisar||0)+(c.cf_comprobante_sin_conciliar||0)+(c.comprobantes_emb_sin_revisar||0);
+              return `<div style="margin-top:8px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;font-size:11px;color:#444;line-height:1.7" onclick="event.stopPropagation()">
+                <div style="font-weight:700;color:#111">🏁 Cierre del evento · ${new Date(c.at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false})}</div>
+                🍾 Mesas: <strong>${c.mesas_vendidas}</strong> vendidas de ${c.mesas_total}${c.mesas_no_vendidas?` · ${c.mesas_no_vendidas} no vendidas`:""}<br>
+                🌸 Close Friends: <strong>${c.cf_pagadas}</strong> pagadas${c.cf_vencidas?` · ${c.cf_vencidas} vencidas${c.cf_vencidas_por_cierre?` (${c.cf_vencidas_por_cierre} al cierre)`:""}`:""}<br>
+                👥 Listas: <strong>${c.listas_ingresadas}</strong> ingresaron de ${c.listas_entradas} entradas (${c.listas_personas} personas)${c.bday_cumples?`<br>🎂 Cumpleaños: ${c.bday_cumples_ingresaron}/${c.bday_cumples} cumpleañeros · ${c.bday_invitados_ingresaron}/${c.bday_invitados} invitados ingresaron`:""}
+                ${warn?`<div style="color:#92400E;font-weight:600;margin-top:2px">⚠️ Quedaron sin revisar: ${[c.cf_comprobante_sin_conciliar?c.cf_comprobante_sin_conciliar+" comprobante(s) CF":"",c.mesas_comprobante_sin_revisar?c.mesas_comprobante_sin_revisar+" comprobante(s) de mesa":"",c.comprobantes_emb_sin_revisar?c.comprobantes_emb_sin_revisar+" de embajadoras":""].filter(Boolean).join(", ")} — se conservan tal cual para que los revises.</div>`:""}
+              </div>`;})():""}
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${badge({active:"Activo",draft:"Borrador",closed:"🏁 Finalizado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
@@ -6175,7 +6257,7 @@ async function archivarEvento(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
   if(!confirm(`¿Archivar "${ev.name}"?\n\nSe moverá a Eventos Pasados. No se borra nada: toda la información (acreditaciones, mesas, pagos) se conserva. Puedes restaurarlo cuando quieras.`))return;
   ev.archivado=true;
-  try{await sbPatch("eventos",`id=eq.${evId}`,{archivado:true});await log("archivar_evento","evento",evId,`Evento archivado: ${ev.name}`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPatch("eventos",`id=eq.${evId}`,{archivado:true});await log("archivar_evento","evento",evId,`Evento archivado: ${ev.name}`);await cerrarPendientesEvento(ev);}catch(e){toast("Error: "+e.message,"error");}
   toast(`🗄 "${ev.name}" movido a Eventos Pasados`,"success");
   VIEWS.eventos();
 }
@@ -8431,7 +8513,7 @@ async function loadCF(prodId=null){
       evFilter ? sbGet("cf_config",      evFilter) : Promise.resolve([]),
     ]);
     D.cf_postulantes = postulantes||[];
-    D.cf_ordenes     = cf_ordenes||[];
+    D.cf_ordenes     = cf_ordenes||[];D._cfLoaded=true;
     D.cf_config      = cf_config||[];
   }catch(e){ console.error("loadCF error:",e); D.cf_postulantes=[]; D.cf_ordenes=[]; D.cf_config=[]; }
 }

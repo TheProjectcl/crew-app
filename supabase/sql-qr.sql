@@ -12,3 +12,6 @@ CREATE INDEX IF NOT EXISTS bday_invitados_qr_idx    ON bday_invitados    USING G
 
 -- Una persona puede tener más de una cuenta con el mismo correo (embajadora + compradora de mesa, etc.)
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;
+
+-- Resumen de cierre automático del evento (snapshot al finalizar)
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS cierre JSONB;
