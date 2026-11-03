@@ -12559,7 +12559,7 @@ function qrMostrarResultado(tipo,titulo,detalle,acciones){
   </div>`;
   if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
 }
-window.qrProcesarToken=async function(tok,manual,manual_forzar){
+window.qrProcesarToken=async function(tok,manual){
   if(_qrProcesando)return;_qrProcesando=true;
   try{
     const r=qrResolverLocal(tok);
@@ -12568,17 +12568,17 @@ window.qrProcesarToken=async function(tok,manual,manual_forzar){
     if(d.evId&&currentEvId&&d.evId!==currentEvId)return qrMostrarResultado("err","Es de otro evento",`${d.nombre} · este QR corresponde a <strong>${d.ev?.name||"otro evento"}</strong>.`);
     const sub=`${d.origen} · Pulsera <strong>${d.pulsera}</strong>${d.n>1?` · entrada ${d.k} de ${d.n}`:""}`;
     const usado=qrYaUsado(r);
-    if(usado)return qrMostrarResultado("warn",`${d.nombre} — TICKET YA VALIDADO`,`${sub}<br>Este ticket ya fue validado${usado!=="sí"?" a las <strong>"+fmtT(usado)+"</strong>":""}. No vuelve a entrar con el mismo QR.`);
+    if(usado)return qrMostrarResultado("err","ESTE TICKET YA FUE VALIDADO",`<strong>${d.nombre}</strong> · ${sub}<br><span style="font-size:15px;font-weight:800">Hora validación ${usado!=="sí"?fmtT(usado):"—"}</span>`);
     const venc=qrVencimiento(r);
-    if(venc?.caducado&&(r.tipo==="cumple"||r.tipo==="inv")&&!manual_forzar)return qrMostrarResultado("warn",`${d.nombre} — TICKET CADUCADO`,`${sub}<br>El beneficio era válido hasta <strong>${venc.txt}</strong> (fuera de horario).`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrProcesarToken('${tok}',true,true)">Dejar entrar igual</button>`);
+    if(venc?.caducado)return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${venc.txt}</strong> (fuera de horario). No puede entrar con este ticket.`);
     const at=now();
     if(r.tipo==="entry"){
       const e=r.obj;
       if(e.status==="blocked")return qrMostrarResultado("err",`${d.nombre} — BLOQUEADO`,sub);
       const res=await runCheckin(e.id,1);
-      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
+      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
       if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
-      if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("warn",`${d.nombre} — TICKET CADUCADO`,`${sub}<br>La lista era válida hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario).`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrForzarEntry('${e.id}',${r.i})">Validar igual</button>`);
+      if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario). No puede entrar con este ticket.`);
       return qrMostrarResultado("err",d.nombre,`${sub}<br>${res.msg}`);
     }
     if(r.tipo==="cf"){
@@ -12592,10 +12592,10 @@ window.qrProcesarToken=async function(tok,manual,manual_forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub+aviso);
+      return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub+aviso);
     }
-    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
-    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
+    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
     if(r.tipo==="mesa"||r.tipo==="mesa_extra"){
       const p=r.obj,m=r.m;
       if(p.estado==="bloqueado"||p.estado==="rechazado")return qrMostrarResultado("err",`${d.nombre} — ${p.estado.toUpperCase()}`,sub);
@@ -12606,16 +12606,10 @@ window.qrProcesarToken=async function(tok,manual,manual_forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("mesa_invitado","vip_table",m.id,`Mesa ${m.table_num} — ${d.nombre} ingresó (QR)`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);
+      return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);
     }
   }catch(e){qrMostrarResultado("err","Error",e.message||String(e));}
   finally{_qrProcesando=false;}
-};
-window.qrForzarEntry=async function(eid,i){
-  const e=(D.acc_entries||[]).find(x=>x.id===eid);if(!e)return;
-  const res=await runCheckin(eid,1,true);
-  if(res.ok){await qrMarcarToken({tipo:"entry",obj:e,i},now());programarRenderSuave?.();qrMostrarResultado("ok",`${e.name} — PUEDE ENTRAR`,"Validado fuera de horario.");}
-  else qrMostrarResultado("err",e.name,res.msg);
 };
 
 // ── Bloques de QR para correos (imágenes vía API, los correos no ejecutan JS) ──
@@ -12694,8 +12688,8 @@ async function mostrarEntradaQR(tok){
           <div style="font-size:13px;color:#666;margin-top:2px">Pulsera: <strong style="color:#111">${d.pulsera}</strong>${d.n>1?` · Entrada ${d.k} de ${d.n}`:""}</div>
           <div style="display:flex;justify-content:center;margin:18px 0 10px;${usado||venc?.caducado?"opacity:.35;filter:grayscale(1)":""}">${svg}</div>
           <div style="font-family:monospace;font-size:12px;color:#999">${tok}</div>
-          ${usado?`<div style="background:#DBEAFE;color:#1E3A8A;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✔️ Este ticket ya fue validado${usado!=="sí"?" a las "+fmtT(usado)+" hrs":""}</div>`
-            :venc?.caducado?`<div style="background:#FEE2E2;color:#991B1B;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">⛔ Ticket caducado — era válido hasta ${venc.txt}</div><div style="font-size:11px;color:#991B1B;margin-top:6px">Fuera de horario. Consulta en la puerta si aún puedes ingresar.</div>`
+          ${usado?`<div style="background:#DC2626;color:#fff;border-radius:10px;padding:12px;margin-top:14px;font-size:14px;font-weight:800;line-height:1.4">ESTE TICKET YA FUE VALIDADO<br><span style="font-size:13px;font-weight:600">Hora validación ${usado!=="sí"?fmtT(usado):"—"}</span></div>`
+            :venc?.caducado?`<div style="background:#DC2626;color:#fff;border-radius:10px;padding:12px;margin-top:14px;font-size:14px;font-weight:800;line-height:1.4">TICKET CADUCADO<br><span style="font-size:13px;font-weight:600">Era válido hasta ${venc.txt}</span></div>`
             :`<div style="background:#DCFCE7;color:#166534;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✅ Entrada válida — muéstrala en la puerta</div>${venc?`<div style="font-size:11px;color:#92400E;margin-top:6px">⏰ Válida hasta <strong>${venc.txt}</strong></div>`:""}`}
           <div style="font-size:11px;color:#888;margin-top:12px;line-height:1.5">Sube el brillo de tu pantalla al mostrar el QR. Lleva tu carnet de identidad: sin carnet no podemos validar tu entrada.</div>
         </div>
