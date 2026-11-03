@@ -5710,11 +5710,20 @@ VIEWS.embajadores=()=>{
           const miembros=D.users.filter(u=>u.equipo_id===g.id&&u.role==="embajador");
           return `<div style="background:#fafafa;border-radius:8px;padding:10px;margin-bottom:6px">
             <div style="font-size:12px;font-weight:600;margin-bottom:4px">📦 ${g.name} <span style="font-weight:400;color:#999">— ${miembros.length} emb.</span></div>
-            ${miembros.length?`<div style="font-size:11px;color:#666;line-height:1.6">${miembros.map(u=>u.name).join(" · ")}</div>`:`<div style="font-size:11px;color:#bbb;font-style:italic">grupo vacío</div>`}
+            ${miembros.length?`<div style="display:flex;flex-wrap:wrap;gap:4px">${miembros.map(u=>`<span style="font-size:11px;background:#fff;border:1px solid #e8e8e8;border-radius:99px;padding:3px 9px;color:#333">${u.name}${u.must_change_pass?' <span title="Aún no entra por primera vez" style="color:#f59e0b">●</span>':""}</span>`).join("")}</div>`:`<div style="font-size:11px;color:#bbb;font-style:italic">grupo vacío</div>`}
           </div>`;
         }).join(""):`<div style="font-size:11px;color:#aaa;padding:8px;text-align:center">El jefe aún no ha creado grupos.</div>`}
       </div>`;
-    }).join(""):`<div class="card" style="color:#999;text-align:center;padding:20px;font-size:13px">Sin jefes externos todavía. Crea uno con "+ Nuevo jefe" — él podrá entrar con su usuario y armar sus propios grupos de embajadores.</div>`}`;
+    }).join(""):`<div class="card" style="color:#999;text-align:center;padding:20px;font-size:13px">Sin jefes externos todavía. Crea uno con "+ Nuevo jefe" — él podrá entrar con su usuario y armar sus propios grupos de embajadores.</div>`}
+    ${(()=>{
+      // Grupos que no cuelgan de ningún jefe visible (p.ej. jefe eliminado): mostrarlos igual para que nadie quede perdido
+      const huerfanos=D.equipos.filter(e=>(prodId===null||!e.productora_id||e.productora_id===prodId)&&!jefes.some(j=>j.id===e.jefe_id));
+      if(!huerfanos.length)return "";
+      return `<div class="sec-header" style="margin-top:18px"><div class="sec-title">Grupos sin jefe</div></div>`+huerfanos.map(g=>{
+        const miembros=D.users.filter(u=>u.equipo_id===g.id&&u.role==="embajador");
+        return `<div class="card" style="margin-bottom:8px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">📦 ${g.name} <span style="font-weight:400;color:#999">— ${miembros.length} emb. · sin jefe asignado</span></div>
+          ${miembros.length?`<div style="display:flex;flex-wrap:wrap;gap:4px">${miembros.map(u=>`<span style="font-size:11px;background:#fafafa;border:1px solid #e8e8e8;border-radius:99px;padding:3px 9px">${u.name}</span>`).join("")}</div>`:`<div style="font-size:11px;color:#bbb;font-style:italic">grupo vacío</div>`}</div>`;}).join("");
+    })()}`;
 };
 
 // Crear nuevo jefe de embajadores (la productora le da usuario y contraseña)
