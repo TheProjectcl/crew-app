@@ -6234,7 +6234,7 @@ VIEWS.eventos=()=>{
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${badge({active:"Activo",draft:"Borrador",closed:"🏁 Finalizado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
             ${pasado
-              ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>`
+              ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>${["superadmin","owner"].includes(CU.role)?`<button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="openEliminarEvento('${ev.id}')">🗑 Eliminar</button>`:""}`
               : `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="openEditarEvento('${ev.id}')">Editar</button>
                  <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openDatosPago('${ev.id}')">Datos de pago</button>
                  <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openLayoutEvento('${ev.id}')">Layout</button>
@@ -6259,6 +6259,65 @@ async function archivarEvento(evId){
   ev.archivado=true;
   try{await sbPatch("eventos",`id=eq.${evId}`,{archivado:true});await log("archivar_evento","evento",evId,`Evento archivado: ${ev.name}`);await cerrarPendientesEvento(ev);}catch(e){toast("Error: "+e.message,"error");}
   toast(`🗄 "${ev.name}" movido a Eventos Pasados`,"success");
+  VIEWS.eventos();
+}
+// ── Eliminar un evento definitivamente, con TODO lo que cuelga de él ──
+async function openEliminarEvento(evId){
+  const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
+  if(!["superadmin","owner"].includes(CU.role)){toast("Solo el dueño de la productora puede eliminar eventos","error");return;}
+  openModal(`🗑 Eliminar "${ev.name}"`,`<div style="text-align:center;padding:16px;color:#888">Contando lo que se borraría…</div>`);
+  const cnt=async(t,f)=>{try{return (await sbGet(t,`${f}&select=id`)).length;}catch(e){return 0;}};
+  const [listas,entradas,mesas,tiposMesa,cfP,cfO,cfC,ben,cumps,tareas,aforo]=await Promise.all([
+    cnt("acc_lists",`event_id=eq.${evId}`),cnt("acc_entries",`event_id=eq.${evId}`),cnt("vip_tables",`event_id=eq.${evId}`),cnt("mesa_tipos",`event_id=eq.${evId}`),
+    cnt("cf_postulantes",`evento_id=eq.${evId}`),cnt("cf_ordenes",`evento_id=eq.${evId}`),cnt("cf_config",`evento_id=eq.${evId}`),
+    cnt("bday_beneficios",`evento_id=eq.${evId}`),cnt("bday_cumpleaneros",`evento_id=eq.${evId}`),cnt("tareas",`event_id=eq.${evId}`),cnt("capacity_log",`event_id=eq.${evId}`)]);
+  let invs=0;try{const c=await sbGet("bday_cumpleaneros",`evento_id=eq.${evId}&select=id`);if(c.length)invs=(await sbGet("bday_invitados",`cumpleanero_id=in.(${c.map(x=>x.id).join(",")})&select=id`)).length;}catch(e){}
+  const filas=[["👥 Listas",listas],["👥 Personas en listas",entradas],["🍾 Mesas VIP (con sus invitados)",mesas],["🍾 Tipos de mesa",tiposMesa],["🌸 Postulantes Close Friends",cfP],["🌸 Órdenes Close Friends",cfO],["🌸 Config Close Friends",cfC],["🎂 Beneficios de cumpleaños",ben],["🎂 Cumpleañeros",cumps],["🎂 Invitados de cumpleaños",invs],["📣 Campañas de embajadoras (y sus comprobantes)",tareas],["📊 Registros de aforo",aforo]].filter(f=>f[1]>0);
+  openModal(`🗑 Eliminar "${ev.name}"`,`
+    <div class="alert alert-danger" style="margin-top:0"><strong>Esto no se puede deshacer.</strong> Se borra el evento y todo lo que cuelga de él. Estas personas también desaparecen de la Base de Datos (salvo que estén en otro evento).</div>
+    ${filas.length?`<div style="font-size:13px;line-height:1.9;background:#fafafa;border:1px solid #eee;border-radius:10px;padding:10px 14px;margin-bottom:12px">${filas.map(f=>`<div style="display:flex;justify-content:space-between"><span>${f[0]}</span><strong>${f[1]}</strong></div>`).join("")}</div>`:`<div style="font-size:13px;color:#166534;margin-bottom:12px">✓ El evento no tiene datos asociados.</div>`}
+    <label class="form-label">Para confirmar, escribe el nombre del evento: <strong>${ev.name}</strong></label>
+    <input class="form-input" id="del-ev-confirm" placeholder="${ev.name}" autocomplete="off">
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="eliminarEventoDefinitivo('${evId}')">🗑 Eliminar definitivamente</button></div>`);
+}
+async function eliminarEventoDefinitivo(evId){
+  const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
+  const typed=($("del-ev-confirm")?.value||"").trim().toLowerCase();
+  if(typed!==(ev.name||"").trim().toLowerCase()){toast("El nombre no coincide","error");$("del-ev-confirm")?.focus();return;}
+  const btn=document.querySelector("#modal-body .btn-danger");if(btn){btn.disabled=true;btn.textContent="Eliminando…";}
+  const errores=[];
+  const del=async(t,f)=>{try{await sbDelete(t,f);}catch(e){if(!/does not exist|42P01/.test(e.message||""))errores.push(t+": "+e.message);}};
+  try{
+    // Hijos primero, el evento al final
+    const cumps=await sbGet("bday_cumpleaneros",`evento_id=eq.${evId}&select=id`).catch(()=>[]);
+    if(cumps.length)await del("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);
+    await del("bday_cumpleaneros",`evento_id=eq.${evId}`);
+    await del("bday_beneficios",`evento_id=eq.${evId}`);
+    await del("cf_ordenes",`evento_id=eq.${evId}`);
+    await del("cf_postulantes",`evento_id=eq.${evId}`);
+    await del("cf_config",`evento_id=eq.${evId}`);
+    const tareas=await sbGet("tareas",`event_id=eq.${evId}&select=id`).catch(()=>[]);
+    if(tareas.length)await del("cumplimientos",`tarea_id=in.(${tareas.map(t=>t.id).join(",")})`);
+    await del("tareas",`event_id=eq.${evId}`);
+    await del("vip_tables",`event_id=eq.${evId}`);
+    await del("mesa_tipos",`event_id=eq.${evId}`);
+    await del("acc_entries",`event_id=eq.${evId}`);
+    await del("acc_lists",`event_id=eq.${evId}`);
+    await del("capacity_log",`event_id=eq.${evId}`);
+    await del("recompensas",`event_id=eq.${evId}`);
+    await log("delete_event","evento",evId,`Evento ELIMINADO definitivamente: ${ev.name} (${ev.date||""})`);
+    await sbDelete("eventos",`id=eq.${evId}`);
+  }catch(e){errores.push(e.message);}
+  // Limpiar memoria local
+  const cumpIds=new Set((D.bday_cumpleaneros||[]).filter(c=>c.evento_id===evId).map(c=>c.id));
+  D.eventos=D.eventos.filter(e=>e.id!==evId);
+  ["acc_lists","acc_entries","vip_tables","mesa_tipos","capacity_log","tareas","recompensas"].forEach(k=>{if(D[k])D[k]=D[k].filter(x=>x.event_id!==evId);});
+  ["cf_postulantes","cf_ordenes","cf_config","bday_beneficios","bday_cumpleaneros"].forEach(k=>{if(D[k])D[k]=D[k].filter(x=>x.evento_id!==evId);});
+  if(D.bday_invitados)D.bday_invitados=D.bday_invitados.filter(i=>!cumpIds.has(i.cumpleanero_id));
+  if(currentEvId===evId)currentEvId=D.eventos.filter(e=>esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""))[0]?.id||D.eventos[0]?.id||null;
+  closeModal();
+  if(errores.length)alert("El evento se eliminó, pero hubo problemas borrando algunos datos:\n\n"+errores.join("\n"));
+  toast(`🗑 "${ev.name}" eliminado`,"success");
   VIEWS.eventos();
 }
 async function restaurarEvento(evId){
