@@ -9,3 +9,6 @@ CREATE INDEX IF NOT EXISTS acc_entries_qr_idx       ON acc_entries       USING G
 CREATE INDEX IF NOT EXISTS cf_ordenes_qr_idx        ON cf_ordenes        USING GIN (qr_tokens);
 CREATE INDEX IF NOT EXISTS bday_cumpleaneros_qr_idx ON bday_cumpleaneros USING GIN (qr_tokens);
 CREATE INDEX IF NOT EXISTS bday_invitados_qr_idx    ON bday_invitados    USING GIN (qr_tokens);
+
+-- Una persona puede tener más de una cuenta con el mismo correo (embajadora + compradora de mesa, etc.)
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;

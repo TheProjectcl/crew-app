@@ -1157,7 +1157,7 @@ async function doLogin(){
 async function intentarLogin(email,pass,esRestauracion){
   showLoading(true);
   try{
-    const res=await sbGet("users",`email=ilike.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}&limit=1`);
+    const res=await sbGet("users",`email=ilike.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}`);
     if(!res.length){
       showLoading(false);
       if(esRestauracion){
@@ -1168,7 +1168,43 @@ async function intentarLogin(email,pass,esRestauracion){
       $("li-err")?.classList.remove("hidden");return false;
     }
     $("li-err")?.classList.add("hidden");
-    CU={...res[0],equipoId:res[0].equipo_id};
+    // Una persona puede tener más de una cuenta con el mismo correo (p.ej. embajadora + compradora de mesa)
+    let elegido=res[0];
+    if(res.length>1){
+      let uidGuardado=null;try{uidGuardado=JSON.parse(localStorage.getItem("crew-session")||"{}").uid;}catch(e){}
+      const f=uidGuardado&&res.find(u=>u.id===uidGuardado);
+      if(f)elegido=f;
+      else{showLoading(false);elegirCuentaLogin(res,email,pass);return false;}
+    }
+    return await finalizarLogin(elegido,email,pass,esRestauracion);
+  }catch(e){
+    showLoading(false);
+    if(!esRestauracion)toast("Error: "+e.message,"error");
+    return false;
+  }
+}
+// Varias cuentas con el mismo correo y clave: preguntar con cuál entrar
+function elegirCuentaLogin(cuentas,email,pass){
+  const ROL={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador/a de mesa",cumpleanero:"Cumpleañero/a"};
+  const ICO={embajador:"🌸",comprador:"🍾",cumpleanero:"🎂",owner:"🏢",coordinator:"🏢",superadmin:"👑"};
+  window._cuentasLogin=cuentas;
+  openModal("¿Con qué perfil quieres entrar?",`
+    <div style="font-size:13px;color:#666;margin-bottom:12px">Tu correo <strong>${email}</strong> tiene más de un perfil en Guestly. Elige uno (puedes cambiar después saliendo y volviendo a entrar).</div>
+    <div style="display:grid;gap:8px">${cuentas.map((u,i)=>{const prod=(D.productoras||[]).find(p=>p.id===u.productora_id);return `
+      <button class="btn" style="display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;justify-content:flex-start" onclick="entrarConCuenta(${i},'${email.replace(/'/g,"")}')">
+        <span style="font-size:24px">${ICO[u.role]||"👤"}</span>
+        <span><span style="font-weight:700;display:block">${ROL[u.role]||u.role}</span><span style="font-size:12px;color:#888">${u.name||""}${prod?" · "+prod.nombre:""}</span></span>
+      </button>`;}).join("")}</div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button></div>`);
+  window._passLogin=pass;
+}
+window.entrarConCuenta=async(i,email)=>{
+  const u=(window._cuentasLogin||[])[i];if(!u)return;closeModal();showLoading(true);
+  try{await finalizarLogin(u,email,window._passLogin,false);}catch(e){showLoading(false);toast("Error: "+e.message,"error");}
+};
+async function finalizarLogin(usuario,email,pass,esRestauracion){
+  try{
+    CU={...usuario,equipoId:usuario.equipo_id};
 
     // Cargar datos según rol
     if(CU.role==="superadmin"){
@@ -1182,7 +1218,7 @@ async function intentarLogin(email,pass,esRestauracion){
     }
 
     // Guardar sesión para auto-login posterior
-    try{localStorage.setItem("crew-session",JSON.stringify({email,pass}));}catch(e){}
+    try{localStorage.setItem("crew-session",JSON.stringify({email,pass,uid:CU.id}));}catch(e){}
 
     showLoading(false);
     if(!esRestauracion)await log("login","user",CU.id,`Login desde ${navigator.userAgent.slice(0,40)}`);
@@ -1239,7 +1275,7 @@ async function guardarMiPass(){
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
     CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1}));}catch(e){}
+    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id}));}catch(e){}
     closeModal();toast("✅ Contraseña actualizada","ok");
     try{await log("cambio_pass","user",CU.id,"Cambió su contraseña desde Mi cuenta");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}}
@@ -1270,7 +1306,7 @@ async function guardarPassObligatoria(){
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
     CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1}));}catch(e){}
+    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id}));}catch(e){}
     window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast("✅ Contraseña guardada. ¡Bienvenida!","ok");
     try{await log("cambio_pass","user",CU.id,"Creó su contraseña en el primer ingreso");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar y continuar →";}}
@@ -12287,9 +12323,9 @@ window.embAprobarPost=(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
   const prodId=p.productora_id;
   const equipos=(D.equipos||[]).filter(e=>!prodId||e.productora_id===prodId);
-  const yaUser=(D.users||[]).find(u=>(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+  const yaUser=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
   if(yaUser){
-    const esEmb=yaUser.role==="embajador";const rolTxt={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"}[yaUser.role]||yaUser.role;
+    const esEmb=true;const rolTxt={superadmin:"Administrador Guestly",owner:"Dueño productora",coordinator:"Coordinador",door_chief:"Jefe de puerta",door_staff:"Puerta",vip_staff:"VIP",cashier:"Caja",ambassador_chief:"Jefe de embajadores",embajador:"Embajador/a",comprador:"Comprador",cumpleanero:"Cumpleañero/a"}[yaUser.role]||yaUser.role;
     openModal(`Aprobar a ${p.nombre} ${p.apellido}`,`
       <div class="alert alert-warn" style="margin-top:0">⚠️ El correo <strong>${p.email}</strong> ya tiene una cuenta en Guestly: <strong>${yaUser.name||""}</strong> (${rolTxt}${yaUser.equipo_id?" · equipo "+((D.equipos||[]).find(e=>e.id===yaUser.equipo_id)?.name||""):""}). No se puede crear otra con el mismo correo.</div>
       ${esEmb?`<div style="font-size:13px;color:#555;margin-bottom:10px">Puedes <strong>usar esa misma cuenta</strong>: la asignas al equipo y le avisamos por correo que ya puede entrar con su clave de siempre (si no la recuerda, la cambias desde Usuarios).</div>`
@@ -12344,9 +12380,9 @@ window.embPreviewAprobacion=(id)=>{
 window.embConfirmarAprobacion=async()=>{
   const a=window._embApr;if(!a)return;const p=(D.emb_postulantes||[]).find(x=>x.id===a.id);if(!p)return;
   try{
-    let dup=(D.users||[]).find(u=>(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
-    if(!dup){try{dup=(await sbGet("users",`email=eq.${encodeURIComponent(p.email)}`))[0];if(dup&&!D.users.some(x=>x.id===dup.id))D.users.push(dup);}catch(e){}}
-    if(dup){closeModal();embAprobarPost(p.id);toast("Ese correo ya tiene cuenta: elige cómo continuar","warn");return;}
+    let dup=(D.users||[]).find(u=>u.role==="embajador"&&(u.email||"").toLowerCase()===(p.email||"").toLowerCase());
+    if(!dup){try{dup=(await sbGet("users",`email=eq.${encodeURIComponent(p.email)}&role=eq.embajador`))[0];if(dup&&!D.users.some(x=>x.id===dup.id))D.users.push(dup);}catch(e){}}
+    if(dup){closeModal();embAprobarPost(p.id);toast("Ese correo ya tiene cuenta de embajadora: elige cómo continuar","warn");return;}
     const u={id:uid(),name:`${p.nombre} ${p.apellido}`.trim(),email:p.email,pass:a.pass,role:"embajador",puntos:0,equipo_id:a.eqId||null,productora_id:p.productora_id,evento_ids:p.eventos_interes||[],whatsapp:(p.whatsapp||"").replace(/\D/g,""),instagram:"@"+p.instagram,must_change_pass:true};
     await sbPostUserTolerante(u);D.users.push(u);
     const at=now();await sbPatch("emb_postulantes",`id=eq.${p.id}`,{estado:"aprobado",resuelto_at:at,resuelto_por:CU?.id||null,user_id:u.id});
@@ -12355,7 +12391,7 @@ window.embConfirmarAprobacion=async()=>{
     await log("emb_postulacion_aprobada","user",u.id,`Embajadora aprobada desde postulación: ${u.name}${a.eqId?" → equipo":""}`);
     closeModal();toast(ok?`✅ ${p.nombre} ya es embajadora. Correo enviado.`:`✅ ${p.nombre} creada, pero el correo no se pudo enviar`,ok?"ok":"warn");
     VIEWS["emb-postulaciones"]();
-  }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+e.message);}
+  }catch(e){toast("Error: "+e.message,"error");alert("No se pudo aprobar:\n"+(/users_email_key/.test(e.message||"")?"Ese correo ya tiene otra cuenta y la base de datos todavía no permite dos cuentas con el mismo correo.\n\nEjecuta en Supabase:\nALTER TABLE users DROP CONSTRAINT IF EXISTS users_email_key;":e.message));}
 };
 window.embRechazarPost=async(id)=>{
   const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;
