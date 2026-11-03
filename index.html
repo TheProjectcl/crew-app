@@ -620,6 +620,13 @@ const showLoading=(show)=>{
 };
 
 const openModal=(title,html,wide=false)=>{
+  if(!$("modal")){ // páginas públicas que reemplazan el body: recrear el contenedor del modal
+    const d=document.createElement("div");d.id="modal";d.className="modal-overlay hidden";
+    d.innerHTML=`<div class="modal-box" id="modal-box"><div class="modal-header"><div class="modal-title" id="modal-title"></div><button class="modal-close" onclick="closeModal()">✕</button></div><div id="modal-body"></div></div>`;
+    document.body.appendChild(d);
+    d.addEventListener("mousedown",e=>{window._modalDownFuera2=(e.target===d);});
+    d.addEventListener("mouseup",e=>{if(window._modalDownFuera2&&e.target===d)closeModal();window._modalDownFuera2=false;});
+  }
   $("modal-title").textContent=title;$("modal-body").innerHTML=html;
   $("modal-box").style.width=wide?"680px":"520px";
   $("modal").classList.remove("hidden");
@@ -882,11 +889,12 @@ const glMail={
   },
 
   // ── 3) Entrada confirmada (después de pagar)
-  confirmada({nombre,mensaje,codigo}){
+  confirmada({nombre,mensaje,codigo,qrHtml}){
     return glMail.shell("#16C46B",
       glMail.row(`<div style="font-size:52px;line-height:56px">&#127881;</div><div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>`+glMail.badge("Pago recibido"),"40px 48px 0",true)+
       glMail.row(glMail.h1(`¡${glEsc(nombre)}, tu entrada está confirmada!`)+glMail.p(mensaje||"Ya puedes acercarte a nuestra acreditación el día del evento. ¡Nos vemos!"),"18px 48px 0",true)+
-      glMail.row(glMail.ticket("Código de entrada",glEsc(codigo),"Muestra este código en la puerta del evento",true),"30px 48px 0")+
+      glMail.row(glMail.ticket("Código de entrada",glEsc(codigo),qrHtml?"Tu QR de ingreso viene más abajo":"Muestra este código en la puerta del evento",true),"30px 48px 0")+
+      (qrHtml?glMail.row(qrHtml,"8px 24px 0"):"")+
       glMail.row(glMail.note("&#129706;","Recuerda llegar con tu carnet de identidad vigente.","Sin carnet no podemos validar tu entrada."),"24px 48px 44px"));
   },
 
@@ -2671,40 +2679,41 @@ function acrTotalItems(){
       pulsera:puls?.nombre||"",entradas:t,usadas:u,
       estado:u===0?badge("No validado","gray"):u>=t?badge("✓ Validado "+fmtT(e.checked_in_at),"green"):badge(`Parcial ${u}/${t}`,"amber"),
       extra:e.fuera_horario?` <span style="font-size:10px;color:#92400E;background:#fef3c7;padding:2px 6px;border-radius:6px;font-weight:600">⏰ fuera de horario</span>`:"",
-      acciones:`${u<t?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Ingresar</button>`:""}${u>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')">🔓 Anular</button>`:""}<button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${e.list_id||""}')" title="Editar">✏️</button>`});
+      acciones:`${u<t?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="adminCheckin('${e.id}')">✓ Ingresar</button>`:""}${u>0&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="abrirInvalidacion('${e.id}')">🔓 Anular</button>`:""}<button class="btn" style="padding:4px 8px;font-size:11px" onclick="openEditEntry('${e.id}','${e.list_id||""}')" title="Editar">✏️</button><button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('entry','${e.id}')">🎟 QR</button>`});
   });
   // Mesas VIP
   D.vip_tables.filter(m=>m.event_id===currentEvId&&m.estado_reserva!=="disponible").forEach(m=>{
-    const perfilesMesa=(m.perfiles||[]).filter(p=>p.estado!=="rechazado").map(p=>({...p,_tipo:"mesa"}));
-    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).filter(pp=>pp.estado==="aprobada").map(pp=>({...pp,_tipo:"pulsera_extra",_lote_id:l.id})));
+    const perfilesMesa=(m.perfiles||[]).map((p,pi)=>({...p,_tipo:"mesa",_pi:pi})).filter(p=>p.estado!=="rechazado");
+    const extras=(m.solicitudes_pulseras||[]).filter(l=>l.estado==="pagado").flatMap(l=>(l.personas||[]).map((pp,ppi)=>({...pp,_tipo:"pulsera_extra",_lote_id:l.id,_ppi:ppi})).filter(pp=>pp.estado==="aprobada"));
     [...perfilesMesa,...extras].forEach((p,idx)=>{
       const esExtra=p._tipo==="pulsera_extra";const args=`'${m.id}','${p.id||idx}',${idx}`;const lote=esExtra?`,'${p._lote_id}'`:"";
+      const qrBtn=esExtra?`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('mesa_extra','${m.id}','${p._lote_id}',${p._ppi})">🎟 QR</button>`:`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('mesa','${m.id}',${p._pi})">🎟 QR</button>`;
       items.push({seg:"mesas",nombre:`${p.nombre||p.name||""} ${p.apellido||""}`.trim()||"(sin nombre)",rut:p.rut||"",
         sub:`🍾 Mesa ${m.table_num}${esExtra?" · pulsera extra":""}`,subColor:"#0e7490",origen:`Mesa ${m.table_num}${m.section?" · "+m.section:""}`,origenColor:"#0e7490",
         pulsera:pulseraDeMesa(m),entradas:1,usadas:p.llego?1:0,
         estado:p.llego?badge("✓ Ingresó "+(p.llego_at?fmtT(p.llego_at):""),"green"):badge("No validado","gray"),extra:"",
-        acciones:!p.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="marcarInvitadoMesa(${args},true${lote}).then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="marcarInvitadoMesa(${args},false${lote}).then(()=>${R()})">🔓 Anular</button>`:"")});
+        acciones:(!p.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="marcarInvitadoMesa(${args},true${lote}).then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="marcarInvitadoMesa(${args},false${lote}).then(()=>${R()})">🔓 Anular</button>`:""))+qrBtn});
     });
   });
   // Close Friends
   (D.cf_ordenes||[]).filter(o=>o.evento_id===currentEvId&&["pagado","conciliado"].includes(o.estado)).forEach(o=>{
-    const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};const ya=!!o.ingreso_at;
+    const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};const ya=!!o.ingreso_at;const qrUs=(o.qr_tokens||[]).filter(t=>t&&t.usado_at).length;
     items.push({seg:"cf",nombre:`${p.nombre||""} ${p.apellido||""}`.trim()||"(sin nombre)",rut:p.rut||"",
       sub:`🌸 ${o.codigo||"Close Friends"}`,subColor:"#EC4899",origen:"Close Friends"+(o.estado==="conciliado"?"":" · pago por conciliar"),origenColor:"#EC4899",
-      pulsera:p.tipo_entrada||"",entradas:o.cantidad||1,usadas:ya?(o.cantidad||1):0,
-      estado:ya?badge("✓ Ingresó "+fmtT(o.ingreso_at),"green"):badge("No validado","gray"),extra:"",
-      acciones:!ya?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="cfCheckinOrden('${o.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="cfAnularIngreso('${o.id}').then(()=>${R()})">🔓 Anular</button>`:"")});
+      pulsera:p.tipo_entrada||"",entradas:o.cantidad||1,usadas:ya?(o.cantidad||1):qrUs,
+      estado:ya?badge("✓ Ingresó "+fmtT(o.ingreso_at),"green"):qrUs?badge(`Parcial ${qrUs}/${o.cantidad||1}`,"amber"):badge("No validado","gray"),extra:"",
+      acciones:(!ya?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="cfCheckinOrden('${o.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="cfAnularIngreso('${o.id}').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('cf','${o.id}')">🎟 QR</button>`});
   });
   // Cumpleaños (solo activos)
   (D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c)).forEach(c=>{
     const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);const covers=ben?.covers_cumple??1;const cNom=`${c.nombre||""} ${c.apellido||""}`.trim();
     items.push({seg:"bday",esCumple:true,nombre:cNom,rut:c.rut||"",sub:`🎂 Cumpleañero/a · ${covers} cover${covers===1?"":"s"}`,subColor:"#854d0e",origen:"Lista cumpleaños",origenColor:"#854d0e",
       pulsera:ben?.pulsera||"",entradas:1,usadas:c.llego?1:0,estado:c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray"),extra:"",
-      acciones:!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}').then(()=>${R()})">🔓 Anular</button>`:"")});
+      acciones:(!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('cumple','${c.id}')">🎟 QR</button>`});
     (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").forEach(i=>{
       items.push({seg:"bday",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:i.rut||"",sub:`🎂 Cumple de ${cNom}`,subColor:"#534AB7",origen:"Lista cumpleaños",origenColor:"#534AB7",
         pulsera:ben?.pulsera||"",entradas:1,usadas:i.llego?1:0,estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):badge("No validado","gray"),extra:"",
-        acciones:!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${i.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${i.id}','all').then(()=>${R()})">🔓 Anular</button>`:"")});
+        acciones:(!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${i.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${i.id}','all').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('inv','${i.id}')">🎟 QR</button>`});
     });
   });
   return items.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
@@ -2731,6 +2740,7 @@ function renderAcrTotal(q){
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <input class="form-input" id="acr-total-q" placeholder="🔍 Buscar en TODAS las listas por nombre, RUT, mesa, código o lista..." style="flex:1;min-width:260px;font-size:15px;padding:11px" value="${(_acrTotalQ||"").replace(/"/g,"&quot;")}" oninput="renderAcrTotal(this.value)">
+        <button class="btn" style="background:#1a1a1a;color:#fff;border-color:#1a1a1a" onclick="abrirScannerQR()">📷 Escanear QR</button>
         <button class="btn btn-primary" onclick="openWalkin()">+ Walk-in</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
@@ -7193,6 +7203,31 @@ function initCompradorApp(){
   renderCompradorApp(mesas[0].id);
 }
 
+async function compradorRenderQRs(mesaId){
+  const el=document.getElementById("comp-qrs");if(!el)return;
+  const m=D.vip_tables.find(x=>x.id===mesaId);if(!m)return;
+  const ev=D.eventos.find(e=>e.id===m.event_id);
+  const personas=[];
+  for(const p of (m.perfiles||[]))if(p.estado!=="rechazado"&&p.estado!=="bloqueado")personas.push({tipo:"mesa",ref:{m,perfil:p},obj:p});
+  for(const l of (m.solicitudes_pulseras||[]))if(l.estado==="pagado")for(const pp of (l.personas||[]))if(pp.estado==="aprobada")personas.push({tipo:"mesa_extra",ref:{m,lote:l,persona:pp},obj:pp,extra:true});
+  if(!personas.length){el.innerHTML="";return;}
+  try{
+    for(const x of personas)x.toks=await qrAsegurar(x.tipo,x.ref);
+    const svgs=await Promise.all(personas.map(x=>qrHtml(x.toks[0].t,150)));
+    el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px">`+personas.map((x,i)=>{
+      const nom=`${x.obj.nombre||x.obj.name||""} ${x.obj.apellido||""}`.trim();const link=qrLink(x.toks[0].t);
+      const wa=`https://wa.me/?text=${encodeURIComponent(`Hola ${nom.split(" ")[0]}! Esta es tu entrada VIP para ${ev?.name||"el evento"} (Mesa ${m.table_num}). Muéstrala en la entrada con tu carnet: ${link}`)}`;
+      return `<div style="background:#fff;border:1px solid #e8e8e8;border-radius:12px;padding:10px;text-align:center">
+        <div style="display:flex;justify-content:center">${svgs[i]}</div>
+        <div style="font-size:12px;font-weight:700;color:#111;margin-top:6px;line-height:1.2">${nom||"(sin nombre)"}</div>
+        <div style="font-size:10px;color:#888">${x.extra?"Pulsera extra":"Invitado/a de mesa"}${x.obj.llego?" · <span style=\"color:#166534;font-weight:600\">✓ ingresó</span>":""}</div>
+        <div style="display:flex;gap:4px;justify-content:center;margin-top:6px;flex-wrap:wrap">
+          <button class="btn" style="padding:3px 7px;font-size:10px" onclick="navigator.clipboard.writeText('${link}').then(()=>toast('Link copiado','ok'))">📋 Link</button>
+          <a class="btn" style="padding:3px 7px;font-size:10px;text-decoration:none;background:#25D366;color:#fff;border-color:#25D366" target="_blank" href="${wa}">📱 WhatsApp</a>
+        </div>
+      </div>`;}).join("")+`</div>`;
+  }catch(e){el.innerHTML=`<div style="color:#991B1B">No se pudieron generar los QR (${e.message}).</div>`;}
+}
 function renderCompradorApp(mesaId){
   const appEl = document.getElementById("comp-app");
   if(!appEl) return;
@@ -7461,22 +7496,8 @@ function renderCompradorApp(mesaId){
         <div style="background:#EDE9FE;border-radius:14px;padding:24px;text-align:center;border:1px solid #C4B5FD">
           <div style="font-size:40px;margin-bottom:10px">🎉</div>
           <div style="font-size:18px;font-weight:700;color:#534AB7;margin-bottom:8px">¡Mesa confirmada!</div>
-          <div style="font-size:13px;color:#555;line-height:1.6">Tu reserva está 100% confirmada.<br>El día del evento presenta este QR en la entrada VIP.</div>
-          <div style="background:#fff;border-radius:12px;padding:20px;margin-top:16px;display:inline-block">
-            <svg width="120" height="120" viewBox="0 0 120 120">
-              <rect x="10" y="10" width="40" height="40" rx="4" fill="none" stroke="#111" stroke-width="4"/>
-              <rect x="18" y="18" width="24" height="24" rx="2" fill="#111"/>
-              <rect x="70" y="10" width="40" height="40" rx="4" fill="none" stroke="#111" stroke-width="4"/>
-              <rect x="78" y="18" width="24" height="24" rx="2" fill="#111"/>
-              <rect x="10" y="70" width="40" height="40" rx="4" fill="none" stroke="#111" stroke-width="4"/>
-              <rect x="18" y="78" width="24" height="24" rx="2" fill="#111"/>
-              <rect x="70" y="70" width="8" height="8" fill="#111"/><rect x="82" y="70" width="8" height="8" fill="#111"/>
-              <rect x="94" y="70" width="16" height="8" fill="#111"/>
-              <rect x="70" y="82" width="16" height="8" fill="#111"/><rect x="90" y="82" width="8" height="8" fill="#111"/>
-              <rect x="70" y="94" width="8" height="16" fill="#111"/><rect x="82" y="94" width="28" height="8" fill="#111"/>
-            </svg>
-            <div style="font-size:12px;color:#888;margin-top:8px">Mesa ${m.table_num} — ${CU.name}</div>
-          </div>
+          <div style="font-size:13px;color:#555;line-height:1.6">Tu reserva está 100% confirmada.<br>Cada invitado tiene su propio QR: envíaselo para que lo muestre en la entrada VIP junto a su carnet.</div>
+          <div id="comp-qrs" style="margin-top:16px;text-align:left;font-size:12px;color:#888">Generando los QR de tu mesa…</div>
         </div>`:""}
 
       <!-- PULSERAS EXTRA — solo cuando mesa está cerrada -->
@@ -7553,6 +7574,7 @@ function renderCompradorApp(mesaId){
 
     </div>`;
     actualizarCampanitas();
+    if(m.estado_reserva==="cerrada")compradorRenderQRs(m.id);
 
   }catch(err){
     console.error("renderCompradorApp error:",err);
@@ -8885,7 +8907,14 @@ function mostrarPagoCF(ordenId){
     const ord = ordArr[0];
     if(!ord){ cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">Orden no encontrada.</p></div>`; return; }
     if(ord.estado==="conciliado"||ord.estado==="confirmado"){
-      cont.innerHTML=`<div class="cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">¡Pago confirmado!</h2><p style="color:#aaa">Tu entrada está lista. Código: <strong style="color:#EC4899">${ord.codigo}</strong></p></div>`; return;
+      cont.innerHTML=`<div class="cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">¡Pago confirmado!</h2><p style="color:#aaa">Tu entrada está lista. Código: <strong style="color:#EC4899">${ord.codigo}</strong></p><div id="cf-qrs" style="margin-top:16px;color:#aaa;font-size:12px">Generando tu QR…</div></div>`;
+      (async()=>{try{const toks=await qrAsegurar("cf",ord);const svgs=await Promise.all(toks.map(t=>qrHtml(t.t,200)));
+        const el=document.getElementById("cf-qrs");if(!el)return;
+        el.innerHTML=`<div style="color:#fff;font-weight:700;font-size:14px;margin-bottom:10px">${toks.length>1?`Tus ${toks.length} entradas — un QR por persona`:"Tu QR de ingreso"}</div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;justify-content:center">${toks.map((t,i)=>`<div style="background:#1e1e1e;border-radius:12px;padding:12px;text-align:center"><div style="display:flex;justify-content:center">${svgs[i]}</div><div style="color:#fff;font-weight:700;font-size:12px;margin-top:8px">${toks.length>1?`Entrada ${i+1} de ${toks.length}`:""}</div><div style="font-family:monospace;font-size:11px;color:#888">${t.t}</div><a href="${qrLink(t.t)}" target="_blank" style="display:inline-block;margin-top:6px;color:#EC4899;font-size:12px;font-weight:600;text-decoration:none">Abrir entrada digital →</a></div>`).join("")}</div>
+          <div style="margin-top:10px;font-size:11px;color:#888">Guarda una captura. Si no tienes señal el día del evento, igual puedes acreditarte por lista con tu carnet.</div>`;
+      }catch(e){const el=document.getElementById("cf-qrs");if(el)el.textContent="";}})();
+      return;
     }
     const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${ord.evento_id}`)]);
     const cfg = cfgArr[0]||{};
@@ -9863,7 +9892,8 @@ VIEWS.cfConciliacion = async()=>{
         const ev=D.eventos.find(e=>e.id===ord.evento_id);
         if(post&&ev){
           const cfg=getCFConfig(ord.evento_id);
-          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo}));
+          let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
+          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
           toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
         } else {
           toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
@@ -10723,7 +10753,7 @@ function emailBdayInvitacion(nombreCumple, eventoNombre, productoraNombre, linkI
 }
 
 function emailBdayAprobado(nombreInv, nombreCumple, eventoNombre, productoraNombre, opts={}){
-  const {precioH=0, precioM=0, genero="", horaValidez=""} = opts;
+  const {precioH=0, precioM=0, genero="", horaValidez="", qrHtml=""} = opts;
   const precio = genero==="m" ? precioH : precioM;
   const precioTxt = precio>0 ? `$${precio.toLocaleString("es-CL")}` : "gratis";
   const horaTxt = horaValidez ? `Tu entrada con este precio es válida hasta las <strong>${horaValidez} hrs</strong> — asegúrate de ingresar antes de esa hora.` : "";
@@ -10742,6 +10772,7 @@ function emailBdayAprobado(nombreInv, nombreCumple, eventoNombre, productoraNomb
           <li>Considera que habrá mucha gente — llega con anticipación para evitar filas.</li>
         </ul>
       </div>
+      ${qrHtml||""}
       ${GL_POWERED}
     </div>
   </div>`;
@@ -11187,7 +11218,8 @@ VIEWS["bday-cumpleaneros"] = async()=>{
     // Correo al invitado
     const ev=(D.eventos||[]).find(e=>e.id===c?.evento_id);
     const prod=(D.productoras||[]).find(p=>p.id===c?.productora_id);
-    if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c?.nombre+" "+c?.apellido,ev?.name||"",prod?.nombre||"Guestly",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||""}));
+    let qrToksInv=[];try{if(inv)qrToksInv=await qrAsegurar("inv",inv);}catch(e){}
+    if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c?.nombre+" "+c?.apellido,ev?.name||"",prod?.nombre||"Guestly",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||"",qrHtml:qrBloqueEmail(qrToksInv,inv.nombre)}));
     toast("Invitado aprobado ✅","ok");closeModal();bdayVerInvitados(cid);
   };
   window.bdayRechazarInv=async(invId,cid)=>{
@@ -11611,7 +11643,10 @@ async function initBdayApp(){
           }
           <!-- Beneficio y stats -->
           <div style="background:#fff;border-radius:14px;padding:20px;border:1px solid #e8e8e8">
-            <div style="font-size:13px;font-weight:700;color:#534AB7;margin-bottom:12px">🎁 ${ben?.nombre||"Tu beneficio"}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+              <div style="font-size:13px;font-weight:700;color:#534AB7">🎁 ${ben?.nombre||"Tu beneficio"}</div>
+              <button onclick="bdayPubAbrirQR('me')" style="background:#111;color:#fff;border:none;padding:7px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🎟 Mi QR de ingreso</button>
+            </div>
             <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px">
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-ap" style="font-size:28px;font-weight:800;color:#534AB7">${ap}</div><div style="color:#888;font-size:11px">aprobados</div></div>
               <div style="text-align:center;min-width:80px"><div id="bday-cnt-pend" style="font-size:28px;font-weight:800;color:#f59e0b">${pend}</div><div style="color:#888;font-size:11px">pendientes</div></div>
@@ -11700,6 +11735,7 @@ async function initBdayApp(){
         </div>
         <div style="display:flex;gap:5px;align-items:center;flex-shrink:0">
           ${badge(inv.estado==="aprobado"?"✓ Aprobado":inv.estado==="rechazado"?"✕ Rechazado":"⏳ Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
+          ${inv.estado==="aprobado"?`<button onclick="bdayPubAbrirQR('${inv.id}')" title="Ver / enviar su QR" style="background:#111;color:#fff;border:none;padding:4px 8px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🎟 QR</button>`:""}
           ${!cerrada&&inv.estado==="pendiente"?`
             <button onclick="bdaySelfAprobar('${inv.id}')" style="background:#dcfce7;color:#166534;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✓</button>
             <button onclick="bdaySelfRechazar('${inv.id}')" style="background:#fee2e2;color:#991b1b;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✕</button>
@@ -11710,13 +11746,35 @@ async function initBdayApp(){
   }
 
   function bindBdayApp(){
+    window.bdayPubAbrirQR=async(id)=>{
+      const esMe=id==="me";const obj=esMe?c:invitados.find(i=>i.id===id);if(!obj)return;
+      let toks;try{toks=await qrAsegurar(esMe?"cumple":"inv",obj);}catch(e){return toast("No se pudo generar el QR","error");}
+      const link=qrLink(toks[0].t);
+      const nom=esMe?c.nombre:obj.nombre;
+      const wa=obj.whatsapp?`https://wa.me/${String(obj.whatsapp).replace(/[^0-9]/g,"")}?text=${encodeURIComponent(`Hola ${nom}! Esta es tu entrada para ${ev?.name||"el evento"} (cumple de ${c.nombre}). Muéstrala en la puerta: ${link}`)}`:`https://wa.me/?text=${encodeURIComponent(`Entrada para ${ev?.name||"el evento"}: ${link}`)}`;
+      const svg=await qrHtml(toks[0].t,200);
+      openModal(`🎟 QR de ${nom}`,`
+        <div style="text-align:center">
+          <div style="display:flex;justify-content:center">${svg}</div>
+          <div style="font-family:monospace;font-size:11px;color:#888;margin-top:6px">${toks[0].t}</div>
+          ${obj.llego?`<div style="font-size:12px;color:#166534;font-weight:600;margin-top:6px">✓ Ya ingresó</div>`:""}
+          <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;flex-wrap:wrap">
+            <a class="btn" href="${link}" target="_blank" style="text-decoration:none;font-size:12px">Abrir entrada digital</a>
+            <button class="btn" style="font-size:12px" onclick="navigator.clipboard.writeText('${link}').then(()=>toast('Link copiado','ok'))">📋 Copiar link</button>
+            ${esMe?"":`<a class="btn" href="${wa}" target="_blank" style="text-decoration:none;font-size:12px;background:#25D366;color:#fff;border-color:#25D366">📱 Enviar por WhatsApp</a>`}
+          </div>
+          <div style="font-size:11px;color:#999;margin-top:12px">${esMe?"Muestra este QR en la puerta junto a tu carnet.":"Envíale el QR a tu invitado/a: lo muestra en la puerta junto a su carnet."}</div>
+        </div>
+        <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+    };
     window.bdaySelfAprobar=async(invId)=>{
       const inv=invitados.find(i=>i.id===invId);
       if(aprobados()>=maxInv)return toast(`Cupo lleno (máx. ${maxInv})`,  "warn");
       await sbPatch("bday_invitados",`id=eq.${invId}`,{estado:"aprobado"});
       if(inv)inv.estado="aprobado";
       // Correo al invitado
-      if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||"",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||""}));
+      let qrToksInv=[];try{if(inv)qrToksInv=await qrAsegurar("inv",inv);}catch(e){}
+      if(inv?.email) await sendEmail(inv.email,`¡Quedaste en la lista — ${ev?.name||""}!`,emailBdayAprobado(inv.nombre,c.nombre+" "+c.apellido,ev?.name||"",prod?.nombre||"",{precioH:ben?.precio_invitado_h||0,precioM:ben?.precio_invitado_m||0,genero:inv.genero||"",horaValidez:ben?.hora_validez||"",qrHtml:qrBloqueEmail(qrToksInv,inv.nombre)}));
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
       updateContadores();
       toast("Aprobado ✅","ok");
@@ -12283,9 +12341,350 @@ window.embRechazarPost=async(id)=>{
 window.embReabrirPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;await sbPatch("emb_postulantes",`id=eq.${id}`,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});Object.assign(p,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});VIEWS["emb-postulaciones"]();};
 window.embEliminarPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p||!confirm(`¿Eliminar la postulación de ${p.nombre} ${p.apellido}?`))return;await sbDelete("emb_postulantes",`id=eq.${id}`);D.emb_postulantes=D.emb_postulantes.filter(x=>x.id!==id);toast("Eliminada");VIEWS["emb-postulaciones"]();};
 
+
+// ═══════════════════════════════════════════════════════════════
+// QR DE ACREDITACIÓN — cada persona (entrada) tiene su propio QR
+// Cada registro acreditable guarda qr_tokens: [{t:"TOKEN", usado_at:null}, ...]
+//   · acc_entries (listas/staff): 1 + acompañantes tokens
+//   · cf_ordenes: 1 token por entrada (cantidad)
+//   · bday_cumpleaneros / bday_invitados: 1 token
+//   · vip_tables.perfiles[] y solicitudes_pulseras[].personas[]: 1 token (dentro del JSON)
+// El QR contiene el link público  https://guestly.cl/?q=TOKEN  (entrada digital)
+// ═══════════════════════════════════════════════════════════════
+const QR_CHARS="ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function qrNuevoToken(){let s="";const a=new Uint8Array(14);crypto.getRandomValues(a);for(const b of a)s+=QR_CHARS[b%32];return s;}
+const qrLink=t=>`${CF_APP_URL}/?q=${t}`;
+const qrImgUrl=(t,size=220)=>`https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=6&data=${encodeURIComponent(qrLink(t))}`;
+function qrTokenDeTexto(txt){
+  // Acepta el link completo, "?q=TOKEN" o el token pelado (pistola lectora / pegado a mano)
+  const s=String(txt||"").trim();
+  const m=s.match(/[?&]q=([A-Za-z0-9]+)/);
+  if(m)return m[1].toUpperCase();
+  if(/^[A-Za-z0-9]{10,20}$/.test(s))return s.toUpperCase();
+  return null;
+}
+let _qrLibP=null;
+function cargarQRLib(){
+  if(window.qrcode)return Promise.resolve();
+  if(_qrLibP)return _qrLibP;
+  _qrLibP=new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js";s.onload=res;s.onerror=()=>{_qrLibP=null;rej(new Error("No se pudo cargar el generador de QR"));};document.head.appendChild(s);});
+  return _qrLibP;
+}
+// Devuelve el HTML de un QR (SVG local; si la librería no carga, imagen vía API)
+async function qrHtml(tok,size=200){
+  try{
+    await cargarQRLib();
+    const q=window.qrcode(0,"M");q.addData(qrLink(tok));q.make();
+    const n=q.getModuleCount();const cell=Math.max(1,Math.floor(size/(n+4)));
+    return q.createSvgTag({cellSize:cell,margin:2*cell,scalable:false}).replace("<svg ",`<svg style="display:block;background:#fff;border-radius:10px;max-width:100%" `);
+  }catch(e){
+    return `<img src="${qrImgUrl(tok,size)}" width="${size}" height="${size}" style="display:block;background:#fff;border-radius:10px;max-width:100%" alt="QR">`;
+  }
+}
+// Cuántas entradas (QR) le corresponden a un registro
+function qrCantidad(tipo,obj){return tipo==="entry"?1+(obj.companions||0):tipo==="cf"?(obj.cantidad||1):1;}
+// Asegura que el registro tenga sus tokens creados y guardados. ref:
+//   entry/cf/cumple/inv → el registro;  mesa → {m,perfil};  mesa_extra → {m,lote,persona}
+async function qrAsegurar(tipo,ref){
+  const obj=tipo==="mesa"?ref.perfil:tipo==="mesa_extra"?ref.persona:ref;
+  const n=qrCantidad(tipo,obj);
+  const toks=Array.isArray(obj.qr_tokens)?obj.qr_tokens.slice():[];
+  if(toks.length>=n)return toks;
+  while(toks.length<n)toks.push({t:qrNuevoToken(),usado_at:null});
+  obj.qr_tokens=toks;
+  try{
+    if(tipo==="entry")await sbPatch("acc_entries",`id=eq.${obj.id}`,{qr_tokens:toks});
+    else if(tipo==="cf")await sbPatch("cf_ordenes",`id=eq.${obj.id}`,{qr_tokens:toks});
+    else if(tipo==="cumple")await sbPatch("bday_cumpleaneros",`id=eq.${obj.id}`,{qr_tokens:toks});
+    else if(tipo==="inv")await sbPatch("bday_invitados",`id=eq.${obj.id}`,{qr_tokens:toks});
+    else if(tipo==="mesa"){if(!obj.id)obj.id=uid();await sbPatch("vip_tables",`id=eq.${ref.m.id}`,{perfiles:ref.m.perfiles});}
+    else if(tipo==="mesa_extra"){if(!obj.id)obj.id=uid();await sbPatch("vip_tables",`id=eq.${ref.m.id}`,{solicitudes_pulseras:ref.m.solicitudes_pulseras});}
+  }catch(e){
+    console.error("qrAsegurar",e);
+    if(/qr_tokens/.test(e.message||""))alert("Falta la columna qr_tokens en Supabase. Ejecuta el SQL de QR (ver documentación).");
+    throw e;
+  }
+  return toks;
+}
+// Busca un token en los datos cargados (acreditación). Devuelve {tipo,obj,i,m,lote} o null
+function qrResolverLocal(tok){
+  const has=o=>Array.isArray(o?.qr_tokens)&&o.qr_tokens.some(x=>x&&x.t===tok);
+  const idx=o=>o.qr_tokens.findIndex(x=>x&&x.t===tok);
+  for(const e of (D.acc_entries||[]))if(has(e))return{tipo:"entry",obj:e,i:idx(e)};
+  for(const o of (D.cf_ordenes||[]))if(has(o))return{tipo:"cf",obj:o,i:idx(o)};
+  for(const c of (D.bday_cumpleaneros||[]))if(has(c))return{tipo:"cumple",obj:c,i:0};
+  for(const c of (D.bday_invitados||[]))if(has(c))return{tipo:"inv",obj:c,i:0};
+  for(const m of (D.vip_tables||[])){
+    for(const p of (m.perfiles||[]))if(has(p))return{tipo:"mesa",obj:p,m,i:0};
+    for(const l of (m.solicitudes_pulseras||[]))for(const pp of (l.personas||[]))if(has(pp))return{tipo:"mesa_extra",obj:pp,m,lote:l,i:0};
+  }
+  return null;
+}
+// Datos "humanos" de un registro resuelto, para mostrar en el escáner y en la entrada digital
+function qrDescribir(r){
+  const ev=(D.eventos||[]).find(e=>e.id===(r.obj.event_id||r.obj.evento_id||r.m?.event_id||(r.tipo==="inv"?(D.bday_cumpleaneros||[]).find(c=>c.id===r.obj.cumpleanero_id)?.evento_id:null)));
+  let nombre="",origen="",pulsera="",color="#534AB7",icono="👥",evId=ev?.id;
+  if(r.tipo==="entry"){const e=r.obj;const l=(D.acc_lists||[]).find(l=>l.id===e.list_id);const st=l?.type==="staff";nombre=e.name||"";origen=(st?"Staff · ":"Lista · ")+(l?.name||"—");pulsera=getPulsera(e,ev)?.nombre||"";color=st?"#0f766e":"#534AB7";icono=st?"🪪":"👥";}
+  else if(r.tipo==="cf"){const o=r.obj;const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};nombre=`${p.nombre||""} ${p.apellido||""}`.trim();origen=`Close Friends · ${o.codigo||""}`;pulsera=p.tipo_entrada||"";color="#EC4899";icono="🌸";}
+  else if(r.tipo==="cumple"){const c=r.obj;const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);nombre=`${c.nombre||""} ${c.apellido||""}`.trim();origen="Cumpleañero/a";pulsera=ben?.pulsera||"";color="#854d0e";icono="🎂";}
+  else if(r.tipo==="inv"){const i=r.obj;const c=(D.bday_cumpleaneros||[]).find(x=>x.id===i.cumpleanero_id);const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);nombre=`${i.nombre||""} ${i.apellido||""}`.trim();origen=`Cumpleaños de ${c?.nombre||""} ${c?.apellido||""}`.trim();pulsera=ben?.pulsera||"";color="#854d0e";icono="🎂";}
+  else if(r.tipo==="mesa"||r.tipo==="mesa_extra"){const p=r.obj,m=r.m;nombre=`${p.nombre||p.name||""} ${p.apellido||""}`.trim();origen=`Mesa ${m.table_num}${m.section?" · "+m.section:""}${r.tipo==="mesa_extra"?" · pulsera extra":""}`;pulsera=pulseraDeMesa(m)||"";color="#0e7490";icono="🍾";}
+  const n=qrCantidad(r.tipo,r.obj);
+  return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev};
+}
+// ¿Ese token/persona ya ingresó?
+function qrYaUsado(r){
+  const t=r.obj.qr_tokens?.[r.i];
+  if(r.tipo==="entry")return t?.usado_at||null;
+  if(r.tipo==="cf")return t?.usado_at||r.obj.ingreso_at||null;
+  return r.obj.llego?(r.obj.llego_at||"sí"):null;
+}
+async function qrMarcarToken(r,at){
+  const toks=(r.obj.qr_tokens||[]).map((x,i)=>i===r.i?{...x,usado_at:at}:x);r.obj.qr_tokens=toks;
+  if(r.tipo==="entry")await sbPatch("acc_entries",`id=eq.${r.obj.id}`,{qr_tokens:toks});
+  else if(r.tipo==="cf")await sbPatch("cf_ordenes",`id=eq.${r.obj.id}`,{qr_tokens:toks});
+}
+
+// ── Modal "Ver QR" de una persona (desde acreditación / listas) ──
+window.qrVerModal=async function(tipo,id,extra,extra2){
+  let ref=null,r=null;
+  if(tipo==="entry")ref=(D.acc_entries||[]).find(e=>e.id===id);
+  else if(tipo==="cf")ref=(D.cf_ordenes||[]).find(o=>o.id===id);
+  else if(tipo==="cumple")ref=(D.bday_cumpleaneros||[]).find(c=>c.id===id);
+  else if(tipo==="inv")ref=(D.bday_invitados||[]).find(c=>c.id===id);
+  else if(tipo==="mesa"){const m=(D.vip_tables||[]).find(x=>x.id===id);const perfil=m?.perfiles?.[Number(extra)];if(m&&perfil)ref={m,perfil};}
+  else if(tipo==="mesa_extra"){const m=(D.vip_tables||[]).find(x=>x.id===id);const lote=(m?.solicitudes_pulseras||[]).find(l=>l.id===extra);const persona=lote?.personas?.[Number(extra2)];if(m&&lote&&persona)ref={m,lote,persona};}
+  if(!ref)return toast("No se encontró el registro","error");
+  openModal("QR de acreditación",`<div style="text-align:center;padding:20px;color:#888">Generando QR…</div>`);
+  let toks;
+  try{toks=await qrAsegurar(tipo,ref);}catch(e){closeModal();return;}
+  const obj=tipo==="mesa"?ref.perfil:tipo==="mesa_extra"?ref.persona:ref;
+  const d=qrDescribir({tipo,obj,i:0,m:ref.m,lote:ref.lote});
+  const svgs=await Promise.all(toks.map(t=>qrHtml(t.t,180)));
+  const waTxt=(k)=>encodeURIComponent(`Hola ${d.nombre.split(" ")[0]}! Esta es tu entrada para ${d.ev?.name||"el evento"}${toks.length>1?` (entrada ${k} de ${toks.length})`:""}. Muéstrala en la puerta: ${qrLink(toks[k-1].t)}`);
+  openModal(`${d.icono} QR — ${d.nombre}`,`
+    <div style="font-size:12px;color:#666;margin-bottom:12px">${d.origen} · Pulsera: <strong>${d.pulsera}</strong> · ${toks.length} entrada${toks.length===1?"":"s"}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:14px;justify-content:center">
+      ${toks.map((t,i)=>`<div style="border:1px solid #e8e8e8;border-radius:12px;padding:12px;text-align:center;width:220px;background:${t.usado_at?"#f0fdf4":"#fff"}">
+        <div style="display:flex;justify-content:center">${svgs[i]}</div>
+        <div style="font-size:12px;font-weight:700;margin-top:8px">${toks.length>1?`Entrada ${i+1} de ${toks.length}`:d.nombre}</div>
+        <div style="font-family:monospace;font-size:11px;color:#888;margin-top:2px">${t.t}</div>
+        ${t.usado_at?`<div style="font-size:11px;color:#166534;font-weight:600;margin-top:4px">✓ Usada ${fmtT(t.usado_at)}</div>`:""}
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap">
+          <button class="btn" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${qrLink(t.t)}').then(()=>toast('Link copiado','ok'))">📋 Copiar link</button>
+          <a class="btn" style="padding:4px 8px;font-size:11px;text-decoration:none;background:#25D366;color:#fff" target="_blank" href="https://wa.me/?text=${waTxt(i+1)}">📱 WhatsApp</a>
+        </div>
+      </div>`).join("")}
+    </div>
+    <div style="font-size:11px;color:#999;margin-top:12px;text-align:center">Cada QR es personal: al escanearlo en la puerta se descuenta una entrada. La persona también puede abrir el link y ver su entrada digital.</div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+};
+
+// ── Escáner web (cámara del celular o pistola lectora) ──
+let _qrScanStream=null,_qrScanTimer=null,_qrUltimo={t:null,at:0},_qrProcesando=false;
+function qrDetenerScanner(){
+  if(_qrScanTimer){clearInterval(_qrScanTimer);_qrScanTimer=null;}
+  if(_qrScanStream){try{_qrScanStream.getTracks().forEach(t=>t.stop());}catch(e){}_qrScanStream=null;}
+}
+window.abrirScannerQR=async function(){
+  qrDetenerScanner();
+  openModal("📷 Escanear QR",`
+    <div style="position:relative;background:#000;border-radius:12px;overflow:hidden">
+      <video id="qr-video" playsinline muted autoplay style="width:100%;max-height:46vh;display:block;object-fit:cover"></video>
+      <div id="qr-cam-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;text-align:center;padding:20px">Activando cámara…</div>
+    </div>
+    <input class="form-input" id="qr-manual" placeholder="o escanea con pistola lectora / pega el código aquí y Enter" style="margin-top:10px;font-size:14px" autocomplete="off">
+    <div id="qr-result" style="margin-top:10px;min-height:60px"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`);
+  const inp=$("qr-manual");
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();const tok=qrTokenDeTexto(inp.value);inp.value="";if(tok)qrProcesarToken(tok,true);else qrMostrarResultado("err","Código no válido","Ese texto no parece un QR de Guestly.");}});
+  // Si se cierra el modal, apagar cámara
+  const obs=new MutationObserver(()=>{if(!document.getElementById("qr-video")){qrDetenerScanner();obs.disconnect();}});
+  obs.observe($("modal-body"),{childList:true});
+  const video=$("qr-video"),msg=$("qr-cam-msg");
+  try{
+    _qrScanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
+    video.srcObject=_qrScanStream;await video.play();msg.style.display="none";
+  }catch(e){msg.innerHTML=`No se pudo activar la cámara (${e.name||e.message}).<br>Puedes usar la pistola lectora o pegar el código abajo.`;inp.focus();return;}
+  let detector=null;
+  if("BarcodeDetector" in window){try{detector=new BarcodeDetector({formats:["qr_code"]});}catch(e){detector=null;}}
+  let jsqrOk=false;
+  if(!detector){
+    try{await new Promise((res,rej)=>{if(window.jsQR)return res();const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});jsqrOk=!!window.jsQR;}
+    catch(e){msg.style.display="flex";msg.textContent="Este navegador no puede leer QR desde la cámara. Usa la pistola lectora o pega el código.";return;}
+  }
+  const canvas=document.createElement("canvas");const ctx=canvas.getContext("2d",{willReadFrequently:true});
+  _qrScanTimer=setInterval(async()=>{
+    if(!document.getElementById("qr-video")||video.readyState<2||_qrProcesando)return;
+    let txt=null;
+    try{
+      if(detector){const codes=await detector.detect(video);if(codes.length)txt=codes[0].rawValue;}
+      else if(jsqrOk){canvas.width=video.videoWidth;canvas.height=video.videoHeight;ctx.drawImage(video,0,0);const img=ctx.getImageData(0,0,canvas.width,canvas.height);const c=window.jsQR(img.data,img.width,img.height,{inversionAttempts:"dontInvert"});if(c)txt=c.data;}
+    }catch(e){}
+    if(!txt)return;
+    const tok=qrTokenDeTexto(txt);if(!tok)return;
+    const ahora=Date.now();
+    if(_qrUltimo.t===tok&&ahora-_qrUltimo.at<4000)return; // mismo QR seguido: ignorar
+    _qrUltimo={t:tok,at:ahora};
+    qrProcesarToken(tok,false);
+  },250);
+};
+function qrMostrarResultado(tipo,titulo,detalle,acciones){
+  const el=$("qr-result");if(!el)return;
+  const c={ok:["#DCFCE7","#166534","✅"],warn:["#FEF3C7","#92400E","⚠️"],err:["#FEE2E2","#991B1B","⛔"]}[tipo]||["#eee","#333","ℹ️"];
+  el.innerHTML=`<div style="background:${c[0]};color:${c[1]};border-radius:12px;padding:14px 16px">
+    <div style="font-size:18px;font-weight:800;line-height:1.2">${c[2]} ${titulo}</div>
+    <div style="font-size:13px;margin-top:4px">${detalle||""}</div>
+    ${acciones?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${acciones}</div>`:""}
+  </div>`;
+  if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
+}
+window.qrProcesarToken=async function(tok,manual){
+  if(_qrProcesando)return;_qrProcesando=true;
+  try{
+    const r=qrResolverLocal(tok);
+    if(!r)return qrMostrarResultado("err","QR no encontrado","No está en ninguna lista de este evento. Busca a la persona por nombre o RUT en la lista.");
+    const d=qrDescribir(r);
+    if(d.evId&&currentEvId&&d.evId!==currentEvId)return qrMostrarResultado("err","Es de otro evento",`${d.nombre} · este QR corresponde a <strong>${d.ev?.name||"otro evento"}</strong>.`);
+    const sub=`${d.origen} · Pulsera <strong>${d.pulsera}</strong>${d.n>1?` · entrada ${d.k} de ${d.n}`:""}`;
+    const usado=qrYaUsado(r);
+    if(usado)return qrMostrarResultado("warn",`${d.nombre} — YA INGRESÓ`,`${sub}<br>Este QR ya fue usado${usado!=="sí"?" a las "+fmtT(usado):""}.`);
+    const at=now();
+    if(r.tipo==="entry"){
+      const e=r.obj;
+      if(e.status==="blocked")return qrMostrarResultado("err",`${d.nombre} — BLOQUEADO`,sub);
+      const res=await runCheckin(e.id,1);
+      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
+      if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
+      if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("warn",`${d.nombre} — fuera de horario`,`${sub}<br>${res.msg}`,`<button class="btn btn-success" style="padding:6px 10px;font-size:12px" onclick="qrForzarEntry('${e.id}',${r.i})">Validar igual</button>`);
+      return qrMostrarResultado("err",d.nombre,`${sub}<br>${res.msg}`);
+    }
+    if(r.tipo==="cf"){
+      const o=r.obj;
+      if(!["pagado","conciliado"].includes(o.estado))return qrMostrarResultado("err",`${d.nombre} — SIN PAGO`,`${sub}<br>La orden está en estado <strong>${o.estado}</strong>.`);
+      const aviso=o.estado!=="conciliado"?"<br>⚠️ Pago aún no conciliado.":"";
+      await qrMarcarToken(r,at);
+      const todos=(o.qr_tokens||[]).every(x=>x.usado_at);
+      if(todos&&!o.ingreso_at){o.ingreso_at=at;try{await sbPatch("cf_ordenes",`id=eq.${o.id}`,{ingreso_at:at});}catch(e){}}
+      const aforo=getAforo(),max=getMax();
+      if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
+      try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
+      programarRenderSuave?.();
+      return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub+aviso);
+    }
+    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
+    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);}
+    if(r.tipo==="mesa"||r.tipo==="mesa_extra"){
+      const p=r.obj,m=r.m;
+      if(p.estado==="bloqueado"||p.estado==="rechazado")return qrMostrarResultado("err",`${d.nombre} — ${p.estado.toUpperCase()}`,sub);
+      p.llego=true;p.llego_at=at;
+      try{await sbPatch("vip_tables",`id=eq.${m.id}`,r.tipo==="mesa"?{perfiles:m.perfiles}:{solicitudes_pulseras:m.solicitudes_pulseras});}
+      catch(e){p.llego=false;p.llego_at=null;return qrMostrarResultado("err","Error al registrar",e.message);}
+      const aforo=getAforo(),max=getMax();
+      if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
+      try{await log("mesa_invitado","vip_table",m.id,`Mesa ${m.table_num} — ${d.nombre} ingresó (QR)`);}catch(e){}
+      programarRenderSuave?.();
+      return qrMostrarResultado("ok",`${d.nombre} — PUEDE ENTRAR`,sub);
+    }
+  }catch(e){qrMostrarResultado("err","Error",e.message||String(e));}
+  finally{_qrProcesando=false;}
+};
+window.qrForzarEntry=async function(eid,i){
+  const e=(D.acc_entries||[]).find(x=>x.id===eid);if(!e)return;
+  const res=await runCheckin(eid,1,true);
+  if(res.ok){await qrMarcarToken({tipo:"entry",obj:e,i},now());programarRenderSuave?.();qrMostrarResultado("ok",`${e.name} — PUEDE ENTRAR`,"Validado fuera de horario.");}
+  else qrMostrarResultado("err",e.name,res.msg);
+};
+
+// ── Bloques de QR para correos (imágenes vía API, los correos no ejecutan JS) ──
+function qrBloqueEmail(toks,nombre){
+  if(!toks||!toks.length)return "";
+  return `<div style="margin:22px 0 6px;text-align:center">
+    <div style="font-size:13px;font-weight:700;color:#1a1a1a;margin-bottom:10px">${toks.length>1?`Tus ${toks.length} entradas — un QR por persona`:"Tu QR de ingreso"}</div>
+    ${toks.map((t,i)=>`<div style="display:inline-block;vertical-align:top;margin:6px;padding:12px;border:1px solid #e8e8e8;border-radius:12px;background:#fff">
+      <a href="${qrLink(t.t)}" style="text-decoration:none"><img src="${qrImgUrl(t.t,180)}" width="180" height="180" alt="QR" style="display:block;border:0"></a>
+      <div style="font-size:12px;font-weight:700;color:#1a1a1a;margin-top:8px">${toks.length>1?`Entrada ${i+1} de ${toks.length}`:(nombre||"")}</div>
+      <div style="font-size:11px;color:#888;font-family:monospace">${t.t}</div>
+      <a href="${qrLink(t.t)}" style="font-size:11px;color:#534AB7;font-weight:600;text-decoration:none">Abrir entrada digital →</a>
+    </div>`).join("")}
+    <div style="font-size:11px;color:#888;margin-top:8px;line-height:1.5">Guarda una captura del QR o abre el link antes de llegar.<br>Si no tienes señal o no lo encuentras, igual puedes acreditarte por lista con tu carnet.</div>
+  </div>`;
+}
+
+// ── PÁGINA PÚBLICA: entrada digital (?q=TOKEN) ──
+async function mostrarEntradaQR(tok){
+  try{localStorage.removeItem("crew-session");}catch(e){}
+  CU=null;CP=null;
+  const css=document.querySelector("style")?.textContent||"";
+  document.body.innerHTML=`<style>${css}</style><div id="qr-pub" style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,sans-serif"></div>`;
+  const scr=document.getElementById("qr-pub");
+  const show=h=>{scr.innerHTML=h;};
+  show(`<div style="text-align:center;color:#aaa"><div style="font-size:32px">🎟</div><p style="margin-top:8px;font-size:14px">Cargando tu entrada…</p></div>`);
+  const fallo=(t)=>show(`<div style="max-width:380px;text-align:center;color:#fff"><div style="font-size:48px">😕</div><h2 style="font-size:18px;margin-top:12px">${t||"Entrada no encontrada"}</h2><p style="color:#aaa;font-size:13px;margin-top:8px">Si crees que es un error, acredítate por lista con tu carnet en la puerta.</p></div>`);
+  tok=qrTokenDeTexto(tok);if(!tok)return fallo("Link no válido");
+  const cs=encodeURIComponent(JSON.stringify([{t:tok}]));
+  let r=null;
+  try{
+    const [ent,cf,cum,inv,mp,me]=await Promise.all([
+      sbGet("acc_entries",`qr_tokens=cs.${cs}`).catch(()=>[]),
+      sbGet("cf_ordenes",`qr_tokens=cs.${cs}`).catch(()=>[]),
+      sbGet("bday_cumpleaneros",`qr_tokens=cs.${cs}`).catch(()=>[]),
+      sbGet("bday_invitados",`qr_tokens=cs.${cs}`).catch(()=>[]),
+      sbGet("vip_tables",`perfiles=cs.${encodeURIComponent(JSON.stringify([{qr_tokens:[{t:tok}]}]))}`).catch(()=>[]),
+      sbGet("vip_tables",`solicitudes_pulseras=cs.${encodeURIComponent(JSON.stringify([{personas:[{qr_tokens:[{t:tok}]}]}]))}`).catch(()=>[]),
+    ]);
+    const has=o=>Array.isArray(o?.qr_tokens)&&o.qr_tokens.some(x=>x&&x.t===tok);
+    const idx=o=>o.qr_tokens.findIndex(x=>x&&x.t===tok);
+    if(ent[0]){D.acc_entries=ent;r={tipo:"entry",obj:ent[0],i:idx(ent[0])};}
+    else if(cf[0]){D.cf_ordenes=cf;r={tipo:"cf",obj:cf[0],i:idx(cf[0])};}
+    else if(cum[0]){D.bday_cumpleaneros=cum;r={tipo:"cumple",obj:cum[0],i:0};}
+    else if(inv[0]){D.bday_invitados=inv;r={tipo:"inv",obj:inv[0],i:0};}
+    else if(mp[0]){const m=mp[0];const p=(m.perfiles||[]).find(has);D.vip_tables=mp;r={tipo:"mesa",obj:p,m,i:0};}
+    else if(me[0]){const m=me[0];let pp=null,lote=null;for(const l of (m.solicitudes_pulseras||[])){const f=(l.personas||[]).find(has);if(f){pp=f;lote=l;break;}}D.vip_tables=me;r={tipo:"mesa_extra",obj:pp,m,lote,i:0};}
+    if(!r||!r.obj)return fallo();
+    // Datos de apoyo: evento, productora, lista, postulante, cumpleañero, beneficio
+    let evId=r.obj.event_id||r.obj.evento_id||r.m?.event_id;
+    if(r.tipo==="inv"){const c=(await sbGet("bday_cumpleaneros",`id=eq.${r.obj.cumpleanero_id}`))[0];if(c){D.bday_cumpleaneros=[c];evId=c.evento_id;}}
+    const [evA,lA,pA,bA]=await Promise.all([
+      evId?sbGet("eventos",`id=eq.${evId}`):[],
+      r.tipo==="entry"&&r.obj.list_id?sbGet("acc_lists",`id=eq.${r.obj.list_id}`):[],
+      r.tipo==="cf"?sbGet("cf_postulantes",`id=eq.${r.obj.postulante_id}`):[],
+      (r.tipo==="cumple"||r.tipo==="inv")?(()=>{const c=r.tipo==="cumple"?r.obj:D.bday_cumpleaneros?.[0];return c?.beneficio_id?sbGet("bday_beneficios",`id=eq.${c.beneficio_id}`):[];})():[],
+    ]);
+    D.eventos=evA;D.acc_lists=lA;D.cf_postulantes=pA;D.bday_beneficios=bA;currentEvId=evId;
+    const ev=evA[0];
+    const prod=ev?.productora_id?(await sbGet("productoras",`id=eq.${ev.productora_id}`))[0]:null;
+    const d=qrDescribir(r);
+    const usado=qrYaUsado(r);
+    const svg=await qrHtml(tok,240);
+    const fecha=ev?.date?new Date(ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):"";
+    show(`<div style="max-width:400px;width:100%">
+      <div style="text-align:center;margin-bottom:14px">${prod?.logo_url?`<img src="${prod.logo_url}" style="max-height:60px;max-width:200px;object-fit:contain">`:`<div style="color:#fff;font-weight:800;font-size:18px">${prod?.nombre||"Guestly"}</div>`}</div>
+      <div style="background:#fff;border-radius:20px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5)">
+        <div style="background:${d.color};color:#fff;padding:16px 20px">
+          <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:.85">${d.icono} ${d.origen}</div>
+          <div style="font-size:20px;font-weight:800;line-height:1.2;margin-top:4px">${ev?.name||"Evento"}</div>
+          ${fecha?`<div style="font-size:12px;opacity:.9;margin-top:2px">${fecha}${ev?.venue?" · "+ev.venue:""}</div>`:""}
+        </div>
+        <div style="padding:20px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#111">${d.nombre}</div>
+          <div style="font-size:13px;color:#666;margin-top:2px">Pulsera: <strong style="color:#111">${d.pulsera}</strong>${d.n>1?` · Entrada ${d.k} de ${d.n}`:""}</div>
+          <div style="display:flex;justify-content:center;margin:18px 0 10px;${usado?"opacity:.35;filter:grayscale(1)":""}">${svg}</div>
+          <div style="font-family:monospace;font-size:12px;color:#999">${tok}</div>
+          ${usado?`<div style="background:#FEF3C7;color:#92400E;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">⚠️ Este QR ya fue usado${usado!=="sí"?" a las "+fmtT(usado):""}</div>`
+                 :`<div style="background:#DCFCE7;color:#166534;border-radius:10px;padding:10px;margin-top:14px;font-size:13px;font-weight:700">✅ Entrada válida — muéstrala en la puerta</div>`}
+          <div style="font-size:11px;color:#888;margin-top:12px;line-height:1.5">Sube el brillo de tu pantalla al mostrar el QR. Lleva tu carnet de identidad: sin carnet no podemos validar tu entrada.</div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-top:16px"><span style="font-size:11px;color:#666;letter-spacing:.5px">Powered by <a href="https://guestly.cl" style="color:#9d95ff;text-decoration:none;font-weight:600">Guestly.cl</a></span></div>
+    </div>`);
+  }catch(e){console.error(e);fallo("No se pudo cargar la entrada");}
+}
+
 // ── Detectar acceso público CF en la URL ──
 const _cfUrl = new URLSearchParams(window.location.search);
-if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
+if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
+else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
@@ -12305,7 +12704,7 @@ else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q"].some(k=>_pub.has(k));
   if(!_esLinkPublico) await restaurarSesion();
 })();
 </script>
