@@ -12705,7 +12705,13 @@ window.embEliminarPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id=
 // cruzadas con los comprobantes que suben los clientes (Close Friends, mesas VIP, pulseras extra)
 // ═══════════════════════════════════════════════════════════════
 const CONC_DOMINIO="pagos.guestly.cl";
-let _concFiltro="pendiente",_concQ="",_concTimer=null;
+let _concFiltro="pendiente",_concQ="",_concTimer=null,_concEv="";
+// Agrupa candidatos por evento (orden por fecha del evento, luego por nombre)
+function concPorEvento(cands){
+  const g={};cands.forEach(c=>{(g[c.evId||"?"]=g[c.evId||"?"]||{id:c.evId,nombre:c.evento||"Sin evento",fecha:c.evFecha||"",items:[]}).items.push(c);});
+  return Object.values(g).sort((a,b)=>(a.fecha||"9").localeCompare(b.fecha||"9")||a.nombre.localeCompare(b.nombre)).map(x=>({...x,items:x.items.sort((a,b)=>a.nombre.localeCompare(b.nombre))}));
+}
+const concEvLabel=g=>`${g.nombre}${g.fecha?" · "+new Date(g.fecha+"T12:00:00").toLocaleDateString("es-CL",{day:"numeric",month:"short"}):""}`;
 async function loadTransferencias(prodId){
   try{D.transferencias=await sbGet("transferencias",(prodId?`productora_id=eq.${prodId}&`:"")+"order=fecha.desc.nullslast,created_at.desc");}
   catch(e){D.transferencias=D.transferencias||[];if(/transferencias/.test(e.message||"")&&/does not exist|42P01/.test(e.message||""))toast("Falta crear la tabla transferencias (supabase/sql-conciliacion.sql)","error");}
@@ -12716,19 +12722,20 @@ const concTokens=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u030
 function concCandidatos(prodId){
   const evIds=new Set((D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId).map(e=>e.id));
   const evN=id=>(D.eventos||[]).find(e=>e.id===id)?.name||"";
+  const evF=id=>(D.eventos||[]).find(e=>e.id===id)?.date||"";
   const out=[];
   (D.cf_ordenes||[]).filter(o=>evIds.has(o.evento_id)&&o.estado==="pagado"&&o.comprobante_url).forEach(o=>{
     const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};
-    out.push({key:`cf:${o.id}`,tipo:"cf",id:o.id,icono:"🌸",nombre:`${p.nombre||""} ${p.apellido||""}`.trim(),rut:p.rut||"",email:p.email||"",monto:o.monto_total||0,evento:evN(o.evento_id),fecha:o.comprobante_at||o.updated_at||o.created_at||"",comprobante:o.comprobante_url,detalle:`${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""} · ${o.codigo||""}`});
+    out.push({key:`cf:${o.id}`,tipo:"cf",id:o.id,icono:"🌸",nombre:`${p.nombre||""} ${p.apellido||""}`.trim(),rut:p.rut||"",email:p.email||"",monto:o.monto_total||0,evId:o.evento_id,evFecha:evF(o.evento_id),evento:evN(o.evento_id),fecha:o.comprobante_at||o.updated_at||o.created_at||"",comprobante:o.comprobante_url,detalle:`${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""} · ${o.codigo||""}`});
   });
   (D.vip_tables||[]).filter(m=>evIds.has(m.event_id)).forEach(m=>{
     const comp=(D.users||[]).find(u=>u.id===m.comprador_id);
     if(m.estado_reserva==="comprobante"){
       const saldo=Math.max((m.price||0)-(m.amount_paid||0),0);
-      out.push({key:`mesa:${m.id}`,tipo:"mesa",id:m.id,icono:"🍾",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:saldo||m.deposit_50||m.price||0,montos:[saldo,m.deposit_50,m.price].filter(Boolean),evento:evN(m.event_id),fecha:m.comprobante_at||"",comprobante:m.comprobante_pago,detalle:`Mesa ${m.table_num}${m.section?" · "+m.section:""} · saldo ${fmtM(saldo)} de ${fmtM(m.price||0)}`,saldo,precio:m.price||0});
+      out.push({key:`mesa:${m.id}`,tipo:"mesa",id:m.id,icono:"🍾",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:saldo||m.deposit_50||m.price||0,montos:[saldo,m.deposit_50,m.price].filter(Boolean),evId:m.event_id,evFecha:evF(m.event_id),evento:evN(m.event_id),fecha:m.comprobante_at||"",comprobante:m.comprobante_pago,detalle:`Mesa ${m.table_num}${m.section?" · "+m.section:""} · saldo ${fmtM(saldo)} de ${fmtM(m.price||0)}`,saldo,precio:m.price||0});
     }
     (m.solicitudes_pulseras||[]).filter(l=>l.estado==="comprobante").forEach(l=>{
-      out.push({key:`lote:${m.id}:${l.id}`,tipo:"lote",id:m.id,loteId:l.id,icono:"🎟",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:l.precio_total||0,evento:evN(m.event_id),fecha:l.comprobante_at||"",comprobante:l.comprobante,detalle:`${(l.personas||[]).filter(p=>p.estado==="aprobada").length} pulsera(s) extra · Mesa ${m.table_num}`});
+      out.push({key:`lote:${m.id}:${l.id}`,tipo:"lote",id:m.id,loteId:l.id,icono:"🎟",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:l.precio_total||0,evId:m.event_id,evFecha:evF(m.event_id),evento:evN(m.event_id),fecha:l.comprobante_at||"",comprobante:l.comprobante,detalle:`${(l.personas||[]).filter(p=>p.estado==="aprobada").length} pulsera(s) extra · Mesa ${m.table_num}`});
     });
   });
   return out;
@@ -12745,6 +12752,7 @@ function concScore(t,c){
   const comunes=a.filter(w=>b.includes(w)).length;
   if(comunes>=2)s+=3;else if(comunes===1)s+=1;
   const cm=concTokens(t.comentario);if(cm.some(w=>b.includes(w)))s+=1;
+  const ev=concTokens(c.evento);if(cm.some(w=>ev.includes(w)))s+=1; // el mensaje nombra el evento (ej: "saldo vip GTA")
   return s;
 }
 VIEWS.conciliacion=async()=>{
@@ -12761,7 +12769,11 @@ function renderConciliacion(){
   const mc=$("main-content");if(!mc)return;
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const prod=(D.productoras||[]).find(p=>p.id===prodId);
-  const cands=concCandidatos(prodId);
+  const candsTodos=concCandidatos(prodId);
+  const gruposTodos=concPorEvento(candsTodos);
+  if(_concEv&&!gruposTodos.some(g=>g.id===_concEv))_concEv="";
+  const cands=_concEv?candsTodos.filter(c=>c.evId===_concEv):candsTodos;
+  const grupos=concPorEvento(cands);
   const todas=(D.transferencias||[]).filter(t=>t.estado!=="sistema");
   const sistema=(D.transferencias||[]).filter(t=>t.estado==="sistema");
   const cnt=e=>todas.filter(t=>t.estado===e).length;
@@ -12772,7 +12784,7 @@ function renderConciliacion(){
   const pend=todas.filter(t=>t.estado==="pendiente");
   const candConMatch=new Set();cands.forEach(c=>{if(pend.some(t=>concScore(t,c)>=3))candConMatch.add(c.key);});
   const casilla=prod?.pagos_alias?`${prod.pagos_alias}@${CONC_DOMINIO}`:"";
-  const opcion=(c,sel)=>`<option value="${c.key}" ${sel?"selected":""}>${c.icono} ${c.nombre} · ${c.evento} · ${fmtM(c.monto)}${c.fecha?" · comp. "+fmtDT(c.fecha):""}</option>`;
+  const opcion=(c,sel,conEv)=>`<option value="${c.key}" ${sel?"selected":""}>${conEv?"📅 "+c.evento+" — ":""}${c.icono} ${c.nombre} · ${c.detalle} · ${fmtM(c.monto)}${c.fecha?" · comp. "+fmtDT(c.fecha):""}</option>`;
   mc.innerHTML=`
     <div class="sec-header"><div class="page-title">💳 Conciliación de pagos</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -12789,6 +12801,7 @@ function renderConciliacion(){
     </div>
     ${concBloqueConfig(prod,casilla,sistema,todas)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      ${gruposTodos.length>1||_concEv?`<select class="form-select" style="margin:0;width:auto;flex:0 0 auto;max-width:280px;font-size:13px" onchange="_concEv=this.value;renderConciliacion()"><option value="">📅 Todos los eventos (${candsTodos.length})</option>${gruposTodos.map(g=>`<option value="${g.id}" ${g.id===_concEv?"selected":""}>${concEvLabel(g)} (${g.items.length})</option>`).join("")}</select>`:""}
       <input class="form-input" id="conc-q" placeholder="🔍 Nombre, RUT, monto, correo, comentario…" value="${(_concQ||"").replace(/"/g,"&quot;")}" oninput="_concQ=this.value;renderConciliacion();const i=document.getElementById('conc-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)" style="flex:1;min-width:240px;margin:0">
       <button class="btn" style="font-size:12px" onclick="concExportar()">⬇ Exportar (CSV / Excel)</button>
     </div>
@@ -12808,8 +12821,8 @@ function renderConciliacion(){
               :t.estado==="ignorada"?`<span style="font-size:12px;color:#888">No es de un evento</span>`
               :`<select class="form-select" id="conc-sel-${t.id}" style="font-size:12px;padding:6px 8px;max-width:360px">
                   <option value="">— Elegir comprobante pendiente —</option>
-                  ${mejor?`<optgroup label="✓ Sugerido (coincide ${[(mejor.c.montos||[mejor.c.monto]).some(m=>m===t.monto)?"monto":"",concTokens(t.nombre).some(w=>concTokens(mejor.c.nombre).includes(w))?"nombre":"",t.rut&&mejor.c.rut&&normRut(t.rut)===normRut(mejor.c.rut)?"RUT":""].filter(Boolean).join(" + ")})">${opcion(mejor.c,true)}</optgroup>`:""}
-                  ${ranked.filter(r=>r!==mejor).length?`<optgroup label="Otros comprobantes pendientes">${ranked.filter(r=>r!==mejor).map(r=>opcion(r.c,false)).join("")}</optgroup>`:""}
+                  ${mejor?`<optgroup label="✓ Sugerido (coincide ${[(mejor.c.montos||[mejor.c.monto]).some(m=>m===t.monto)?"monto":"",concTokens(t.nombre).some(w=>concTokens(mejor.c.nombre).includes(w))?"nombre":"",t.rut&&mejor.c.rut&&normRut(t.rut)===normRut(mejor.c.rut)?"RUT":""].filter(Boolean).join(" + ")})">${opcion(mejor.c,true,true)}</optgroup>`:""}
+                  ${grupos.map(g=>{const its=g.items.filter(c=>!mejor||c.key!==mejor.c.key);return its.length?`<optgroup label="📅 ${concEvLabel(g).replace(/"/g,"&quot;")} (${its.length})">${its.map(c=>opcion(c,false,false)).join("")}</optgroup>`:"";}).join("")}
                 </select>${!cands.length?`<div style="font-size:11px;color:#999;margin-top:4px">No hay comprobantes esperando confirmación.</div>`:""}`}</td>
             <td style="white-space:nowrap">${conc||t.estado==="ignorada"?`<button class="btn" style="font-size:11px;padding:4px 8px" onclick="concDeshacer('${t.id}')">↩</button>`
               :`<button class="btn btn-success" style="font-size:11px;padding:5px 10px" onclick="concConfirmar('${t.id}')">✓ Confirmar pago</button>
@@ -12822,7 +12835,7 @@ function renderConciliacion(){
     <div class="card" style="margin-top:16px">
       <div class="sec-header"><div class="sec-title">📎 Comprobantes esperando confirmación (${cands.length})</div></div>
       ${cands.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Cliente</th><th>Qué pagó</th><th style="text-align:right">Monto</th><th>Comprobante</th><th>Transferencia</th></tr></thead><tbody>
-        ${cands.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")}
+        ${grupos.map(g=>`<tr><td colspan="5" style="background:#EEEDFE;font-weight:700;font-size:12px;color:#534AB7;padding:6px 12px">📅 ${concEvLabel(g)} · ${g.items.length} esperando · ${fmtM(g.items.reduce((a,c)=>a+(c.monto||0),0))}</td></tr>`+g.items.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")).join("")}
       </tbody></table></div>`:`<div style="font-size:13px;color:#999">Nadie está esperando confirmación de pago.</div>`}
     </div>`;
 }
