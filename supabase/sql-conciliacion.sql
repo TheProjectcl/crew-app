@@ -20,3 +20,6 @@ CREATE POLICY transferencias_anon ON transferencias FOR ALL TO anon USING (true)
 ALTER PUBLICATION supabase_realtime ADD TABLE transferencias;
 ALTER TABLE productoras ADD COLUMN IF NOT EXISTS pagos_alias TEXT;
 ALTER TABLE cf_ordenes ADD COLUMN IF NOT EXISTS transferencia_id TEXT;
+-- Filtro de destino: solo se guardan avisos dirigidos a la cuenta de la productora (nombre, RUT o nº de cuenta, separados por coma)
+ALTER TABLE productoras ADD COLUMN IF NOT EXISTS pagos_destino TEXT;
+-- ejemplo: UPDATE productoras SET pagos_destino='sociedad de profesionales, 77820659, 92686299' WHERE pagos_alias='theproject';

@@ -21,11 +21,11 @@ supabase functions deploy inbound-transferencias --no-verify-jwt
 En Conciliación de pagos › "Casilla de recepción" escribe el alias (ej. `theproject`). La casilla queda:
 `theproject@pagos.guestly.cl`
 
-## 5. Gmail (felipe@circlegroup.cl): reenviar solo los avisos del banco
+## 5. Gmail (fturub@gmail.com): reenviar solo los avisos de transferencias recibidas
 1. Ajustes › Reenvío y correo POP/IMAP › **Agregar dirección de reenvío** → `theproject@pagos.guestly.cl`.
    Gmail manda un correo de verificación a esa casilla: el código aparece en Guestly › Conciliación de pagos (fila gris "Gmail — verificación de reenvío"). Pégalo en Gmail.
-2. Crear filtro: `from:(santander.cl) subject:(transferencia OR abono OR depósito)` → acción **Reenviar a** `theproject@pagos.guestly.cl`.
-   Nada más de tu correo se reenvía.
+2. Crear filtro con **Contiene las palabras**: `transferencia (sociedad OR 92686299 OR "77.820.659-5" OR 778206595)` → acción **Reenviar a** `theproject@pagos.guestly.cl`.
+   Los avisos los manda el banco de quien paga (Santander, Bci, Falabella, Tenpo, MACH…), por eso el filtro es por contenido y no por remitente. La función descarta igual lo que no sea para la cuenta de la productora (`pagos_destino`) y las transferencias salientes.
 
 ## Prueba sin esperar un aviso real
 ```bash

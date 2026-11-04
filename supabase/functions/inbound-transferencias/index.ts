@@ -27,41 +27,83 @@ function htmlToText(html: string) {
     .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
 }
-function limpiarNombre(s: string) { return s.replace(/\s+/g, " ").replace(/[.,;:]+$/, "").trim(); }
+function limpiarNombre(s: string) { return s.replace(/\s+/g, " ").replace(/^[\s:|.,;-]+|[\s:|.,;-]+$/g, "").trim(); }
+const digitos = (s: string) => (s || "").replace(/\D/g, "");
 
-// Extrae los datos del aviso. Tolerante: si algo no se encuentra queda vacío y se corrige en Guestly.
-function parsear(texto: string, asunto: string) {
-  const t = texto.replace(/\r/g, "");
+// Banco emisor según la casilla que manda el aviso
+const BANCOS: [RegExp, string][] = [
+  [/santander/i, "Banco Santander"], [/bancochile|bchile/i, "Banco de Chile"], [/bci\.cl/i, "Bci"], [/falabella/i, "Banco Falabella"],
+  [/scotiabank/i, "Scotiabank"], [/tenpo/i, "Tenpo"], [/losandes/i, "TAPP Caja Los Andes"], [/bice/i, "Banco BICE"], [/consorcio/i, "Banco Consorcio"],
+  [/somosmach|\bmach\b/i, "MACH"], [/bancoestado/i, "BancoEstado"], [/itau/i, "Itaú"], [/security/i, "Banco Security"], [/ripley/i, "Banco Ripley"],
+  [/coopeuch/i, "Coopeuch"], [/mercadopago|mercadolibre/i, "Mercado Pago"], [/internacional/i, "Banco Internacional"],
+];
+const bancoDeRemitente = (from: string, texto: string) => { for (const [re, n] of BANCOS) if (re.test(from)) return n; const m = texto.match(/Banco de origen\s*[|:]*\s*([^|\n]+)/i); return m ? limpiarNombre(m[1]) : ""; };
+
+// ¿El aviso es de una transferencia que YO hice (saliente)? → no se concilia
+function esSaliente(t: string) {
+  return /Te enviamos el detalle de la transferencia realizada/i.test(t) && /Datos de origen/i.test(t)
+    || /ha realizado una transferencia[\s\S]{0,200}Enviamos a usted el detalle/i.test(t)
+    || /transferencia (?:enviada|realizada) con [eé]xito/i.test(t) && !/recibid/i.test(t);
+}
+// ¿El aviso es para la cuenta de la productora? tokens: nombres, RUT o cuentas (se comparan sin puntos/guiones)
+function esParaDestino(t: string, tokens: string[]) {
+  if (!tokens.length) return true;
+  const txt = t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const num = t.replace(/[\s.\-]/g, "");
+  return tokens.some((tok) => { const k = tok.trim().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, ""); if (!k) return false; return /^\d+$/.test(k.replace(/[.\-\s]/g, "")) ? num.includes(k.replace(/[.\-\s]/g, "")) : txt.includes(k); });
+}
+
+// Extrae los datos del aviso (formatos reales de los bancos chilenos). Lo que no se encuentra queda vacío y se corrige en Guestly.
+function parsear(texto: string, asunto: string, from: string, destinoTokens: string[]) {
+  const t = texto.replace(/\r/g, "").replace(/[ \t]+/g, " ");
   const todo = asunto + "\n" + t;
   const out: Record<string, string | number | null> = { monto: null, nombre: "", rut: "", banco: "", email: "", comentario: "", cuenta_destino: "", fecha: null };
-  // Monto: primer "$ 25.000" o "$25.000,00"
-  const mm = todo.match(/\$\s?([\d]{1,3}(?:\.[\d]{3})+|[\d]+)(?:,\d{2})?/);
-  if (mm) out.monto = parseInt(mm[1].replace(/\./g, ""), 10);
-  // RUT
-  const mr = todo.match(/(\d{1,2}\.?\d{3}\.?\d{3}\s?-\s?[\dkK])/);
-  if (mr) out.rut = mr[1].replace(/\s/g, "").toUpperCase();
-  // Nombre: varios formatos de Santander / otros bancos
-  const pats = [
-    /(?:transferencia|dep[oó]sito|abono)\s+(?:recibid[oa]\s+)?(?:de|desde)\s+(?:la cuenta de\s+)?([A-ZÁÉÍÓÚÑa-záéíóúñ' ]{4,60}?)(?=\s+(?:RUT|Rut|rut|por|con|,|\.|\n|desde|al|a su))/,
-    /(?:Nombre|Titular|Origen|Remitente|De)\s*[:：]\s*([A-ZÁÉÍÓÚÑa-záéíóúñ' ]{4,60})/,
-    /([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑa-záéíóúñ' ]{3,60})\s+(?:RUT|Rut)\s*[:：]?\s*\d/,
+  // ── Quién transfirió ──
+  const pats: RegExp[] = [
+    /nuestro\(?a?\)?\s+cliente(?:\s+el\s+Sr\(a\))?\s+([^\n|]+?)\s+(?:realiz[oó]|ha efectuado|ha instruido|ha realizado|hoy\b)/i,          // Santander, Bco Chile, Falabella, Scotia
+    /transferencia de fondos de\s+([^\n|]+?)\s+hacia/i,                                                                                   // BCI
+    /La transferencia de\s+([^\n|]+?)\s+por\s+\$/i,                                                                                       // Tenpo
+    /informamos que\s+([^\n|]+?)\s+ha enviado una transferencia/i,                                                                        // Caja Los Andes
+    /por parte de:\s*([^\n|,]+)/i,                                                                                                        // Consorcio
+    /transferencia de\s+([^\n|]+?)\s+sin costo desde/i,                                                                                   // MACH
+    /Recibiste una transferencia de\s+([^\n|]+)/i,                                                                                        // MACH (asunto)
+    /Cuenta de origen[\s|]*Nombre\s*\|?\s*([^|\n]+)/i,                                                                                    // BICE
+    /Datos originador[\s\S]{0,80}?Nombre:\s*\|?\s*([^|\n]+)/i,                                                                            // Consorcio (tabla)
+    /has recibido una transferencia(?: de fondos)? (?:de|desde|por parte de)\s+([^\n|,]+)/i,
+    /(?:Nombre|Titular)(?: de)? (?:origen|ordenante|emisor|remitente)(?:\s*[:|])*\s*([^|\n]+)/i,
   ];
-  for (const p of pats) { const m = todo.match(p); if (m) { out.nombre = limpiarNombre(m[1]); break; } }
-  // Banco de origen
-  const mb = todo.match(/Banco(?:\s+de\s+origen|\s+origen)?\s*[:：]?\s*((?:Banco\s+)?[A-ZÁÉÍÓÚÑa-záéíóúñ]+(?:\s+(?:de|del)\s+[A-ZÁÉÍÓÚÑa-záéíóúñ]+|\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+)*)/);
-  if (mb) out.banco = limpiarNombre(mb[1].replace(/\s+(?:Fecha|Monto|Nombre|RUT|Rut|Mensaje|Comentario|Glosa|Cuenta|el|la|a)$/i, ""));
-  // Correo del emisor (excluye casillas del banco y de guestly)
+  for (const p of pats) { const m = todo.match(p); if (m) { const n = limpiarNombre(m[1]); if (n.length >= 3 && !/^\$|sin costo/i.test(n)) { out.nombre = n; break; } } }
+  // ── Monto (prefiere el etiquetado; si no, el primer $) ──
+  const mm = todo.match(/(?:Monto(?:\s+(?:recibido|transferido|transferencia|Transacci[oó]n))?|por el monto)(?:\s*[:|])*\s*\$?\s*([\d]{1,3}(?:\.[\d]{3})+|[\d]{4,})/i)
+    || todo.match(/\$\s?([\d]{1,3}(?:\.[\d]{3})+|[\d]{4,})/);
+  if (mm) out.monto = parseInt(mm[1].replace(/\./g, ""), 10);
+  // ── RUT del que transfirió: el primero que NO sea de la productora ──
+  const destNum = destinoTokens.map((k) => k.replace(/[.\-\s]/g, "")).filter((k) => /^\d+$/.test(k));
+  const ruts = [...todo.matchAll(/(\d{1,2}\.?\d{3}\.?\d{3})\s?-\s?([\dkK])\b|\bRut:?\s*\|?\s*(\d{7,8})([\dkK])\b/gi)].map((m) => (m[1] ? m[1].replace(/\./g, "") + "-" + m[2] : m[3] + "-" + m[4]).toUpperCase());
+  const orig = todo.match(/Datos originador[\s\S]{0,200}?Rut:\s*\|?\s*(\d{7,9}[\dkK]?)/i);
+  if (orig) { const d = orig[1]; out.rut = d.length >= 8 ? d.slice(0, -1) + "-" + d.slice(-1) : d; }
+  else { const r = ruts.find((x) => !destNum.some((k) => x.replace(/[-]/g, "").startsWith(k) || k.startsWith(x.replace(/[-]/g, "")))); if (r) out.rut = r; }
+  // ── Banco emisor ──
+  out.banco = bancoDeRemitente(from, todo);
+  // ── Correo del emisor (si el banco lo incluye y no es el nuestro) ──
   const emails = (todo.match(/[\w.+-]+@[\w-]+\.[\w.-]+/g) || []).map((e) => e.toLowerCase());
-  out.email = emails.find((e) => !/santander|bancoestado|bci\.|itau|scotiabank|bancochile|falabella|guestly|resend|noreply|no-reply/.test(e)) || "";
-  // Comentario / mensaje / glosa
-  const mc = todo.match(/(?:Comentario|Mensaje|Glosa|Asunto|Motivo)\s*[:：]\s*([^\n]{1,120})/i);
-  if (mc) out.comentario = limpiarNombre(mc[1]);
-  // Cuenta destino (últimos dígitos)
-  const md = todo.match(/cuenta(?:\s+(?:corriente|vista|destino))?(?:\s+(?:n[úu]mero|N[°º]\.?|nro\.?))?\s*[:：]?\s*[*xX•·]*\s?(\d{3,})/i);
-  if (md) out.cuenta_destino = md[1].slice(-4);
-  // Fecha dd-mm-aaaa hh:mm
-  const mf = todo.match(/(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
-  if (mf) { const [_, d, m, y, hh, mi] = mf; out.fecha = `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}T${(hh || "12").padStart(2, "0")}:${mi || "00"}:00-03:00`; }
+  out.email = emails.find((e) => !/santander|bancochile|bci|itau|scotiabank|falabella|bice|consorcio|tenpo|mach|losandes|bancoestado|guestly|resend|noreply|no-reply|no\.reply|fturub|circlegroup|taskpro/.test(e)) || "";
+  // ── Mensaje / comentario / asunto del pago ──
+  const mc = [...todo.matchAll(/(?:Comentario|Mensaje|Asunto|Glosa|Motivo)(?:\s*[:|])*\s*([^|\n]*)/gi)].map((m) => limpiarNombre(m[1]).replace(/\s*(?:C[oó]digo de transacci[oó]n|Hora|Fecha|N[°º] de Transacci[oó]n).*$/i, "")).filter((v) => v && !/^sin mensaje$|^transferencia realizada$|^:?$/i.test(v));
+  if (mc.length) out.comentario = mc[0].slice(0, 160);
+  // ── Cuenta de destino (últimos 4) ──
+  const md = todo.match(/(?:Cuenta(?: de)? destino|N[úu]mero de cuenta|N[°º] de cuenta|Nº cuenta de destino|cuenta Nro\.?|Cuenta Corriente|tu cuenta N°)(?:\s*[:|])*\s*(?:Cuenta (?:Corriente|Vista)\s*)?([\d][\d.\- ]{5,})/i);
+  if (md) out.cuenta_destino = digitos(md[1]).slice(-4);
+  // ── Fecha y hora ──
+  let fecha: string | null = null;
+  const f1 = todo.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:\D{1,12}(\d{1,2}):(\d{2}))?/);           // dd/mm/yyyy [hh:mm]
+  const f2 = todo.match(/(\d{4})-(\d{2})-(\d{2})/);                                                        // yyyy-mm-dd
+  const f3 = todo.match(/(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)[a-z]*\.?\s+(\d{4})(?:\s*-\s*(\d{1,2}):(\d{2}))?/i); // 23 oct 2026 - 14:13
+  const hm = todo.match(/\bHora(?:\s*[:|])*\s*(\d{1,2}):(\d{2})/i);
+  if (f1) fecha = `${f1[3]}-${f1[2].padStart(2, "0")}-${f1[1].padStart(2, "0")}T${(f1[4] || hm?.[1] || "12").padStart(2, "0")}:${f1[5] || hm?.[2] || "00"}:00-03:00`;
+  else if (f3) { const mes = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"].indexOf(f3[2].toLowerCase().slice(0, 3)) + 1; fecha = `${f3[3]}-${String(mes).padStart(2, "0")}-${f3[1].padStart(2, "0")}T${(f3[4] || "12").padStart(2, "0")}:${f3[5] || "00"}:00-03:00`; }
+  else if (f2) fecha = `${f2[1]}-${f2[2]}-${f2[3]}T${(hm?.[1] || "12").padStart(2, "0")}:${hm?.[2] || "00"}:00-03:00`;
+  out.fecha = fecha;
   return out;
 }
 
@@ -90,17 +132,19 @@ Deno.serve(async (req) => {
   let alias = "";
   for (const d of to) { const m = String(d).toLowerCase().match(/^(?:pagos\+)?([a-z0-9._-]+)@/); if (m && m[1] !== "pagos") { alias = m[1]; break; } }
   const hdr = { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, "Content-Type": "application/json", Prefer: "return=representation" };
-  let productora_id: string | null = null;
-  if (alias) { const r = await fetch(`${SB_URL}/rest/v1/productoras?pagos_alias=eq.${encodeURIComponent(alias)}&select=id`, { headers: hdr }); const a = await r.json(); productora_id = a?.[0]?.id || null; }
-  if (!productora_id) { const r = await fetch(`${SB_URL}/rest/v1/productoras?select=id&limit=2`, { headers: hdr }); const a = await r.json(); if (a?.length === 1) productora_id = a[0].id; }
+  let productora_id: string | null = null, destinoTokens: string[] = [];
+  if (alias) { const r = await fetch(`${SB_URL}/rest/v1/productoras?pagos_alias=eq.${encodeURIComponent(alias)}&select=id,pagos_destino`, { headers: hdr }); const a = await r.json(); productora_id = a?.[0]?.id || null; destinoTokens = String(a?.[0]?.pagos_destino || "").split(/[,;\n]/).map((x: string) => x.trim()).filter(Boolean); }
+  if (!productora_id) { const r = await fetch(`${SB_URL}/rest/v1/productoras?select=id,pagos_destino&limit=2`, { headers: hdr }); const a = await r.json(); if (a?.length === 1) { productora_id = a[0].id; destinoTokens = String(a[0].pagos_destino || "").split(/[,;\n]/).map((x: string) => x.trim()).filter(Boolean); } }
 
   // Correo de verificación de reenvío de Gmail: se guarda como "sistema" para leer el código desde Guestly
   const esVerificacion = /confirmaci[oó]n de reenv[ií]o|forwarding confirmation|código de confirmación|confirmation code/i.test(subject + " " + texto);
   const esTransferencia = /transferencia|dep[oó]sito|abono|te han transferido|has recibido/i.test(todo);
-  const esSaliente = /has (?:realizado|enviado|efectuado)|transferencia (?:enviada|realizada|efectuada)|enviaste|realizaste/i.test(todo) && !/recibid|te han transferido|has recibido/i.test(todo);
-  if (!esVerificacion && (!esTransferencia || esSaliente)) return json({ ok: true, skipped: esSaliente ? "saliente" : "no es aviso de transferencia" });
-
-  const p = esVerificacion ? { monto: null, nombre: "Gmail — verificación de reenvío", rut: "", banco: "", email: "", comentario: (texto.match(/\b\d{6,9}\b/) || [""])[0], cuenta_destino: "", fecha: null } : parsear(texto, subject);
+  if (!esVerificacion) {
+    if (!esTransferencia) return json({ ok: true, skipped: "no es aviso de transferencia" });
+    if (esSaliente(subject + "\n" + texto)) return json({ ok: true, skipped: "transferencia saliente (la hiciste tú)" });
+    if (!esParaDestino(subject + "\n" + texto, destinoTokens)) return json({ ok: true, skipped: "no es para la cuenta de la productora" });
+  }
+  const p = esVerificacion ? { monto: null, nombre: "Gmail — verificación de reenvío", rut: "", banco: "", email: "", comentario: (texto.match(/\b\d{6,9}\b/) || [""])[0], cuenta_destino: "", fecha: null } : parsear(texto, subject, from, destinoTokens);
   const row = {
     id: crypto.randomUUID(), productora_id, email_id, asunto: subject.slice(0, 200), remitente: from.slice(0, 200),
     fecha: p.fecha || received_at, monto: p.monto, nombre: p.nombre, rut: p.rut, banco: p.banco, email: p.email, comentario: p.comentario, cuenta_destino: p.cuenta_destino,
