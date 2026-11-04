@@ -12849,7 +12849,7 @@ function concBloqueConfig(prod,casilla,sistema,todas){
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px">
         <div>
-          <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:4px">Tu casilla Guestly</div>
+          <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:4px">Tu casilla Guestly <span style="font-weight:400;color:#888">(no hay que crear ningún correo, se activa al guardar)</span></div>
           <div style="display:flex;gap:6px;align-items:center">
             <input class="form-input" id="conc-alias" placeholder="alias (ej: theproject)" value="${(prod?.pagos_alias||"").replace(/"/g,"&quot;")}" style="width:150px;font-size:12px;margin:0" ${dis}>
             <span style="font-size:12px;color:#555">@${CONC_DOMINIO}</span>
@@ -12890,7 +12890,7 @@ function concGuiaCorreo(){
   const code=t=>`<code style="background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:12px">${t}</code>`;
   openModal("📬 Cómo configurar tu correo",`<div>
     <div style="font-size:12px;color:#666;margin-bottom:18px">Tu banco te manda un correo por cada transferencia que recibes. Con esto, ese correo se reenvía solo a Guestly y la transferencia aparece en Conciliación de pagos lista para asignarla. Toma unos 5 minutos y se hace una sola vez.</div>
-    ${paso(1,"Crea tu casilla Guestly",`En esta pantalla, en <strong>Tu casilla Guestly</strong>, escribe un alias corto (ej: el nombre de tu productora, sin espacios) y aprieta <strong>Guardar</strong>. Tu casilla queda así: ${code(casilla)}`)}
+    ${paso(1,"Crea tu casilla Guestly",`En esta pantalla, en <strong>Tu casilla Guestly</strong>, escribe un alias corto (ej: el nombre de tu productora, sin espacios) y aprieta <strong>Guardar</strong>. Tu casilla queda así: ${code(casilla)}<br><span style="color:#166534">👉 No tienes que crear ningún correo nuevo: esta casilla es solo una dirección de Guestly que existe apenas guardas el alias. No tiene bandeja ni clave; lo que llega ahí aparece directo en esta pantalla.</span>`)}
     ${paso(2,"Indica la cuenta donde recibes los pagos",`En <strong>Cuenta donde recibes los pagos</strong> escribe el titular (basta el inicio del nombre, ej: <em>Sociedad de Profesionales</em>), el RUT y el N° de cuenta, y aprieta <strong>Guardar</strong>.<br>Así Guestly guarda solo los avisos de esa cuenta y descarta los de tus cuentas personales u otras empresas.`)}
     ${paso(3,"Agrega la casilla en Gmail",`Entra al correo donde te llegan los avisos del banco → ⚙️ <strong>Ver todos los ajustes</strong> → pestaña <strong>Reenvío y correo POP/IMAP</strong> → <strong>Añadir una dirección de reenvío</strong> → pega ${code(casilla)} → <strong>Siguiente</strong> → <strong>Continuar</strong>.`)}
     ${paso(4,"Verifica con el código",`Google manda un código a tu casilla Guestly. En 1 minuto aparece <strong>en esta pantalla</strong> como 🔑 <em>Gmail — verificación de reenvío · código: 123456</em> (aprieta ↻ Actualizar si no lo ves).<br>Vuelve a Gmail → <strong>Reenvío y correo POP/IMAP</strong> → haz clic en el link <strong>Verificar</strong> → escribe el código → <strong>Verificar</strong>.<br><span style="color:#b45309">Deja marcado “Inhabilitar el reenvío”: no queremos reenviar todo tu correo, solo los avisos (paso 5).</span>`)}
