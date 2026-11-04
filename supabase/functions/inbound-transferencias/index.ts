@@ -55,12 +55,21 @@ function esParaDestino(t: string, tokens: string[]) {
 
 // Extrae los datos del aviso (formatos reales de los bancos chilenos). Lo que no se encuentra queda vacío y se corrige en Guestly.
 function parsear(texto: string, asunto: string, from: string, destinoTokens: string[]) {
-  const t = texto.replace(/\r/g, "").replace(/[ \t]+/g, " ");
+  let t = texto.replace(/\r/g, "").replace(/[ \t]+/g, " ");
+  // Reenviado a mano ("---------- Forwarded message / Mensaje reenviado ----------"): el banco real está en el De:/From: del encabezado,
+  // y ese encabezado (Date/Subject/Asunto/To…) se quita para que no se confunda con los datos del aviso.
+  const fwd = t.match(/-{3,}\s*(?:Forwarded message|Mensaje reenviado)\s*-{3,}\s*\n((?:\s*(?:De|From|Date|Fecha|Subject|Asunto|To|Para|Cc)\s*:[^\n]*\n)+)/i);
+  if (fwd) {
+    const de = fwd[1].match(/(?:De|From)\s*:[^\n]*?([\w.+-]+@[\w-]+\.[\w.-]+)/i);
+    if (de) from = de[1];
+    t = t.replace(fwd[0], "\n");
+  }
+  asunto = asunto.replace(/^\s*(?:(?:fwd?|rv|re|reenv)\s*:\s*)+/i, "");
   const todo = asunto + "\n" + t;
   const out: Record<string, string | number | null> = { monto: null, nombre: "", rut: "", banco: "", email: "", comentario: "", cuenta_destino: "", fecha: null };
   // ── Quién transfirió ──
   const pats: RegExp[] = [
-    /nuestro\(?a?\)?\s+cliente(?:\s+el\s+Sr\(a\))?\s+([^\n|]+?)\s+(?:realiz[oó]|ha efectuado|ha instruido|ha realizado|hoy\b)/i,          // Santander, Bco Chile, Falabella, Scotia
+    /nuestro\(?a?\)?\s+cliente(?:\s+el\s+Sr\(a\))?\s+([^|]{3,90}?)\s+(?:realiz[oó]|ha efectuado|ha instruido|ha realizado|hoy\b)/i,         // Santander, Bco Chile, Falabella, Scotia
     /transferencia de fondos de\s+([^\n|]+?)\s+hacia/i,                                                                                   // BCI
     /La transferencia de\s+([^\n|]+?)\s+por\s+\$/i,                                                                                       // Tenpo
     /informamos que\s+([^\n|]+?)\s+ha enviado una transferencia/i,                                                                        // Caja Los Andes
