@@ -432,6 +432,7 @@ function iniciarRealtime(){
   if(realtimeChannel){try{sbClient.removeChannel(realtimeChannel);}catch(e){}}
   realtimeChannel=sbClient.channel("crew-operacion")
     .on("postgres_changes",{event:"*",schema:"public",table:"acc_entries"},aplicarCambioRealtime)
+    .on("postgres_changes",{event:"*",schema:"public",table:"transferencias"},()=>{if(CURRENT_VIEW==="conciliacion"&&typeof VIEWS.conciliacion==="function")VIEWS.conciliacion();})
     .on("postgres_changes",{event:"*",schema:"public",table:"vip_tables"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"acc_lists"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"capacity_log"},aplicarCambioRealtime)
@@ -4843,6 +4844,13 @@ async function confirmarPagoLotePulseras(mesaId,loteId){
   const lote=(m.solicitudes_pulseras||[]).find(l=>l.id===loteId);if(!lote)return;
   const aprobadas=(lote.personas||[]).filter(p=>p.estado==="aprobada").length;
   if(!confirm(`Confirmar pago de ${fmtM(lote.precio_total||0)} por ${aprobadas} pulsera(s) extra.\n\nLas personas aprobadas quedarán acreditables en puerta.`))return;
+  await confirmarPagoLotePulserasCore(mesaId,loteId);
+  openDetallesMesa(mesaId,"perfiles");
+}
+async function confirmarPagoLotePulserasCore(mesaId,loteId){
+  const m=D.vip_tables.find(m=>m.id===mesaId);if(!m)return;
+  const lote=(m.solicitudes_pulseras||[]).find(l=>l.id===loteId);if(!lote)return;
+  const aprobadas=(lote.personas||[]).filter(p=>p.estado==="aprobada").length;
   lote.estado="pagado";
   lote.paid_at=now();
   lote.paid_confirmed_by=CU.id;
@@ -4851,7 +4859,6 @@ async function confirmarPagoLotePulseras(mesaId,loteId){
     await log("pago_pulseras_confirmado","vip_table",mesaId,`${aprobadas} pulseras pagadas por ${fmtM(lote.precio_total||0)}`);
     toast(`✓ Pago confirmado — ${aprobadas} pulsera(s) acreditadas`,"success");
   }catch(e){toast("Error: "+e.message,"error");}
-  openDetallesMesa(mesaId,"perfiles");
 }
 
 async function rechazarComprobanteLote(mesaId,loteId){
@@ -4935,6 +4942,10 @@ async function aprobarPerfilesMesa(mesaId){
   closeModal();toast("✓ Mesa completa y aprobada — email enviado al comprador","success");VIEWS.vip();
 }
 async function confirmarPagoMesa(mesaId){
+  await confirmarPagoMesaCore(mesaId);
+  closeModal();toast("✅ Mesa cerrada — email enviado al comprador","success");VIEWS.vip();
+}
+async function confirmarPagoMesaCore(mesaId){
   const m=D.vip_tables.find(m=>m.id===mesaId);if(!m)return;
   const comprador=D.users.find(u=>u.id===m.comprador_id);
   const ev=D.eventos.find(e=>e.id===m.event_id);
@@ -4957,7 +4968,6 @@ async function confirmarPagoMesa(mesaId){
       );
     }
   }catch(e){toast("Error: "+e.message,"error");}
-  closeModal();toast("✅ Mesa cerrada — email enviado al comprador","success");VIEWS.vip();
 }
 
 // ── Registrar pago (manual + IA) ──
@@ -9307,6 +9317,12 @@ buildSidebar = function(){
       <div class="nav-item" data-v="cf-config" onclick="goView('cf-config')">${NAV_ICONS["settings"]||""}<span>Config CF</span></div>`;
     nav.appendChild(cfSection);
   }
+  if(["superadmin","owner","coordinator","cashier"].includes(role)){
+    const pagos=document.createElement("div");
+    pagos.innerHTML=`<div class="nav-sec">Pagos</div>
+      <div class="nav-item" data-v="conciliacion" onclick="goView('conciliacion')">${NAV_ICONS["card"]||""}<span>Conciliación de pagos</span></div>`;
+    nav.appendChild(pagos);
+  }
 };
 
 // ── Auto-refresh CF cada 30 segundos — SIN re-renderizar la página completa ──
@@ -10153,28 +10169,11 @@ VIEWS.cfConciliacion = async()=>{
 
   window.cfConciliar=async(ordenId)=>{
     const _o=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
-    if(_o&&!_o.comprobante_url&&!confirm("⚠ Esta orden NO tiene comprobante de pago subido.\n\nSi la confirmas, la persona quedará como pagada y su link dirá \"pago confirmado\" sin haber comprobado el pago.\n\n¿Confirmar igual?"))return;
+    if(_o&&!_o.comprobante_url&&!confirm("⚠ Esta orden NO tiene comprobante de pago subido.\n\nSi la confirmas, la persona quedará como pagada y su link dirá \"pago confirmado\" sin haber comprobante.\n\n¿Confirmar igual?"))return;
     const btn=document.querySelector(`button[onclick="cfConciliar('${ordenId}')"]`);
     if(btn){btn.disabled=true;btn.textContent="Conciliando...";}
     try{
-      const isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
-      const r=await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:isUuid(CU.id)?CU.id:null,conciliado_at:new Date().toISOString()});
-      if(r&&r.error) throw new Error(r.error.message||JSON.stringify(r.error));
-      const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
-      if(ord){ ord.estado="conciliado";
-        // Enviar confirmación
-        const post=(D.cf_postulantes||[]).find(p=>p.id===ord.postulante_id);
-        const ev=D.eventos.find(e=>e.id===ord.evento_id);
-        if(post&&ev){
-          const cfg=getCFConfig(ord.evento_id);
-          let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
-          await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
-          toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
-        } else {
-          toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
-        }
-      }
-      await log("cf_conciliar","cf_ordenes",ordenId,`Orden conciliada: ${ord?.codigo}`);
+      await cfConciliarCore(ordenId);
       await new Promise(r=>setTimeout(r,600));
       VIEWS.cfConciliacion();
     }catch(e){
@@ -10183,6 +10182,27 @@ VIEWS.cfConciliacion = async()=>{
     }
   };
 };
+// Núcleo de la conciliación CF (lo usan la vista de Close Friends y Conciliación de pagos)
+async function cfConciliarCore(ordenId,extraPatch){
+      const isUuid=v=>/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v);
+  const r=await sbPatch("cf_ordenes",`id=eq.${ordenId}`,{estado:"conciliado",conciliado_por:isUuid(CU.id)?CU.id:null,conciliado_at:new Date().toISOString(),...(extraPatch||{})});
+  if(r&&r.error) throw new Error(r.error.message||JSON.stringify(r.error));
+  const ord=(D.cf_ordenes||[]).find(o=>o.id===ordenId);
+  if(ord){ ord.estado="conciliado";
+    // Enviar confirmación
+    const post=(D.cf_postulantes||[]).find(p=>p.id===ord.postulante_id);
+    const ev=D.eventos.find(e=>e.id===ord.evento_id);
+    if(post&&ev){
+      const cfg=getCFConfig(ord.evento_id);
+      let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
+      await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
+      toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
+    } else {
+      toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
+    }
+  }
+  await log("cf_conciliar","cf_ordenes",ordenId,`Orden conciliada: ${ord?.codigo}`);
+}
 
 function renderConcPendientes(prodId,evId){
   const pend=(D.cf_ordenes||[]).filter(o=>(prodId===null||o.productora_id===prodId)&&(!evId||o.evento_id===evId)&&(o.estado==="pagado"||o.estado==="pendiente")&&o.comprobante_url);
@@ -12678,6 +12698,230 @@ window.embRechazarPost=async(id)=>{
 window.embReabrirPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p)return;await sbPatch("emb_postulantes",`id=eq.${id}`,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});Object.assign(p,{estado:"pendiente",motivo_rechazo:null,resuelto_at:null});VIEWS["emb-postulaciones"]();};
 window.embEliminarPost=async(id)=>{const p=(D.emb_postulantes||[]).find(x=>x.id===id);if(!p||!confirm(`¿Eliminar la postulación de ${p.nombre} ${p.apellido}?`))return;await sbDelete("emb_postulantes",`id=eq.${id}`);D.emb_postulantes=D.emb_postulantes.filter(x=>x.id!==id);toast("Eliminada");VIEWS["emb-postulaciones"]();};
 
+
+
+// ═══════════════════════════════════════════════════════════════
+// CONCILIACIÓN DE PAGOS — transferencias recibidas (correo del banco / cartola / manual)
+// cruzadas con los comprobantes que suben los clientes (Close Friends, mesas VIP, pulseras extra)
+// ═══════════════════════════════════════════════════════════════
+const CONC_DOMINIO="pagos.guestly.cl";
+let _concFiltro="pendiente",_concQ="",_concTimer=null;
+async function loadTransferencias(prodId){
+  try{D.transferencias=await sbGet("transferencias",(prodId?`productora_id=eq.${prodId}&`:"")+"order=fecha.desc.nullslast,created_at.desc");}
+  catch(e){D.transferencias=D.transferencias||[];if(/transferencias/.test(e.message||"")&&/does not exist|42P01/.test(e.message||""))toast("Falta crear la tabla transferencias (supabase/sql-conciliacion.sql)","error");}
+}
+// Normaliza nombres para comparar: minúsculas, sin tildes, sin palabras cortas
+const concTokens=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>=3&&!["del","los","las","con","para","por","transferencia","pago","abono"].includes(w));
+// Candidatos: todo lo que está esperando confirmación de pago en la productora
+function concCandidatos(prodId){
+  const evIds=new Set((D.eventos||[]).filter(e=>!prodId||e.productora_id===prodId).map(e=>e.id));
+  const evN=id=>(D.eventos||[]).find(e=>e.id===id)?.name||"";
+  const out=[];
+  (D.cf_ordenes||[]).filter(o=>evIds.has(o.evento_id)&&o.estado==="pagado"&&o.comprobante_url).forEach(o=>{
+    const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};
+    out.push({key:`cf:${o.id}`,tipo:"cf",id:o.id,icono:"🌸",nombre:`${p.nombre||""} ${p.apellido||""}`.trim(),rut:p.rut||"",email:p.email||"",monto:o.monto_total||0,evento:evN(o.evento_id),fecha:o.comprobante_at||o.updated_at||o.created_at||"",comprobante:o.comprobante_url,detalle:`${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""} · ${o.codigo||""}`});
+  });
+  (D.vip_tables||[]).filter(m=>evIds.has(m.event_id)).forEach(m=>{
+    const comp=(D.users||[]).find(u=>u.id===m.comprador_id);
+    if(m.estado_reserva==="comprobante"){
+      const saldo=Math.max((m.price||0)-(m.amount_paid||0),0);
+      out.push({key:`mesa:${m.id}`,tipo:"mesa",id:m.id,icono:"🍾",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:saldo||m.deposit_50||m.price||0,montos:[saldo,m.deposit_50,m.price].filter(Boolean),evento:evN(m.event_id),fecha:m.comprobante_at||"",comprobante:m.comprobante_pago,detalle:`Mesa ${m.table_num}${m.section?" · "+m.section:""} · saldo ${fmtM(saldo)} de ${fmtM(m.price||0)}`,saldo,precio:m.price||0});
+    }
+    (m.solicitudes_pulseras||[]).filter(l=>l.estado==="comprobante").forEach(l=>{
+      out.push({key:`lote:${m.id}:${l.id}`,tipo:"lote",id:m.id,loteId:l.id,icono:"🎟",nombre:comp?.name||`Mesa ${m.table_num}`,rut:comp?.rut||"",email:comp?.email||"",monto:l.precio_total||0,evento:evN(m.event_id),fecha:l.comprobante_at||"",comprobante:l.comprobante,detalle:`${(l.personas||[]).filter(p=>p.estado==="aprobada").length} pulsera(s) extra · Mesa ${m.table_num}`});
+    });
+  });
+  return out;
+}
+// Puntaje de coincidencia transferencia ↔ candidato
+function concScore(t,c){
+  let s=0;
+  const montos=c.montos||[c.monto];
+  if(t.monto&&montos.some(m=>m&&Math.abs(t.monto-m)<1))s+=3;
+  else if(t.monto&&montos.some(m=>m&&Math.abs(t.monto-m)<=Math.max(1000,m*0.02)))s+=1;
+  if(t.rut&&c.rut&&normRut(t.rut)===normRut(c.rut))s+=5;
+  if(t.email&&c.email&&t.email.toLowerCase()===c.email.toLowerCase())s+=4;
+  const a=concTokens(t.nombre),b=concTokens(c.nombre);
+  const comunes=a.filter(w=>b.includes(w)).length;
+  if(comunes>=2)s+=3;else if(comunes===1)s+=1;
+  const cm=concTokens(t.comentario);if(cm.some(w=>b.includes(w)))s+=1;
+  return s;
+}
+VIEWS.conciliacion=async()=>{
+  const mc=$("main-content");if(!mc)return;
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  mc.innerHTML=`<div class="page-title">💳 Conciliación de pagos</div><div style="color:#888;font-size:13px">Cargando transferencias y comprobantes…</div>`;
+  if(!D._cfLoaded)await loadCF(prodId).catch(()=>{});
+  await loadTransferencias(prodId);
+  renderConciliacion();
+  clearInterval(_concTimer);
+  _concTimer=setInterval(async()=>{if(CURRENT_VIEW!=="conciliacion"){clearInterval(_concTimer);return;}const antes=(D.transferencias||[]).length;await loadTransferencias(prodId);if((D.transferencias||[]).length!==antes)renderConciliacion();},45000);
+};
+function renderConciliacion(){
+  const mc=$("main-content");if(!mc)return;
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const prod=(D.productoras||[]).find(p=>p.id===prodId);
+  const cands=concCandidatos(prodId);
+  const todas=(D.transferencias||[]).filter(t=>t.estado!=="sistema");
+  const sistema=(D.transferencias||[]).filter(t=>t.estado==="sistema");
+  const cnt=e=>todas.filter(t=>t.estado===e).length;
+  const nq=acrNorm(_concQ||"");
+  let lista=todas.filter(t=>_concFiltro==="todas"||t.estado===_concFiltro);
+  if(nq)lista=lista.filter(t=>[t.nombre,t.rut,t.email,t.comentario,t.banco,String(t.monto||"")].some(v=>acrNorm(v||"").includes(nq)));
+  // Candidatos que ya tienen alguna transferencia pendiente que calce (para marcar los comprobantes "sin transferencia")
+  const pend=todas.filter(t=>t.estado==="pendiente");
+  const candConMatch=new Set();cands.forEach(c=>{if(pend.some(t=>concScore(t,c)>=3))candConMatch.add(c.key);});
+  const casilla=prod?.pagos_alias?`${prod.pagos_alias}@${CONC_DOMINIO}`:"";
+  const opcion=(c,sel)=>`<option value="${c.key}" ${sel?"selected":""}>${c.icono} ${c.nombre} · ${c.evento} · ${fmtM(c.monto)}${c.fecha?" · comp. "+fmtDT(c.fecha):""}</option>`;
+  mc.innerHTML=`
+    <div class="sec-header"><div class="page-title">💳 Conciliación de pagos</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="concAgregarManual()">+ Transferencia a mano</button>
+        <button class="btn" onclick="VIEWS.conciliacion()">↻ Actualizar</button>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="pendiente"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='pendiente';renderConciliacion()"><div style="font-size:11px;color:#999">Transferencias por conciliar</div><div style="font-size:22px;font-weight:700;color:#b45309">${cnt("pendiente")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="conciliada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='conciliada';renderConciliacion()"><div style="font-size:11px;color:#999">Conciliadas</div><div style="font-size:22px;font-weight:700;color:#166534">${cnt("conciliada")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="ignorada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='ignorada';renderConciliacion()"><div style="font-size:11px;color:#999">No son de eventos</div><div style="font-size:22px;font-weight:700;color:#888">${cnt("ignorada")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>
+      <div class="card-sm"><div style="font-size:11px;color:#999">Comprobantes esperando pago</div><div style="font-size:22px;font-weight:700;color:#534AB7">${cands.length}</div><div style="font-size:10px;color:${cands.length-candConMatch.size?"#991B1B":"#888"}">${cands.length-candConMatch.size} sin transferencia que calce</div></div>
+    </div>
+    <div class="card" style="margin-bottom:14px;background:#f8fafc;border-left:4px solid #534AB7;padding:12px 16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px">
+          <div style="font-size:12px;font-weight:700">📬 Casilla de recepción de avisos del banco</div>
+          <div style="font-size:11px;color:#666;margin-top:2px">Crea en tu Gmail un filtro <em>de: santander.cl</em> → reenviar a esta casilla. Cada aviso de transferencia recibida aparece aquí solo.</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input class="form-input" id="conc-alias" placeholder="alias (ej: theproject)" value="${(prod?.pagos_alias||"").replace(/"/g,"&quot;")}" style="width:150px;font-size:12px" ${["superadmin","owner"].includes(CU.role)?"":"disabled"}>
+          <span style="font-size:12px;color:#555">@${CONC_DOMINIO}</span>
+          ${["superadmin","owner"].includes(CU.role)?`<button class="btn" style="font-size:11px" onclick="concGuardarAlias()">Guardar</button>`:""}
+          ${casilla?`<button class="btn" style="font-size:11px" onclick="navigator.clipboard.writeText('${casilla}').then(()=>toast('Casilla copiada','ok'))">📋 Copiar</button>`:""}
+        </div>
+      </div>
+      ${sistema.length?`<div style="margin-top:10px;background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px">${sistema.map(t=>`<div>🔑 <strong>${t.nombre||"Correo del sistema"}</strong> · ${fmtDT(t.created_at)} · ${t.comentario?`código: <strong style="font-family:monospace;font-size:14px">${t.comentario}</strong>`:""} <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concVerRaw('${t.id}')">ver correo</button> <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concEliminar('${t.id}')">🗑</button></div>`).join("")}</div>`:""}
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <input class="form-input" id="conc-q" placeholder="🔍 Nombre, RUT, monto, correo, comentario…" value="${(_concQ||"").replace(/"/g,"&quot;")}" oninput="_concQ=this.value;renderConciliacion();const i=document.getElementById('conc-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)" style="flex:1;min-width:240px;margin:0">
+      <button class="btn" style="font-size:12px" onclick="concExportar()">⬇ Exportar (CSV / Excel)</button>
+    </div>
+    <div class="card" style="padding:0;overflow:auto">
+      <table class="data-table" style="min-width:900px">
+        <thead><tr><th>Fecha</th><th>Transfirió</th><th style="text-align:right">Monto</th><th>Detalle</th><th style="min-width:300px">Asignar a</th><th></th></tr></thead>
+        <tbody>${lista.length?lista.map(t=>{
+          const ranked=cands.map(c=>({c,s:concScore(t,c)})).sort((a,b)=>b.s-a.s);
+          const mejor=ranked[0]&&ranked[0].s>=3?ranked[0]:null;
+          const conc=t.estado==="conciliada";
+          return `<tr style="background:${conc?"#f0fdf4":t.estado==="ignorada"?"#fafafa":"#fff"}">
+            <td style="font-size:12px;white-space:nowrap">${t.fecha?fmtDT(t.fecha):"—"}<div style="font-size:10px;color:#999">${{email:"📧 correo",manual:"✍️ manual",cartola:"📄 cartola"}[t.origen]||t.origen||""}</div></td>
+            <td><div style="font-weight:600">${t.nombre||'<span style="color:#991B1B">sin nombre</span>'}</div><div style="font-size:11px;color:#666">${t.rut?fmtRut(t.rut):""}${t.banco?" · "+t.banco:""}</div>${t.email?`<div style="font-size:11px;color:#534AB7">${t.email}</div>`:""}</td>
+            <td style="text-align:right;font-weight:700;white-space:nowrap">${t.monto!=null?fmtM(t.monto):'<span style="color:#991B1B">?</span>'}</td>
+            <td style="font-size:11px;color:#555;max-width:220px">${t.comentario?`💬 ${t.comentario}`:""}${t.cuenta_destino?`<div style="color:#999">cta ····${t.cuenta_destino}</div>`:""}</td>
+            <td>${conc?`<div style="font-size:12px;color:#166534;font-weight:600">✓ ${t.match_label||"conciliada"}</div><div style="font-size:10px;color:#888">${t.conciliado_at?fmtDT(t.conciliado_at):""}${t.conciliado_por?" · "+((D.users||[]).find(u=>u.id===t.conciliado_por)?.name||""):""}</div>`
+              :t.estado==="ignorada"?`<span style="font-size:12px;color:#888">No es de un evento</span>`
+              :`<select class="form-select" id="conc-sel-${t.id}" style="font-size:12px;padding:6px 8px;max-width:360px">
+                  <option value="">— Elegir comprobante pendiente —</option>
+                  ${mejor?`<optgroup label="✓ Sugerido (coincide ${[(mejor.c.montos||[mejor.c.monto]).some(m=>m===t.monto)?"monto":"",concTokens(t.nombre).some(w=>concTokens(mejor.c.nombre).includes(w))?"nombre":"",t.rut&&mejor.c.rut&&normRut(t.rut)===normRut(mejor.c.rut)?"RUT":""].filter(Boolean).join(" + ")})">${opcion(mejor.c,true)}</optgroup>`:""}
+                  ${ranked.filter(r=>r!==mejor).length?`<optgroup label="Otros comprobantes pendientes">${ranked.filter(r=>r!==mejor).map(r=>opcion(r.c,false)).join("")}</optgroup>`:""}
+                </select>${!cands.length?`<div style="font-size:11px;color:#999;margin-top:4px">No hay comprobantes esperando confirmación.</div>`:""}`}</td>
+            <td style="white-space:nowrap">${conc||t.estado==="ignorada"?`<button class="btn" style="font-size:11px;padding:4px 8px" onclick="concDeshacer('${t.id}')">↩</button>`
+              :`<button class="btn btn-success" style="font-size:11px;padding:5px 10px" onclick="concConfirmar('${t.id}')">✓ Confirmar pago</button>
+                <button class="btn" style="font-size:11px;padding:5px 8px" title="No corresponde a un evento" onclick="concIgnorar('${t.id}')">No es de evento</button>`}
+              <button class="btn" style="font-size:11px;padding:4px 8px" title="Editar datos" onclick="concEditar('${t.id}')">✏️</button>
+              ${t.raw?`<button class="btn" style="font-size:11px;padding:4px 8px" title="Ver correo original" onclick="concVerRaw('${t.id}')">📧</button>`:""}</td>
+          </tr>`;}).join(""):`<tr><td colspan="6" style="text-align:center;color:#999;padding:30px">${_concFiltro==="pendiente"?"No hay transferencias por conciliar. 🎉":"Nada aquí."}</td></tr>`}</tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="sec-header"><div class="sec-title">📎 Comprobantes esperando confirmación (${cands.length})</div></div>
+      ${cands.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Cliente</th><th>Qué pagó</th><th style="text-align:right">Monto</th><th>Comprobante</th><th>Transferencia</th></tr></thead><tbody>
+        ${cands.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")}
+      </tbody></table></div>`:`<div style="font-size:13px;color:#999">Nadie está esperando confirmación de pago.</div>`}
+    </div>`;
+}
+async function concGuardarAlias(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);if(!prod)return;
+  const v=($("conc-alias")?.value||"").trim().toLowerCase().replace(/[^a-z0-9._-]/g,"");
+  try{await sbPatch("productoras",`id=eq.${prodId}`,{pagos_alias:v||null});prod.pagos_alias=v||null;toast(v?`✓ Casilla: ${v}@${CONC_DOMINIO}`:"Alias borrado","success");renderConciliacion();}
+  catch(e){toast("Error: "+e.message,"error");if(/pagos_alias/.test(e.message||""))alert("Falta la columna pagos_alias en productoras: ejecuta supabase/sql-conciliacion.sql");}
+}
+async function concConfirmar(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
+  const key=$("conc-sel-"+tid)?.value;if(!key){toast("Elige a quién corresponde esta transferencia","warn");return;}
+  const c=concCandidatos(CU.role==="superadmin"?(CP?.id||null):CU.productora_id).find(x=>x.key===key);if(!c)return;
+  const dif=t.monto!=null&&Math.abs((t.monto||0)-(c.monto||0))>=1;
+  if(!confirm(`Confirmar pago de ${c.icono} ${c.nombre} (${c.evento}) con la transferencia de ${fmtM(t.monto||0)} de ${t.nombre||"?"}.${dif?`\n\n⚠️ OJO: el monto esperado era ${fmtM(c.monto)} y llegaron ${fmtM(t.monto||0)}.`:""}\n\n${c.tipo==="cf"?"Se enviará el correo de entrada confirmada con su QR.":c.tipo==="mesa"?((t.monto||0)>=(c.saldo||0)?"La mesa quedará cerrada y se avisará al comprador.":"Se registrará como abono; la mesa seguirá con saldo pendiente."):"Las pulseras extra quedarán acreditables."}`))return;
+  const btn=document.querySelector(`button[onclick="concConfirmar('${tid}')"]`);if(btn){btn.disabled=true;btn.textContent="Confirmando…";}
+  try{
+    if(c.tipo==="cf")await cfConciliarCore(c.id,{transferencia_id:tid});
+    else if(c.tipo==="mesa"){
+      const m=D.vip_tables.find(x=>x.id===c.id);const monto=t.monto||c.monto||0;
+      m.amount_paid=(m.amount_paid||0)+monto;m.pago_transferencia=(m.pago_transferencia||0)+monto;m.transfer_ref=`${t.nombre||""} ${t.fecha?fmtDT(t.fecha):""}`.trim();
+      if(m.amount_paid>=(m.price||0)){m.amount_paid=m.price||0;await confirmarPagoMesaCore(c.id);}
+      else{m.payment_status="deposit_paid";m.estado_reserva="pago_pendiente";await sbPatch("vip_tables",`id=eq.${m.id}`,{amount_paid:m.amount_paid,payment_status:m.payment_status,estado_reserva:m.estado_reserva,pago_transferencia:m.pago_transferencia,transfer_ref:m.transfer_ref});await log("registrar_pago","vip_table",m.id,`Abono conciliado por transferencia: ${fmtM(monto)} — acumulado ${fmtM(m.amount_paid)}/${fmtM(m.price||0)}`);}
+    }
+    else if(c.tipo==="lote")await confirmarPagoLotePulserasCore(c.id,c.loteId);
+    const patch={estado:"conciliada",match_tipo:c.tipo,match_id:c.tipo==="lote"?`${c.id}:${c.loteId}`:c.id,match_label:`${c.icono} ${c.nombre} · ${c.evento}`,conciliado_por:CU?.id||null,conciliado_at:now()};
+    await sbPatch("transferencias",`id=eq.${tid}`,patch);Object.assign(t,patch);
+    await log("conciliar_transferencia","transferencia",tid,`${fmtM(t.monto||0)} de ${t.nombre||"?"} → ${patch.match_label}`);
+    toast(`✅ Pago confirmado: ${c.nombre}`,"success");
+  }catch(e){toast("Error: "+e.message,"error");}
+  renderConciliacion();
+}
+async function concIgnorar(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
+  try{await sbPatch("transferencias",`id=eq.${tid}`,{estado:"ignorada"});t.estado="ignorada";renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+async function concDeshacer(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
+  if(t.estado==="conciliada"&&!confirm("Esto solo vuelve la transferencia a 'por conciliar'. El pago del cliente ya quedó confirmado (si fue un error, revísalo en Close Friends o Mesas).\n\n¿Continuar?"))return;
+  try{await sbPatch("transferencias",`id=eq.${tid}`,{estado:"pendiente",match_tipo:null,match_id:null,match_label:null,conciliado_por:null,conciliado_at:null});Object.assign(t,{estado:"pendiente",match_tipo:null,match_id:null,match_label:null});renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+async function concEliminar(tid){
+  if(!confirm("¿Eliminar este registro?"))return;
+  try{await sbDelete("transferencias",`id=eq.${tid}`);D.transferencias=(D.transferencias||[]).filter(x=>x.id!==tid);renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+function concVerRaw(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
+  openModal(`📧 ${t.asunto||"Correo original"}`,`<div style="font-size:11px;color:#888;margin-bottom:8px">De: ${t.remitente||"—"} · recibido ${fmtDT(t.created_at)}</div><pre style="white-space:pre-wrap;font-size:12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px;max-height:60vh;overflow:auto">${(t.raw||"(sin texto)").replace(/</g,"&lt;")}</pre><div class="modal-footer"><button class="btn" onclick="closeModal()">Cerrar</button></div>`,true);
+}
+function concFormHTML(t={}){
+  return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div><label class="form-label" style="margin-top:0">Nombre de quien transfirió</label><input class="form-input" id="tf-nombre" value="${(t.nombre||"").replace(/"/g,"&quot;")}"></div>
+    <div><label class="form-label" style="margin-top:0">Monto</label><input class="form-input" id="tf-monto" type="number" value="${t.monto??""}"></div>
+    <div><label class="form-label">RUT</label><input class="form-input" id="tf-rut" value="${t.rut||""}"></div>
+    <div><label class="form-label">Fecha y hora</label><input class="form-input" id="tf-fecha" type="datetime-local" value="${t.fecha?new Date(t.fecha).toISOString().slice(0,16):""}"></div>
+    <div><label class="form-label">Banco</label><input class="form-input" id="tf-banco" value="${(t.banco||"").replace(/"/g,"&quot;")}"></div>
+    <div><label class="form-label">Correo</label><input class="form-input" id="tf-email" value="${t.email||""}"></div>
+    <div style="grid-column:1/-1"><label class="form-label">Comentario</label><input class="form-input" id="tf-com" value="${(t.comentario||"").replace(/"/g,"&quot;")}"></div>
+  </div>`;
+}
+function concLeerForm(){
+  const f=$("tf-fecha")?.value;
+  return {nombre:($("tf-nombre")?.value||"").trim(),monto:parseInt($("tf-monto")?.value)||null,rut:($("tf-rut")?.value||"").trim(),fecha:f?new Date(f).toISOString():null,banco:($("tf-banco")?.value||"").trim(),email:($("tf-email")?.value||"").trim(),comentario:($("tf-com")?.value||"").trim()};
+}
+function concAgregarManual(){
+  openModal("✍️ Transferencia a mano",concFormHTML({fecha:new Date().toISOString()})+`<div style="font-size:11px;color:#888;margin-top:8px">Para avisos que no llegaron por correo. Se concilia igual que las demás.</div><div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="concGuardarManual()">Guardar</button></div>`);
+}
+async function concGuardarManual(){
+  const d=concLeerForm();if(!d.monto){toast("Ingresa el monto","error");return;}
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const row={id:uid(),productora_id:prodId,...d,origen:"manual",estado:"pendiente",created_at:now()};
+  try{await sbPost("transferencias",[row]);(D.transferencias=D.transferencias||[]).unshift(row);closeModal();toast("✓ Transferencia agregada","success");renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+function concEditar(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
+  openModal("✏️ Editar transferencia",concFormHTML(t)+`<div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="concGuardarEdicion('${tid}')">Guardar</button></div>`);
+}
+async function concGuardarEdicion(tid){
+  const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;const d=concLeerForm();
+  try{await sbPatch("transferencias",`id=eq.${tid}`,d);Object.assign(t,d);closeModal();renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+function concExportar(){
+  const rows=[["Fecha","Nombre","RUT","Monto","Banco","Correo","Comentario","Origen","Estado","Asignada a","Conciliada el"],...(D.transferencias||[]).filter(t=>t.estado!=="sistema").map(t=>[t.fecha?fmtDT(t.fecha):"",t.nombre||"",t.rut?fmtRut(t.rut):"",t.monto||0,t.banco||"",t.email||"",t.comentario||"",t.origen||"",t.estado||"",t.match_label||"",t.conciliado_at?fmtDT(t.conciliado_at):""])];
+  descargarTabla("conciliacion_pagos",rows,"Transferencias",{titulo:"conciliación de pagos"});
+}
 
 // ═══════════════════════════════════════════════════════════════
 // QR DE ACREDITACIÓN — cada persona (entrada) tiene su propio QR
