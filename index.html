@@ -9312,7 +9312,6 @@ buildSidebar = function(){
       <div class="nav-sec">Close Friends</div>
       <div class="nav-item" data-v="cf-postulantes" onclick="goView('cf-postulantes')">${NAV_ICONS["users"]||""}<span>Postulantes</span></div>
       <div class="nav-item" data-v="cf-ordenes" onclick="goView('cf-ordenes')">${NAV_ICONS["card"]||""}<span>Órdenes / Pago</span></div>
-      <div class="nav-item" data-v="cf-conciliacion" onclick="goView('cf-conciliacion')">${NAV_ICONS["chart"]||""}<span>Conciliación</span></div>
       <div class="nav-item" data-v="cf-planilla" onclick="goView('cf-planilla')">${NAV_ICONS["list"]||""}<span>Planilla</span></div>
       <div class="nav-item" data-v="cf-config" onclick="goView('cf-config')">${NAV_ICONS["settings"]||""}<span>Config CF</span></div>`;
     nav.appendChild(cfSection);
@@ -9388,7 +9387,7 @@ goView = async function(v){
   const mc = $("main-content"); if(!mc) return;
   if(v==="cf-postulantes") VIEWS.cfPostulantes();
   else if(v==="cf-ordenes") VIEWS.cfOrdenes();
-  else if(v==="cf-conciliacion") VIEWS.cfConciliacion();
+  else if(v==="cf-conciliacion") return goView("conciliacion"); // unificada en Pagos → Conciliación de pagos
   else if(v==="cf-planilla") VIEWS.cfPlanilla();
   else if(v==="cf-config") VIEWS.cfConfig();
 };
@@ -12788,6 +12787,7 @@ function renderConciliacion(){
   mc.innerHTML=`
     <div class="sec-header"><div class="page-title">💳 Conciliación de pagos</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" onclick="concCartolaModal()">📄 Subir cartola</button>
         <button class="btn" onclick="concAgregarManual()">+ Transferencia a mano</button>
         <button class="btn" onclick="VIEWS.conciliacion()">↻ Actualizar</button>
       </div>
@@ -12985,6 +12985,108 @@ async function concGuardarManual(){
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const row={id:uid(),productora_id:prodId,...d,origen:"manual",estado:"pendiente",created_at:now()};
   try{await sbPost("transferencias",[row]);(D.transferencias=D.transferencias||[]).unshift(row);closeModal();toast("✓ Transferencia agregada","success");renderConciliacion();}catch(e){toast("Error: "+e.message,"error");}
+}
+// ── Cartola bancaria (respaldo de los avisos por correo) ──
+let _concCartola=[];
+function concCartolaModal(){
+  openModal("📄 Subir cartola",`<div style="font-size:13px;color:#444;line-height:1.5;margin-bottom:12px">Sube la cartola de la cuenta donde recibes los pagos (PDF, Excel o CSV). Se agregan los <strong>abonos</strong> a la lista de conciliación; los que ya llegaron por correo se reconocen y no se duplican.<br><span style="font-size:11px;color:#888">Útil si un aviso no llegó o para cuadrar a fin de mes.</span></div>
+    <input type="file" id="conc-cartola-file" accept=".pdf,.csv,.xlsx,.xls" class="form-input">
+    <div id="conc-cartola-res" style="margin-top:12px"></div>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="conc-cartola-btn" onclick="concCartolaLeer()">Leer cartola</button></div>`,true);
+}
+// fecha de cartola → ISO (dd/mm/aaaa, dd-mm-aa, dd/mm sin año, aaaa-mm-dd)
+function concCartolaFecha(v){
+  v=String(v||"").trim();let m;
+  if((m=v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return `${m[1]}-${m[2].padStart(2,"0")}-${m[3].padStart(2,"0")}`;
+  if((m=v.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?/))){let y=m[3]?(m[3].length===2?"20"+m[3]:m[3]):String(new Date().getFullYear());return `${y}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`;}
+  return "";
+}
+const concCartolaMonto=v=>{const t=String(v??"").replace(/[$\s]/g,"");if(!t||/^-/.test(t))return 0;const n=parseFloat(t.replace(/\./g,"").replace(",","."));return isNaN(n)?0:Math.round(n);};
+// Saca nombre y RUT de la glosa ("TRANSF DE 19.111.222-3 MARIA SOTO", "Transferencia de Maria Soto")
+function concCartolaGlosa(desc){
+  const d=String(desc||"").replace(/\s+/g," ").trim();
+  const rm=d.match(/(\d{1,2}\.?\d{3}\.?\d{3})\s?-\s?([\dkK])/);const rut=rm?(rm[1].replace(/\./g,"")+"-"+rm[2]).toUpperCase():"";
+  let nom="";const nm=d.match(/(?:transf(?:erencia)?\.?(?:\s+(?:de\s+)?fondos)?|tef|abono|dep[oó]sito)\s+(?:de|desde)\s+(.+)$/i);
+  if(nm)nom=nm[1].replace(/(\d{1,2}\.?\d{3}\.?\d{3})\s?-\s?[\dkK]/,"").replace(/\b\d{4,}\b/g,"").replace(/\s+/g," ").trim();
+  return {nombre:nom.slice(0,80),rut};
+}
+const concCartolaEsCargo=d=>/transf(?:erencia)?\.?\s+(?:a|para)\b|\bcargo\b|compra|\bgiro\b|comisi[oó]n|pago\s+(?:de|en|tarjeta|pac|automatico)|impuesto|mantenci/i.test(d||"");
+async function concCartolaLeer(){
+  const f=$("conc-cartola-file")?.files?.[0];if(!f){toast("Elige el archivo de la cartola","warn");return;}
+  const res=$("conc-cartola-res");res.innerHTML=`<div style="font-size:13px;color:#888">Leyendo cartola…</div>`;
+  const abonos=[];
+  try{
+    const ext=f.name.split(".").pop().toLowerCase();
+    if(ext==="pdf"){
+      if(!window.pdfjsLib){await new Promise((ok,fail)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";sc.onload=()=>{window.pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";ok();};sc.onerror=fail;document.head.appendChild(sc);});}
+      const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+      for(let pn=1;pn<=pdf.numPages;pn++){
+        const tc=await (await pdf.getPage(pn)).getTextContent();
+        // reconstruir líneas por coordenada Y
+        const filas={};tc.items.forEach(i=>{const y=Math.round(i.transform[5]);(filas[y]=filas[y]||[]).push(i);});
+        Object.keys(filas).sort((a,b)=>b-a).forEach(y=>{
+          const line=filas[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(i=>i.str).join(" ").replace(/\s+/g," ").trim();
+          const fm=line.match(/^(\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?)\s+(.*)$/);if(!fm)return;
+          if(concCartolaEsCargo(fm[2]))return;
+          const montos=[...fm[2].matchAll(/\$?\s?(\d{1,3}(?:\.\d{3})+|\d{4,})(?:,\d{1,2})?/g)];if(!montos.length)return;
+          const monto=concCartolaMonto(montos[0][1]);if(monto<1000)return;
+          const desc=fm[2].slice(0,montos[0].index).trim();
+          abonos.push({fecha:concCartolaFecha(fm[1]),desc,monto,linea:line});
+        });
+      }
+    } else {
+      if(!window.XLSX){await new Promise((ok,fail)=>{const sc=document.createElement("script");sc.src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";sc.onload=ok;sc.onerror=fail;document.head.appendChild(sc);});}
+      const wb=XLSX.read(await f.arrayBuffer(),{type:"array",cellDates:true});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,raw:false,dateNF:"dd/mm/yyyy"});
+      // Busca la fila de encabezados (Fecha / Descripción / Cargos / Abonos)
+      const hi=rows.findIndex(r=>r.some(c=>/fecha/i.test(c||""))&&r.some(c=>/abono|dep[oó]sito|cr[eé]dito|monto/i.test(c||"")));
+      const H=hi>=0?rows[hi].map(c=>String(c||"").toLowerCase()):[];
+      const iF=H.findIndex(c=>/fecha/.test(c)),iD=H.findIndex(c=>/descrip|detalle|glosa|movimiento|concepto/.test(c)),iA=H.findIndex(c=>/abono|dep[oó]sito|cr[eé]dito/.test(c)),iM=H.findIndex(c=>/^monto/.test(c)),iC=H.findIndex(c=>/cargo|d[eé]bito|giro/.test(c));
+      rows.slice(hi>=0?hi+1:0).forEach(r=>{
+        if(!r||!r.length)return;
+        const fecha=concCartolaFecha(iF>=0?r[iF]:r[0]);if(!fecha)return;
+        const desc=String((iD>=0?r[iD]:r[1])||"").trim();
+        let monto=0;
+        if(iA>=0)monto=concCartolaMonto(r[iA]);
+        else if(iM>=0){if(concCartolaEsCargo(desc))return;monto=concCartolaMonto(r[iM]);}
+        else{if(concCartolaEsCargo(desc))return;for(let ci=1;ci<r.length;ci++){const m=concCartolaMonto(r[ci]);if(m>=1000){monto=m;break;}}}
+        if(iA<0&&iC>=0&&concCartolaMonto(r[iC])>0)return;
+        if(monto<1000)return;
+        abonos.push({fecha,desc,monto,linea:r.filter(Boolean).join(" | ")});
+      });
+    }
+  }catch(e){res.innerHTML=`<div style="color:#991B1B;font-size:13px">No se pudo leer la cartola: ${e.message}</div>`;return;}
+  // ¿Ya estaba? mismo monto, ±2 días y (si hay nombres) al menos una palabra en común
+  const exist=(D.transferencias||[]).filter(t=>t.estado!=="sistema");
+  const dias=(a,b)=>Math.abs((new Date(a+"T12:00:00")-new Date(String(b).slice(0,10)+"T12:00:00"))/864e5);
+  const vistos={};
+  _concCartola=abonos.map(a=>{
+    const g=concCartolaGlosa(a.desc);
+    const k=`${a.fecha}|${a.monto}|${acrNorm(a.desc).slice(0,40)}`;vistos[k]=(vistos[k]||0)+1;
+    const dup=exist.find(t=>t.monto===a.monto&&t.fecha&&a.fecha&&dias(a.fecha,t.fecha)<=2&&(!g.nombre||!t.nombre||concTokens(g.nombre).some(w=>concTokens(t.nombre).includes(w))));
+    return {...a,...g,key:`cartola_${k}_${vistos[k]}`,dup};
+  });
+  const nuevos=_concCartola.filter(a=>!a.dup);
+  if(!_concCartola.length){res.innerHTML=`<div style="font-size:13px;color:#b45309">No encontré abonos en ese archivo. Si es un PDF escaneado, prueba con el Excel de la cartola.</div>`;return;}
+  res.innerHTML=`<div style="font-size:13px;margin-bottom:8px"><strong>${_concCartola.length}</strong> abonos encontrados · <strong style="color:#166534">${nuevos.length} nuevos</strong> · <span style="color:#888">${_concCartola.length-nuevos.length} ya estaban</span></div>
+    <div style="max-height:340px;overflow:auto;border:1px solid #eee;border-radius:8px"><table class="data-table" style="font-size:12px"><thead><tr><th>Fecha</th><th>Glosa</th><th style="text-align:right">Monto</th><th>Estado</th></tr></thead><tbody>
+    ${_concCartola.map(a=>`<tr style="${a.dup?"color:#999":""}"><td style="white-space:nowrap">${a.fecha?a.fecha.split("-").reverse().join("/"):"—"}</td><td>${a.nombre?`<strong>${a.nombre}</strong><div style="font-size:10px;color:#888">${a.desc}</div>`:a.desc||"—"}</td><td style="text-align:right;font-weight:600">${fmtM(a.monto)}</td><td>${a.dup?`ya estaba (${{email:"correo",manual:"a mano",cartola:"cartola"}[a.dup.origen]||a.dup.origen})`:`<span style="color:#166534;font-weight:600">nuevo</span>`}</td></tr>`).join("")}
+    </tbody></table></div>`;
+  const b=$("conc-cartola-btn");if(b){b.textContent=nuevos.length?`Agregar ${nuevos.length} abono${nuevos.length>1?"s":""}`:"Cerrar";b.setAttribute("onclick",nuevos.length?"concCartolaGuardar()":"closeModal()");}
+}
+async function concCartolaGuardar(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const nuevos=_concCartola.filter(a=>!a.dup);if(!nuevos.length){closeModal();return;}
+  const rows=nuevos.map(a=>({id:uid(),productora_id:prodId,email_id:a.key,fecha:a.fecha?a.fecha+"T12:00:00-03:00":null,monto:a.monto,nombre:a.nombre||"",rut:a.rut||"",banco:"",email:"",comentario:(a.desc||"").slice(0,160),cuenta_destino:"",origen:"cartola",estado:"pendiente",raw:a.linea.slice(0,1000),created_at:now()}));
+  const b=$("conc-cartola-btn");if(b){b.disabled=true;b.textContent="Agregando…";}
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/transferencias?on_conflict=email_id`,{method:"POST",headers:{...HDR,"Prefer":"resolution=ignore-duplicates,return=representation"},body:JSON.stringify(rows)});
+    if(!r.ok)throw new Error(await r.text());
+    const ins=await r.json();
+    await loadTransferencias(prodId);closeModal();
+    toast(`✓ ${ins.length} abono${ins.length===1?"":"s"} de la cartola agregado${ins.length===1?"":"s"}${ins.length<rows.length?` (${rows.length-ins.length} ya estaban)`:""}`,"success");
+    _concFiltro="pendiente";renderConciliacion();
+  }catch(e){toast("Error: "+e.message,"error");if(b){b.disabled=false;b.textContent="Reintentar";}}
 }
 function concEditar(tid){
   const t=(D.transferencias||[]).find(x=>x.id===tid);if(!t)return;
