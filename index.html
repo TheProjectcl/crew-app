@@ -12787,21 +12787,7 @@ function renderConciliacion(){
       <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>
       <div class="card-sm"><div style="font-size:11px;color:#999">Comprobantes esperando pago</div><div style="font-size:22px;font-weight:700;color:#534AB7">${cands.length}</div><div style="font-size:10px;color:${cands.length-candConMatch.size?"#991B1B":"#888"}">${cands.length-candConMatch.size} sin transferencia que calce</div></div>
     </div>
-    <div class="card" style="margin-bottom:14px;background:#f8fafc;border-left:4px solid #534AB7;padding:12px 16px">
-      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-        <div style="flex:1;min-width:260px">
-          <div style="font-size:12px;font-weight:700">📬 Casilla de recepción de avisos del banco</div>
-          <div style="font-size:11px;color:#666;margin-top:2px">Crea en tu Gmail un filtro <em>de: santander.cl</em> → reenviar a esta casilla. Cada aviso de transferencia recibida aparece aquí solo.</div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input class="form-input" id="conc-alias" placeholder="alias (ej: theproject)" value="${(prod?.pagos_alias||"").replace(/"/g,"&quot;")}" style="width:150px;font-size:12px" ${["superadmin","owner"].includes(CU.role)?"":"disabled"}>
-          <span style="font-size:12px;color:#555">@${CONC_DOMINIO}</span>
-          ${["superadmin","owner"].includes(CU.role)?`<button class="btn" style="font-size:11px" onclick="concGuardarAlias()">Guardar</button>`:""}
-          ${casilla?`<button class="btn" style="font-size:11px" onclick="navigator.clipboard.writeText('${casilla}').then(()=>toast('Casilla copiada','ok'))">📋 Copiar</button>`:""}
-        </div>
-      </div>
-      ${sistema.length?`<div style="margin-top:10px;background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px">${sistema.map(t=>`<div>🔑 <strong>${t.nombre||"Correo del sistema"}</strong> · ${fmtDT(t.created_at)} · ${t.comentario?`código: <strong style="font-family:monospace;font-size:14px">${t.comentario}</strong>`:""} <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concVerRaw('${t.id}')">ver correo</button> <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concEliminar('${t.id}')">🗑</button></div>`).join("")}</div>`:""}
-    </div>
+    ${concBloqueConfig(prod,casilla,sistema,todas)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       <input class="form-input" id="conc-q" placeholder="🔍 Nombre, RUT, monto, correo, comentario…" value="${(_concQ||"").replace(/"/g,"&quot;")}" oninput="_concQ=this.value;renderConciliacion();const i=document.getElementById('conc-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)" style="flex:1;min-width:240px;margin:0">
       <button class="btn" style="font-size:12px" onclick="concExportar()">⬇ Exportar (CSV / Excel)</button>
@@ -12839,6 +12825,83 @@ function renderConciliacion(){
         ${cands.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")}
       </tbody></table></div>`:`<div style="font-size:13px;color:#999">Nadie está esperando confirmación de pago.</div>`}
     </div>`;
+}
+// ── Configuración de la casilla de avisos (por productora) + guía paso a paso ──
+function concDestinoPartes(v){
+  const toks=String(v||"").split(/[,;\n]/).map(x=>x.trim()).filter(Boolean);
+  const txt=toks.filter(x=>!/^[\d.\-\s kK]+$/.test(x)), nums=toks.filter(x=>/^[\d.\-\s kK]+$/.test(x));
+  return {titular:txt.join(", "),rut:nums[0]||"",cuenta:nums.slice(1).join(", ")};
+}
+function concBloqueConfig(prod,casilla,sistema,todas){
+  const puede=["superadmin","owner"].includes(CU.role);
+  const d=concDestinoPartes(prod?.pagos_destino);
+  const okAlias=!!prod?.pagos_alias, okDest=!!(prod?.pagos_destino||"").trim(), okVerif=sistema.length>0||todas.some(t=>t.origen==="email"), okRecibe=todas.some(t=>t.origen==="email");
+  const chk=(ok,txt)=>`<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:3px 8px;border-radius:20px;background:${ok?"#dcfce7":"#f1f5f9"};color:${ok?"#166534":"#64748b"};font-weight:600">${ok?"✓":"○"} ${txt}</span>`;
+  const dis=puede?"":"disabled";
+  return `<div class="card" style="margin-bottom:14px;background:#f8fafc;border-left:4px solid #534AB7;padding:12px 16px">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+        <div>
+          <div style="font-size:13px;font-weight:700">📬 Avisos automáticos del banco</div>
+          <div style="font-size:11px;color:#666;margin-top:2px">Los avisos de transferencia que te llegan al correo se reenvían a Guestly y aparecen aquí solos.</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${chk(okAlias,"1. Casilla creada")}${chk(okDest,"2. Cuenta que recibe")}${chk(okVerif,"3. Correo verificado")}${chk(okRecibe,"4. Primer aviso recibido")}</div>
+        </div>
+        <button class="btn btn-primary" style="font-size:12px" onclick="concGuiaCorreo()">❓ ¿Cómo configurar mi correo?</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:4px">Tu casilla Guestly</div>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input class="form-input" id="conc-alias" placeholder="alias (ej: theproject)" value="${(prod?.pagos_alias||"").replace(/"/g,"&quot;")}" style="width:150px;font-size:12px;margin:0" ${dis}>
+            <span style="font-size:12px;color:#555">@${CONC_DOMINIO}</span>
+            ${puede?`<button class="btn" style="font-size:11px" onclick="concGuardarAlias()">Guardar</button>`:""}
+            ${casilla?`<button class="btn" style="font-size:11px" onclick="navigator.clipboard.writeText('${casilla}').then(()=>toast('Casilla copiada','ok'))">📋 Copiar</button>`:""}
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#334155;margin-bottom:4px">Cuenta donde recibes los pagos <span style="font-weight:400;color:#888">(solo se guardan los avisos de esta cuenta)</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <input class="form-input" id="conc-dest-tit" placeholder="Titular (ej: Sociedad de Profesionales)" value="${d.titular.replace(/"/g,"&quot;")}" style="flex:2;min-width:170px;font-size:12px;margin:0" ${dis}>
+            <input class="form-input" id="conc-dest-rut" placeholder="RUT empresa" value="${d.rut.replace(/"/g,"&quot;")}" style="flex:1;min-width:100px;font-size:12px;margin:0" ${dis}>
+            <input class="form-input" id="conc-dest-cta" placeholder="N° de cuenta" value="${d.cuenta.replace(/"/g,"&quot;")}" style="flex:1;min-width:100px;font-size:12px;margin:0" ${dis}>
+            ${puede?`<button class="btn" style="font-size:11px" onclick="concGuardarDestino()">Guardar</button>`:""}
+          </div>
+          ${okDest?"":`<div style="font-size:10px;color:#b45309;margin-top:4px">⚠️ Sin estos datos se guardan los avisos de todas tus cuentas (también las personales).</div>`}
+        </div>
+      </div>
+      ${sistema.length?`<div style="margin-top:10px;background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px">${sistema.map(t=>`<div>🔑 <strong>${t.nombre||"Correo del sistema"}</strong> · ${fmtDT(t.created_at)} · ${t.comentario?`código: <strong style="font-family:monospace;font-size:14px">${t.comentario}</strong>`:""} <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concVerRaw('${t.id}')">ver correo</button> <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concEliminar('${t.id}')">🗑</button></div>`).join("")}</div>`:""}
+    </div>`;
+}
+async function concGuardarDestino(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);if(!prod)return;
+  const tit=($("conc-dest-tit")?.value||"").trim().replace(/[,;]/g," ").replace(/\s+/g," ");
+  const rutRaw=($("conc-dest-rut")?.value||"").trim();
+  const dig=rutRaw.replace(/[^\dkK]/g,"");
+  const rut=dig&&(rutRaw.includes("-")||dig.length===9||/k$/i.test(dig))?dig.slice(0,-1):dig; // sin dígito verificador
+  const ctas=($("conc-dest-cta")?.value||"").split(/[,;\s]+/).map(x=>x.replace(/\D/g,"").replace(/^0+/,"")).filter(x=>x.length>=5); // sin ceros a la izquierda (0-000-9268629-9 → 92686299)
+  if(rutRaw&&rut.length<7){toast("RUT no válido","warn");return;}
+  const v=[tit.toLowerCase(),rut,...ctas].filter(Boolean).join(", ");
+  try{await sbPatch("productoras",`id=eq.${prodId}`,{pagos_destino:v||null});prod.pagos_destino=v||null;toast(v?"✓ Cuenta guardada":"Datos de cuenta borrados","success");renderConciliacion();}
+  catch(e){toast("Error: "+e.message,"error");}
+}
+function concGuiaCorreo(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);
+  const casilla=prod?.pagos_alias?`${prod.pagos_alias}@${CONC_DOMINIO}`:"tu-alias@"+CONC_DOMINIO;
+  const paso=(n,titulo,cuerpo)=>`<div style="display:flex;gap:12px;margin-bottom:16px"><div style="flex:0 0 28px;height:28px;border-radius:50%;background:#534AB7;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:13px">${n}</div><div style="flex:1"><div style="font-weight:700;font-size:14px;margin-bottom:4px">${titulo}</div><div style="font-size:13px;color:#444;line-height:1.55">${cuerpo}</div></div></div>`;
+  const code=t=>`<code style="background:#f1f5f9;padding:1px 6px;border-radius:4px;font-size:12px">${t}</code>`;
+  openModal("📬 Cómo configurar tu correo",`<div>
+    <div style="font-size:12px;color:#666;margin-bottom:18px">Tu banco te manda un correo por cada transferencia que recibes. Con esto, ese correo se reenvía solo a Guestly y la transferencia aparece en Conciliación de pagos lista para asignarla. Toma unos 5 minutos y se hace una sola vez.</div>
+    ${paso(1,"Crea tu casilla Guestly",`En esta pantalla, en <strong>Tu casilla Guestly</strong>, escribe un alias corto (ej: el nombre de tu productora, sin espacios) y aprieta <strong>Guardar</strong>. Tu casilla queda así: ${code(casilla)}`)}
+    ${paso(2,"Indica la cuenta donde recibes los pagos",`En <strong>Cuenta donde recibes los pagos</strong> escribe el titular (basta el inicio del nombre, ej: <em>Sociedad de Profesionales</em>), el RUT y el N° de cuenta, y aprieta <strong>Guardar</strong>.<br>Así Guestly guarda solo los avisos de esa cuenta y descarta los de tus cuentas personales u otras empresas.`)}
+    ${paso(3,"Agrega la casilla en Gmail",`Entra al correo donde te llegan los avisos del banco → ⚙️ <strong>Ver todos los ajustes</strong> → pestaña <strong>Reenvío y correo POP/IMAP</strong> → <strong>Añadir una dirección de reenvío</strong> → pega ${code(casilla)} → <strong>Siguiente</strong> → <strong>Continuar</strong>.`)}
+    ${paso(4,"Verifica con el código",`Google manda un código a tu casilla Guestly. En 1 minuto aparece <strong>en esta pantalla</strong> como 🔑 <em>Gmail — verificación de reenvío · código: 123456</em> (aprieta ↻ Actualizar si no lo ves).<br>Vuelve a Gmail → <strong>Reenvío y correo POP/IMAP</strong> → haz clic en el link <strong>Verificar</strong> → escribe el código → <strong>Verificar</strong>.<br><span style="color:#b45309">Deja marcado “Inhabilitar el reenvío”: no queremos reenviar todo tu correo, solo los avisos (paso 5).</span>`)}
+    ${paso(5,"Crea el filtro",`Recarga Gmail (F5). En la barra <strong>Buscar correo</strong> aprieta el ícono de opciones (☰ a la derecha) → en <strong>Contiene las palabras</strong> escribe ${code("transferencia")} → <strong>Crear filtro</strong> → marca <strong>Reenviarlo a:</strong> y elige ${code(casilla)} → <strong>Crear filtro</strong>.<br><span style="color:#666">Si “Reenviar” aparece gris, la verificación no quedó o falta recargar Gmail.</span>`)}
+    ${paso(6,"Prueba que funcione",`Busca en tu Gmail un aviso de transferencia antiguo <strong>a la cuenta del paso 2</strong> → <strong>Reenviar</strong> → para: ${code(casilla)} → Enviar. En segundos debe aparecer aquí con nombre, monto y banco. Si sale algún dato vacío, puedes corregirlo con ✏️.`)}
+    <div style="background:#f8fafc;border-radius:8px;padding:10px 14px;font-size:12px;color:#555;line-height:1.5;margin-top:4px">
+      <strong>¿Usas Outlook u otro correo?</strong> Crea una regla: si el asunto o cuerpo contiene <em>transferencia</em> → reenviar a ${code(casilla)}.<br>
+      <strong>Importante:</strong> el filtro funciona para los avisos nuevos. Los que llegaron antes de configurarlo se reenvían a mano (paso 6).
+    </div>
+    <div style="text-align:right;margin-top:16px">${prod?.pagos_alias?`<button class="btn" onclick="navigator.clipboard.writeText('${casilla}').then(()=>toast('Casilla copiada','ok'))">📋 Copiar casilla</button> `:""}<button class="btn btn-primary" onclick="closeModal()">Entendido</button></div>
+  </div>`,true);
 }
 async function concGuardarAlias(){
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);if(!prod)return;
