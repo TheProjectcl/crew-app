@@ -2785,7 +2785,7 @@ VIEWS.puerta=async()=>{
     <div class="card">
       <div class="sec-header"><div class="sec-title">Todas las entradas</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
-          ${["all","staff","vip_table","birthday","friends_list"].map(t=>`<button class="btn" style="padding:4px 10px;font-size:11px" onclick="filterAccType('${t}')">${{all:"Todos",staff:"🪪 Staff",vip_table:"VIP",birthday:"🎂 Cumple",friends_list:"👥 Listas"}[t]}</button>`).join("")}
+          ${["all","staff","vip_table","birthday","friends_list"].map(t=>`<button class="btn" style="padding:4px 10px;font-size:11px" onclick="filterAccType('${t}')">${{all:"Todos",staff:"🪪 Staff",vip_table:"VIP",birthday:"🎂 Cumpleaños",friends_list:"👥 Listas"}[t]}</button>`).join("")}
         </div>
       </div>
       <div id="acc-table"></div>
@@ -2975,7 +2975,7 @@ function acrTotalItems(){
       pulsera:ben?.pulsera||"",entradas:1,usadas:c.llego?1:0,estado:c.llego?badge("✓ Ingresó "+fmtT(c.llego_at),"green"):badge("No validado","gray"),extra:"",
       acciones:(!c.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinCumple('${c.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('cumple','${c.id}')">🎟 QR</button>`});
     (D.bday_invitados||[]).filter(i=>i.cumpleanero_id===c.id&&i.estado==="aprobado").forEach(i=>{
-      items.push({seg:"bday",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:i.rut||"",sub:`🎂 Cumple de ${cNom}`,subColor:"#534AB7",origen:"Lista cumpleaños",origenColor:"#534AB7",
+      items.push({seg:"bday",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:i.rut||"",sub:`🎂 Cumpleaños de ${cNom}`,subColor:"#534AB7",origen:"Lista cumpleaños",origenColor:"#534AB7",
         pulsera:ben?.pulsera||"",entradas:1,usadas:i.llego?1:0,estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):badge("No validado","gray"),extra:"",
         acciones:(!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${i.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${i.id}','all').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('inv','${i.id}')">🎟 QR</button>`});
     });
@@ -3209,7 +3209,7 @@ function renderAcrBday(q){
         ${c.llego&&puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCumple('${c.id}')">🔓 Anular</button>`:""}
       </div></td></tr>`;
     const filasInv=invVis.map(inv=>`<tr style="background:${inv.llego?"#f0fdf4":"#fff"}">
-      <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${cNom}</span>${inv.instagram?` <span style="font-size:11px;color:#aaa">· @${String(inv.instagram).replace("@","")}</span>`:""}</td>
+      <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumpleaños de ${cNom}</span>${inv.instagram?` <span style="font-size:11px;color:#aaa">· @${String(inv.instagram).replace("@","")}</span>`:""}</td>
       <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
       <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
       <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
@@ -3609,7 +3609,7 @@ function filterAccType(type){
       const c=cumpleaneros.find(c=>c.id===inv.cumpleanero_id);
       const yaEntro=!!inv.llego;
       return `<tr style="background:#f5f3ff">
-        <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumple de ${c?.nombre||""} ${c?.apellido||""}</span></td>
+        <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumpleaños de ${c?.nombre||""} ${c?.apellido||""}</span></td>
         <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
         <td>${pulseraCellPorNombre((D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id)?.pulsera||"")}</td>
@@ -5471,7 +5471,7 @@ VIEWS.listas=()=>{
       const checked=entries.filter(e=>e.status==="checked_in").length;
       return `<div class="card"><div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px;flex-wrap:wrap;gap:8px">
         <div><div style="font-size:15px;font-weight:600">${l.name}</div>
-        <div style="font-size:12px;color:#888">${badge({friends_list:"👥 Amigos",birthday:"🎂 Cumple",ambassador:"⭐ Emb"}[l.type]||l.type,"purple")} ${l.deadline?`<span style="color:#92400E;font-size:11px;margin-left:6px">⏰ ${fmtDeadline(l.deadline)}</span>`:""}</div></div>
+        <div style="font-size:12px;color:#888">${badge({friends_list:"👥 Amigos",birthday:"🎂 Cumpleaños",ambassador:"⭐ Embajadores"}[l.type]||l.type,"purple")} ${l.deadline?`<span style="color:#92400E;font-size:11px;margin-left:6px">⏰ ${fmtDeadline(l.deadline)}</span>`:""}</div></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn" style="font-size:11px;padding:4px 10px" onclick="abrirImportLista('${l.id}')">📥 Carga masiva</button>
           <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openEditLista('${l.id}')">Editar</button>
@@ -11201,7 +11201,7 @@ VIEWS["base-datos"]=async()=>{
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 10px">
-          <span style="font-size:12px;color:var(--ink-4)">🎂 Cumple entre</span>
+          <span style="font-size:12px;color:var(--ink-4)">🎂 Cumpleaños entre</span>
           <input type="text" id="bd-cumple-desde" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
           <span style="font-size:12px;color:var(--ink-4)">y</span>
           <input type="text" id="bd-cumple-hasta" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
@@ -12473,7 +12473,7 @@ async function initBdayApp(){
       let toks;try{toks=await qrAsegurar(esMe?"cumple":"inv",obj);}catch(e){return toast("No se pudo generar el QR","error");}
       const link=qrLink(toks[0].t);
       const nom=esMe?c.nombre:obj.nombre;
-      const wa=obj.whatsapp?`https://wa.me/${String(obj.whatsapp).replace(/[^0-9]/g,"")}?text=${encodeURIComponent(`Hola ${nom}! Esta es tu entrada para ${ev?.name||"el evento"} (cumple de ${c.nombre}). Muéstrala en la puerta: ${link}`)}`:`https://wa.me/?text=${encodeURIComponent(`Entrada para ${ev?.name||"el evento"}: ${link}`)}`;
+      const wa=obj.whatsapp?`https://wa.me/${String(obj.whatsapp).replace(/[^0-9]/g,"")}?text=${encodeURIComponent(`Hola ${nom}! Esta es tu entrada para ${ev?.name||"el evento"} (cumpleaños de ${c.nombre}). Muéstrala en la puerta: ${link}`)}`:`https://wa.me/?text=${encodeURIComponent(`Entrada para ${ev?.name||"el evento"}: ${link}`)}`;
       const svg=await qrHtml(toks[0].t,200);
       openModal(`🎟 QR de ${nom}`,`
         <div style="text-align:center">
