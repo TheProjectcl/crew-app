@@ -965,7 +965,7 @@ const glMail={
 <div style="${GL_F}font-size:13px;line-height:19px;color:#C9C9CE;margin-top:10px">Vence el <strong style="color:#FFFFFF">${glEsc(limiteTxt)} hrs</strong></div>
 </td></tr></table>`;
     const urgencia=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px"><tr><td style="padding:16px 18px;${GL_F}font-size:14px;line-height:22px;color:#7C2D12">
-&#128293; <strong>Las entradas Close Friends son limitadas</strong> y se van por orden de pago.<br>Tu aprobación <strong>no reserva tu cupo</strong>: es tuyo recién cuando pagas. Si se agotan antes, te quedas afuera.</td></tr></table>`;
+&#128293; <strong>Las entradas Close Friends son limitadas</strong> y se van por orden de pago.<br>Tu aprobación <strong>no reserva tu cupo</strong>: es tuyo recién cuando pagas. <strong>¡Si se agotan antes, perdiste tu cupo!</strong></td></tr></table>`;
     return glMail.shell("#16C46B",
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
       glMail.row(glMail.h1(`¡${glEsc(nombre)}, tu postulación fue aprobada! &#127800;`)+glMail.p(mensaje||"Ahora te toca a ti: <strong style=\"color:#0B0B0C\">compra tu entrada antes de que se agoten</strong>."),"20px 48px 0")+
