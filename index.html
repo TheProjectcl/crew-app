@@ -11391,6 +11391,28 @@ async function loadBday(prodId){
   D.bday_cumpleaneros = cumpleaneros||[];
   D.bday_invitados   = invitados||[];
   D._bdayLoaded = true;
+  try{await bdayAdoptarBeneficios(prodId);}catch(e){console.warn("adoptar beneficios",e.message);}
+}
+// Beneficios creados antes de que fueran por evento (sin evento_id): pasan al evento activo/próximo donde se están usando.
+// No crea copias ni toca a los cumpleañeros (solo asigna el evento). Si dos eventos vigentes usan el mismo, el segundo recibe su propia copia.
+async function bdayAdoptarBeneficios(prodId){
+  if(!["superadmin","owner","coordinator"].includes(CU?.role))return;
+  window._bdayAdoptado=window._bdayAdoptado||{};const k=prodId||"*";if(window._bdayAdoptado[k])return;window._bdayAdoptado[k]=true;
+  for(const b of (D.bday_beneficios||[]).filter(b=>!b.evento_id)){
+    const evIds=[...new Set((D.bday_cumpleaneros||[]).filter(c=>c.beneficio_id===b.id&&c.evento_id).map(c=>c.evento_id))];
+    const vigentes=evIds.map(id=>D.eventos.find(e=>e.id===id)).filter(e=>e&&!eventoTermino(e)).sort((x,y)=>(x.date||"").localeCompare(y.date||""));
+    if(!vigentes.length)continue; // solo lo usaron eventos pasados → queda como "beneficios anteriores"
+    try{await sbPatch("bday_beneficios",`id=eq.${b.id}`,{evento_id:vigentes[0].id});b.evento_id=vigentes[0].id;}
+    catch(e){console.warn("adoptar",b.nombre,e.message);continue;}
+    for(const ev of vigentes.slice(1)){
+      const {id,created_at,...resto}=b;const nid=uid();const copia={...resto,id:nid,evento_id:ev.id,created_at:now()};
+      try{
+        await sbPost("bday_beneficios",[copia]);D.bday_beneficios.push(copia);
+        for(const c of (D.bday_cumpleaneros||[]).filter(c=>c.evento_id===ev.id&&c.beneficio_id===b.id)){await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{beneficio_id:nid});c.beneficio_id=nid;}
+      }catch(e){console.warn("adoptar copia",e.message);}
+    }
+    await log("adoptar_beneficio","evento",vigentes[0].id,`Beneficio "${b.nombre}" asignado a ${vigentes[0].name}${vigentes.length>1?` (+${vigentes.length-1} copia)`:""}`);
+  }
 }
 
 // ── Sidebar CF: agregar sección Cumpleaños ──
@@ -11425,7 +11447,8 @@ VIEWS["bday-beneficios"] = async()=>{
   const evB=D.eventos.find(e=>e.id===EV_DENTRO);
 
   const renderBens=()=>{
-    const bens=(D.bday_beneficios||[]).filter(b=>b.evento_id===EV_DENTRO); // beneficios de ESTE evento
+    const usadosAqui=new Set((D.bday_cumpleaneros||[]).filter(c=>c.evento_id===EV_DENTRO).map(c=>c.beneficio_id));
+    const bens=(D.bday_beneficios||[]).filter(b=>b.evento_id===EV_DENTRO||(!b.evento_id&&usadosAqui.has(b.id))); // beneficios de ESTE evento
     const fuentes=bdayFuentesDisponibles(prodId,EV_DENTRO);
     const selFuente=fuentes.length?`<select class="form-select" id="bb-src" style="margin:0;width:auto;max-width:300px;font-size:13px">${fuentes.map(f=>`<option value="${f.id}">${f.label} (${f.n})</option>`).join("")}</select>`:"";
     mc.innerHTML=`
@@ -11901,7 +11924,8 @@ VIEWS["bday-cumpleaneros"] = async()=>{
 function bdayFormCumple(id, prodId, evs){
   const c=id?(D.bday_cumpleaneros||[]).find(x=>x.id===id):null;
   const evIni=c?.evento_id||EV_DENTRO||evs?.[0]?.id||null;
-  const bensDe=evId=>(D.bday_beneficios||[]).filter(b=>(!prodId||b.productora_id===prodId)&&(b.evento_id===evId||(c&&b.id===c.beneficio_id)));
+  const bensDe=evId=>{const usados=new Set((D.bday_cumpleaneros||[]).filter(x=>x.evento_id===evId).map(x=>x.beneficio_id));
+    return (D.bday_beneficios||[]).filter(b=>(!prodId||b.productora_id===prodId)&&(b.evento_id===evId||(!b.evento_id&&usados.has(b.id))||(c&&b.id===c.beneficio_id)));};
   const bens=bensDe(evIni);
   window._bdayBensDe=bensDe;
   openModal(c?"Editar cumpleañero":"Registrar cumpleañero",`
