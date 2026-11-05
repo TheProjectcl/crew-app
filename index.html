@@ -955,11 +955,14 @@ const glMail={
     const ci=cierre?new Date(cierre):null;
     if(ci&&!isNaN(ci)&&ci>new Date()&&ci<limite){limite=ci;porCierre=true;}
     const hrsTxt=porCierre?null:(horas<48?`${horas} HORAS`:`${horas/24} DÍAS`);
-    const limiteTxt=limite.toLocaleString("es-CL",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit",hour12:false}).replace(/,([^,]*)$/," a las$1");
-    const reloj=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0B0B0C;border-radius:14px"><tr><td align="center" style="padding:22px 20px">
-<div style="${GL_F}font-size:12px;font-weight:700;letter-spacing:2px;color:#F59E0B;text-transform:uppercase">&#9203;&nbsp; Tu acceso vence</div>
-<div style="${GL_F}font-size:30px;line-height:36px;font-weight:800;color:#FFFFFF;margin-top:6px">${porCierre?"AL CIERRE DE VENTA":`TIENES ${hrsTxt}`}</div>
-<div style="${GL_F}font-size:14px;line-height:20px;color:#C9C9CE;margin-top:6px">Compra antes del <strong style="color:#FFFFFF">${glEsc(limiteTxt)} hrs</strong></div>
+    // Siempre en hora de Chile, aunque quien aprueba tenga el computador en otra zona horaria
+    const limiteTxt=limite.toLocaleString("es-CL",{timeZone:"America/Santiago",weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit",hour12:false}).replace(/,([^,]*)$/," a las$1");
+    // Contador animado: GIF que se genera al abrir el correo con el tiempo que queda en ese momento
+    const gifUrl=`${SB_URL}/functions/v1/countdown-gif?to=${Math.floor(limite.getTime()/1000)}`;
+    const reloj=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0B0B0C;border-radius:14px"><tr><td align="center" style="padding:18px 16px 16px">
+<div style="${GL_F}font-size:20px;line-height:26px;font-weight:800;color:#FFFFFF;letter-spacing:.5px">${porCierre?"&#9203; COMPRA ANTES DEL CIERRE DE VENTA":`&#9203; TIENES ${hrsTxt} PARA COMPRAR`}</div>
+<img src="${gifUrl}" width="472" alt="Tu acceso vence el ${glEsc(limiteTxt)} hrs" style="display:block;width:100%;max-width:472px;height:auto;margin:12px auto 0;border:0">
+<div style="${GL_F}font-size:13px;line-height:19px;color:#C9C9CE;margin-top:10px">Vence el <strong style="color:#FFFFFF">${glEsc(limiteTxt)} hrs</strong></div>
 </td></tr></table>`;
     const urgencia=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px"><tr><td style="padding:16px 18px;${GL_F}font-size:14px;line-height:22px;color:#7C2D12">
 &#128293; <strong>Las entradas Close Friends son limitadas</strong> y se van por orden de pago.<br>Tu aprobación <strong>no reserva tu cupo</strong>: es tuyo recién cuando pagas. Si se agotan antes, te quedas afuera.</td></tr></table>`;
