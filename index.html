@@ -9747,9 +9747,33 @@ window.cfConfirmarAprobacion=async(id)=>{
 let _cfFiltroActivo="todos";
 let currentCfEvId=null;
 
+// ── Historial Close Friends: la misma persona en otros eventos (por RUT; si no, correo o Instagram) ──
+function cfClavesPersona(p){
+  const k=[];const r=(p.rut||"").replace(/[^0-9kK]/g,"").toUpperCase();if(r.length>=7)k.push("r:"+r);
+  const e=(p.email||"").trim().toLowerCase();if(e)k.push("e:"+e);
+  const ig=(p.instagram||"").trim().toLowerCase().replace(/^@/,"").replace(/^https?:\/\/(www\.)?instagram\.com\//,"").replace(/\/.*$/,"");if(ig)k.push("i:"+ig);
+  return k;
+}
+function cfHistorial(p){
+  // índice por clave (se recalcula si cambian los datos cargados)
+  const firma=(D.cf_postulantes||[]).length+"|"+(D.cf_ordenes||[]).length;
+  if(!window._cfHistIdx||window._cfHistIdx.firma!==firma){
+    const idx={};(D.cf_postulantes||[]).forEach(x=>cfClavesPersona(x).forEach(k=>(idx[k]=idx[k]||[]).push(x)));
+    const pagadas=new Set((D.cf_ordenes||[]).filter(o=>o.estado==="conciliado").map(o=>o.postulante_id));
+    window._cfHistIdx={firma,idx,pagadas};
+  }
+  const {idx,pagadas}=window._cfHistIdx;
+  const otros=new Map();cfClavesPersona(p).forEach(k=>(idx[k]||[]).forEach(x=>{if(x.evento_id!==p.evento_id)otros.set(x.id,x);}));
+  const evN=id=>D.eventos.find(e=>e.id===id);
+  const lista=[...otros.values()].map(x=>({ev:evN(x.evento_id),aprobada:x.estado==="aprobado",compro:pagadas.has(x.id)})).filter(h=>h.ev).sort((a,b)=>(b.ev.date||"").localeCompare(a.ev.date||""));
+  return{aprobadas:lista.filter(h=>h.aprobada||h.compro),compras:lista.filter(h=>h.compro)};
+}
 window._cfRenderFilas=(evId,filtro,busq)=>{
   const posts=(D.cf_postulantes||[]).filter(p=>p.evento_id===evId);
-  let filtrados=filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos"):posts.filter(p=>p.estado===filtro);
+  let filtrados=filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos")
+    :filtro==="ya_cf"?posts.filter(p=>cfHistorial(p).aprobadas.length)
+    :filtro==="nuevo"?posts.filter(p=>!cfHistorial(p).compras.length)
+    :posts.filter(p=>p.estado===filtro);
   if(busq&&busq.trim()){
     const ql=busq.trim().toLowerCase();
     const qNum=busq.replace(/\D/g,"");
@@ -9768,6 +9792,9 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
       <td style="padding:8px">
         <div style="font-weight:500">${p.nombre} ${p.apellido}</div>
         <div style="font-size:11px;color:var(--ink-4)">${p.email}</div>
+        ${(()=>{const h=cfHistorial(p);if(!h.aprobadas.length)return "";
+          const fechas=h.aprobadas.map(x=>`${x.ev.name}${x.compro?" ✓":" (no compró)"}`);
+          return `<div style="margin-top:3px"><span title="${fechas.join(" · ").replace(/"/g,"&quot;")}" style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:10px">⭐ CF anterior</span> <span style="font-size:10px;color:#92400E">${fechas.slice(0,3).join(" · ")}${fechas.length>3?` · +${fechas.length-3}`:""}</span></div>`;})()}
         ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
       </td>
       <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
@@ -9807,6 +9834,8 @@ window._cfRenderPostulantes=(evId,filtro)=>{
     {key:"falta_info",label:`Falta Info${faltaInfoCount?` (${faltaInfoCount})`:""}`},
     {key:"aprobado",label:"Aprobados"},
     {key:"rechazado",label:"Rechazados"},
+    {key:"ya_cf",label:`⭐ Ya fue CF (${posts.filter(p=>cfHistorial(p).aprobadas.length).length})`},
+    {key:"nuevo",label:`🆕 Nunca compró (${posts.filter(p=>!cfHistorial(p).compras.length).length})`},
   ];
   return `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -9833,7 +9862,7 @@ window._cfRenderPostulantes=(evId,filtro)=>{
 
 window.cfCambiarFiltro=(evId,filtro)=>{
   _cfFiltroActivo=filtro;
-  ["todos","pendiente","falta_info","aprobado","rechazado"].forEach(k=>{
+  ["todos","pendiente","falta_info","aprobado","rechazado","ya_cf","nuevo"].forEach(k=>{
     const btn=$(`cf-tab-${k}`);
     if(!btn)return;
     btn.className=`btn${k===filtro?" btn-primary":""}`;
