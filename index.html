@@ -875,6 +875,8 @@ async function sendEmail(to, subject, html){
 // ═══════════════════════════════════
 const glEsc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const GL_F="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
+// Asunto del correo de aprobación Close Friends (con el plazo para comprar)
+function cfAsuntoAprobado(ev,cfg){const h=cfg?.horas_vencimiento||24;return `🌸 ¡Quedaste dentro! Tienes ${h<48?h+" horas":h/24+" días"} para comprar tu entrada — ${ev?.name||""}`;}
 const glMail={
   shell(accent,inner){
     return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><title>Guestly</title>
@@ -946,14 +948,30 @@ const glMail={
   },
 
   // ── 2) Aprobado Close Friends (link de compra)
-  aprobado({nombre,mensaje,tipo,link,horas}){
-    const plazo=horas?`<p style="margin:12px 0 0;font-size:13px;color:#C05621;background:#FFF8F1;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px;line-height:1.5"><strong>⏰ Tienes ${horas<48?`${horas} horas`:horas/24+" días"} para completar tu pago.</strong><br>Pasado ese plazo el link expirará y deberás contactarnos para reactivarlo.</p>`:"";
+  aprobado({nombre,mensaje,tipo,link,horas,cierre}){
+    horas=horas||24;
+    // Plazo: N horas desde ahora, o el cierre de venta si llega antes
+    let limite=new Date(Date.now()+horas*3600e3),porCierre=false;
+    const ci=cierre?new Date(cierre):null;
+    if(ci&&!isNaN(ci)&&ci>new Date()&&ci<limite){limite=ci;porCierre=true;}
+    const hrsTxt=porCierre?null:(horas<48?`${horas} HORAS`:`${horas/24} DÍAS`);
+    const limiteTxt=limite.toLocaleString("es-CL",{weekday:"long",day:"numeric",month:"long",hour:"2-digit",minute:"2-digit",hour12:false}).replace(/,([^,]*)$/," a las$1");
+    const reloj=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0B0B0C;border-radius:14px"><tr><td align="center" style="padding:22px 20px">
+<div style="${GL_F}font-size:12px;font-weight:700;letter-spacing:2px;color:#F59E0B;text-transform:uppercase">&#9203;&nbsp; Tu acceso vence</div>
+<div style="${GL_F}font-size:30px;line-height:36px;font-weight:800;color:#FFFFFF;margin-top:6px">${porCierre?"AL CIERRE DE VENTA":`TIENES ${hrsTxt}`}</div>
+<div style="${GL_F}font-size:14px;line-height:20px;color:#C9C9CE;margin-top:6px">Compra antes del <strong style="color:#FFFFFF">${glEsc(limiteTxt)} hrs</strong></div>
+</td></tr></table>`;
+    const urgencia=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:12px"><tr><td style="padding:16px 18px;${GL_F}font-size:14px;line-height:22px;color:#7C2D12">
+&#128293; <strong>Las entradas Close Friends son limitadas</strong> y se van por orden de pago.<br>Tu aprobación <strong>no reserva tu cupo</strong>: es tuyo recién cuando pagas. Si se agotan antes, te quedas afuera.</td></tr></table>`;
     return glMail.shell("#16C46B",
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
-      glMail.row(glMail.h1(`¡Hola ${glEsc(nombre)}! &#127800;`)+glMail.p(mensaje||"¡Felicidades! Tu solicitud para Close Friends fue aprobada. Usa tu link personal para comprar tu entrada.")+plazo,"20px 48px 0")+
-      (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"28px 48px 0"):"")+
-      glMail.row(glMail.button(link,"COMPRAR MI ENTRADA")+glMail.small("&#128274;&nbsp; Este link es personal e intransferible."),"24px 48px 0")+
-      glMail.row(glMail.fallback(link),"28px 48px 40px"));
+      glMail.row(glMail.h1(`¡${glEsc(nombre)}, quedaste dentro! &#127800;`)+glMail.p(mensaje||"Tu postulación a Close Friends fue aprobada. Ahora te toca a ti: <strong style=\"color:#0B0B0C\">compra tu entrada antes de que se agoten</strong>."),"20px 48px 0")+
+      glMail.row(reloj,"24px 48px 0")+
+      (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"20px 48px 0"):"")+
+      glMail.row(glMail.button(link,"COMPRAR MI ENTRADA AHORA")+glMail.small(`&#128274;&nbsp; Link personal e intransferible · vence el ${glEsc(limiteTxt)} hrs`),"24px 48px 0")+
+      glMail.row(urgencia,"24px 48px 0")+
+      glMail.row(glMail.p("Pasado el plazo no podemos asegurarte un cupo. ¡No lo dejes para después! &#128640;",14),"20px 48px 0")+
+      glMail.row(glMail.fallback(link),"20px 48px 40px"));
   },
 
   // ── 3) Entrada confirmada (después de pagar)
@@ -9534,7 +9552,7 @@ window.cfReenviarCorreo=async(id)=>{
   if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
   const link=`${CF_APP_URL}?cf_buy=${token}`;
   try{
-    await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link,horas:cfg.horas_vencimiento||24}));
+    await sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta}));
     toast(`📧 Correo reenviado a ${p.email}`,"ok");
     await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
   }catch(e){
@@ -9753,7 +9771,7 @@ VIEWS.cfPostulantes = async()=>{
       window._cfAprobando.add(id);
       try{
         const cfg=getCFConfig(pPrev.evento_id);const ev=D.eventos.find(e=>e.id===pPrev.evento_id);
-        const ok=await sendEmail(pPrev.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:pPrev.nombre,mensaje:cfg.msg_aprobacion,tipo:pPrev.tipo_entrada||"",link:`${CF_APP_URL}?cf_buy=${pPrev.buy_token}`,horas:cfg.horas_vencimiento||24}));
+        const ok=await sendEmail(pPrev.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:pPrev.nombre,mensaje:cfg.msg_aprobacion,tipo:pPrev.tipo_entrada||"",link:`${CF_APP_URL}?cf_buy=${pPrev.buy_token}`,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta}));
         toast(ok?`📧 Correo reenviado a ${pPrev.email}`:"No se pudo reenviar",ok?"ok":"warn");
       }finally{window._cfAprobando.delete(id);}
       return;
@@ -9770,8 +9788,8 @@ VIEWS.cfPostulantes = async()=>{
   window.cfPreviewAprobacion=(p,tipoEntrada)=>{
     const cfg=getCFConfig(p.evento_id);const ev=D.eventos.find(e=>e.id===p.evento_id);
     const tipoTexto=tipoEntrada||p.tipo_entrada||"";
-    const asunto=`¡Aprobada para Close Friends — ${ev?.name||""}!`;
-    const html=glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link:`${CF_APP_URL}?cf_buy=TOKEN-NUEVO`,horas:cfg.horas_vencimiento||24});
+    const asunto=cfAsuntoAprobado(ev,cfg);
+    const html=glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link:`${CF_APP_URL}?cf_buy=TOKEN-NUEVO`,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta});
     const ordenAct=(D.cf_ordenes||[]).find(o=>o.postulante_id===p.id&&!["vencido","rechazado"].includes(o.estado));
     const avisos=[];
     if(ordenAct)avisos.push(`<div style="background:#FEE2E2;border:1px solid #FCA5A5;color:#991B1B;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:8px">🛑 <strong>Esta persona YA tiene una compra</strong> (orden ${ordenAct.codigo||""} · ${ordenAct.estado}). No corresponde aprobarla de nuevo: si lo haces, recibirá un correo confuso y su link anterior dejará de funcionar.</div>`);
@@ -9817,7 +9835,7 @@ VIEWS.cfPostulantes = async()=>{
       const link=`${CF_APP_URL}?cf_buy=${token}`;
       const tipoTexto=tipoEntrada||p.tipo_entrada||"";
       try{
-        await sendEmail(p.email,`¡Aprobada para Close Friends — ${ev?.name||""}!`,glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link,horas:cfg.horas_vencimiento||24}));
+        await sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta}));
         toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Email enviado.`,"ok");
       }catch(e){
         toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
@@ -9889,12 +9907,12 @@ VIEWS.cfPostulantes = async()=>{
     const dest=posts.filter(p=>!omit.has(p.id));
     if(!dest.length){toast("Todas las seleccionadas ya estaban aprobadas o ya compraron","warn");return;}
     const p0=dest[0];const cfg=getCFConfig(p0.evento_id);const ev=D.eventos.find(e=>e.id===p0.evento_id);
-    const html=glMail.aprobado({nombre:p0.nombre,mensaje:cfg.msg_aprobacion,tipo:tipo||"",link:`${CF_APP_URL}?cf_buy=TOKEN-NUEVO`,horas:cfg.horas_vencimiento||24});
+    const html=glMail.aprobado({nombre:p0.nombre,mensaje:cfg.msg_aprobacion,tipo:tipo||"",link:`${CF_APP_URL}?cf_buy=TOKEN-NUEVO`,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta});
     openModal(`Confirmar aprobación de ${dest.length} postulante${dest.length>1?"s":""}`,`
       ${cfVentaCerrada(cfg)?`<div style="background:#FEF3C7;border:1px solid #FDE68A;color:#92400E;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:8px">⚠ La venta está cerrada: recibirán el correo pero no podrán comprar hasta que la reabras.</div>`:""}
       ${omit.size?`<div style="font-size:12px;color:#888;margin-bottom:8px">Se omiten <strong>${omit.size}</strong> (ya aprobadas o con compra).</div>`:""}
       <div style="max-height:150px;overflow:auto;border:1px solid var(--line);border-radius:8px;margin-bottom:10px;font-size:12px">${dest.map(p=>`<div style="padding:6px 10px;border-bottom:1px solid var(--line)"><strong>${p.nombre} ${p.apellido||""}</strong> <span style="color:#888">· ${p.email}</span></div>`).join("")}</div>
-      <div style="font-size:12px;color:#555;margin-bottom:6px"><strong>Asunto:</strong> ¡Aprobada para Close Friends — ${ev?.name||""}!${tipo?` · <strong>Entrada:</strong> ${tipo}`:""} · <strong>Vista previa</strong> (ejemplo con ${p0.nombre}):</div>
+      <div style="font-size:12px;color:#555;margin-bottom:6px"><strong>Asunto:</strong> ${cfAsuntoAprobado(ev,cfg)}${tipo?` · <strong>Entrada:</strong> ${tipo}`:""} · <strong>Vista previa</strong> (ejemplo con ${p0.nombre}):</div>
       <iframe id="cf-apr-prev" style="width:100%;height:300px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6"></iframe>
       <div class="modal-footer">
         <button class="btn" onclick="closeModal()">Cancelar</button>
