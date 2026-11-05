@@ -6208,6 +6208,130 @@ function asegurarEventoOperativo(){
   return D.eventos.find(e=>e.id===currentEvId)||null;
 }
 
+// ── Cierre del evento: ventas, accesos validados y cruce con transferencias (cualquier evento; los pasados quedan en solo lectura) ──
+let _resEvId=null;
+function abrirResumenEvento(evId){_resEvId=evId;goView("evento-resumen");}
+function cierreEventoDatos(ev){
+  const listas=(D.acc_lists||[]).filter(l=>l.event_id===ev.id);
+  const listaN=id=>listas.find(l=>l.id===id)?.name||"";
+  const entries=(D.acc_entries||[]).filter(e=>e.event_id===ev.id);
+  const tokUsados=o=>(Array.isArray(o?.qr_tokens)?o.qr_tokens:[]).filter(x=>x&&x.usado_at).length;
+  // Close Friends
+  const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===ev.id);
+  const cfPag=ords.filter(o=>o.estado==="conciliado");
+  const cfSinConc=ords.filter(o=>o.estado==="pagado");
+  const cfTickets=cfPag.reduce((a,o)=>a+(o.cantidad||1),0);
+  const cfTotal=cfPag.reduce((a,o)=>a+(o.monto_total||0),0);
+  const cfPorValor={};cfPag.forEach(o=>{const q=o.cantidad||1,u=Math.round((o.monto_total||0)/q);(cfPorValor[u]=cfPorValor[u]||{valor:u,tickets:0,ordenes:0,total:0});cfPorValor[u].tickets+=q;cfPorValor[u].ordenes++;cfPorValor[u].total+=o.monto_total||0;});
+  const cfValidados=cfPag.reduce((a,o)=>a+(tokUsados(o)||(o.ingreso_at?(o.cantidad||1):0)),0);
+  // Mesas
+  const mesas=(D.vip_tables||[]).filter(m=>m.event_id===ev.id).sort((x,y)=>(x.table_num||0)-(y.table_num||0));
+  const vendida=m=>m.comprador_id&&!["disponible","no_vendida","rechazada"].includes(m.estado_reserva)&&((m.amount_paid||0)>0||m.estado_reserva==="cerrada");
+  const mesasV=mesas.filter(vendida);
+  const tipoN=m=>(D.mesa_tipos||[]).find(t=>t.id===m.mesa_tipo_id)?.nombre||"";
+  const mesaGr={};mesasV.forEach(m=>{const k=`${tipoN(m)||"Mesa"}|${m.price||0}`;(mesaGr[k]=mesaGr[k]||{tipo:tipoN(m)||"Mesa",precio:m.price||0,cant:0,total:0,cobrado:0});mesaGr[k].cant++;mesaGr[k].total+=m.price||0;mesaGr[k].cobrado+=m.amount_paid||0;});
+  const mesasPrecio=mesasV.reduce((a,m)=>a+(m.price||0),0), mesasCobrado=mesasV.reduce((a,m)=>a+(m.amount_paid||0),0);
+  const medios={efectivo:0,transferencia:0,tarjeta:0};mesasV.forEach(m=>{medios.efectivo+=m.pago_efectivo||0;medios.tarjeta+=m.pago_tarjeta||0;const t=(m.pago_transferencia||0)||Math.max((m.amount_paid||0)-(m.pago_efectivo||0)-(m.pago_tarjeta||0),0);medios.transferencia+=t;});
+  const perfiles=mesasV.flatMap(m=>(m.perfiles||[]));
+  // Pulseras extra
+  const lotes=mesas.flatMap(m=>(m.solicitudes_pulseras||[]).map(l=>({...l,_m:m})));
+  const lotesPag=lotes.filter(l=>l.estado==="pagado");
+  const pulsPersonas=lotesPag.flatMap(l=>(l.personas||[]).filter(p=>p.estado==="aprobada"));
+  const pulsTotal=lotesPag.reduce((a,l)=>a+(l.precio_total||0),0);
+  // Accesos validados
+  const acc={
+    listas:{reg:entries.length,val:entries.filter(e=>e.status==="checked_in").length},
+    cf:{reg:cfTickets,val:cfValidados},
+    mesas:{reg:perfiles.length,val:perfiles.filter(p=>p.llego||tokUsados(p)).length},
+    pulseras:{reg:pulsPersonas.length,val:pulsPersonas.filter(p=>p.llego||tokUsados(p)).length},
+  };
+  // Cruce con transferencias conciliadas (Pagos → Conciliación de pagos)
+  const ordIds=new Set(ords.map(o=>o.id)),mesaIds=new Set(mesas.map(m=>m.id));
+  const trans=(D.transferencias||[]).filter(t=>t.estado==="conciliada"&&((t.match_tipo==="cf"&&ordIds.has(t.match_id))||(t.match_tipo==="mesa"&&mesaIds.has(t.match_id))||(t.match_tipo==="lote"&&mesaIds.has(String(t.match_id||"").split(":")[0]))));
+  const transTotal=trans.reduce((a,t)=>a+(t.monto||0),0);
+  const conTrans=new Set(trans.map(t=>t.match_tipo+":"+t.match_id));
+  const cobroTransf=cfTotal+medios.transferencia+pulsTotal; // lo que debió entrar por transferencia
+  const sinTrans=[
+    ...cfPag.filter(o=>!conTrans.has("cf:"+o.id)&&!o.transferencia_id).map(o=>{const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};return{tipo:"🌸 Close Friends",nombre:`${p.nombre||""} ${p.apellido||""}`.trim(),detalle:`${o.codigo||""} · ${o.cantidad||1} entrada(s)`,monto:o.monto_total||0};}),
+    ...mesasV.filter(m=>!conTrans.has("mesa:"+m.id)&&(m.pago_transferencia||0)>0).map(m=>({tipo:"🍾 Mesa",nombre:(D.users||[]).find(u=>u.id===m.comprador_id)?.name||"",detalle:`Mesa ${m.table_num}`,monto:m.pago_transferencia||0})),
+    ...lotesPag.filter(l=>!conTrans.has(`lote:${l._m.id}:${l.id}`)).map(l=>({tipo:"🎟 Pulseras extra",nombre:(D.users||[]).find(u=>u.id===l._m.comprador_id)?.name||"",detalle:`Mesa ${l._m.table_num}`,monto:l.precio_total||0})),
+  ];
+  return{listaN,entries,ords,cfPag,cfSinConc,cfTickets,cfTotal,cfPorValor:Object.values(cfPorValor).sort((x,y)=>y.valor-x.valor),mesas,mesasV,mesaGr:Object.values(mesaGr).sort((x,y)=>y.precio-x.precio),mesasPrecio,mesasCobrado,medios,lotesPag,pulsPersonas,pulsTotal,acc,trans,transTotal,cobroTransf,sinTrans,tipoN,
+    totalVendido:cfTotal+mesasPrecio+pulsTotal,totalCobrado:cfTotal+mesasCobrado+pulsTotal};
+}
+VIEWS["evento-resumen"]=async()=>{
+  const mc=$("main-content");const ev=D.eventos.find(e=>e.id===_resEvId);
+  if(!ev){eventosTab="pasados";return goView("eventos");}
+  document.querySelector('.nav-item[data-v="eventos"]')?.classList.add("active");
+  mc.innerHTML=`<div class="page-title">${ev.name}</div><div style="color:#888;font-size:13px">Armando el cierre…</div>`;
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  try{if(!D._cfLoaded)await loadCF(prodId);}catch(e){}
+  try{await loadTransferencias(prodId);}catch(e){}
+  let cumps=[],invs=[];
+  try{cumps=await sbGet("bday_cumpleaneros",`evento_id=eq.${ev.id}`);if(cumps.length)invs=await sbGet("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);}catch(e){}
+  if(CURRENT_VIEW!=="evento-resumen"||_resEvId!==ev.id)return;
+  const d=cierreEventoDatos(ev);d.cumps=cumps;d.invs=invs;d.ev=ev;
+  d.acc.bday={reg:cumps.length+invs.filter(i=>i.estado==="aprobado").length,val:cumps.filter(x=>x.llego).length+invs.filter(i=>i.llego).length};
+  window._resEvData=d;
+  const pasado=esEventoPasado(ev);
+  const fechaTxt=ev.date?new Date(ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long",year:"numeric"}):"";
+  const kpi=(t,v,sub,col)=>`<div class="card-sm"><div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.04em">${t}</div><div style="font-size:22px;font-weight:700;color:${col||"#111"}">${v}</div>${sub?`<div style="font-size:11px;color:#888">${sub}</div>`:""}</div>`;
+  const th=t=>`<th style="text-align:right">${t}</th>`,tdR=v=>`<td style="text-align:right">${v}</td>`;
+  const sec=(titulo,btn,body)=>`<div class="card" style="margin-bottom:14px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap"><div style="font-weight:700;font-size:15px">${titulo}</div>${btn?`<button class="btn" style="font-size:11px" onclick="resEvDescargar('${btn}')">⬇ Descargar detalle</button>`:""}</div>${body}</div>`;
+  const accRow=(n,a)=>`<tr><td>${n}</td>${tdR(a.reg)}${tdR(`<strong>${a.val}</strong>`)}${tdR(a.reg?Math.round(a.val/a.reg*100)+"%":"—")}</tr>`;
+  const accTot={reg:Object.values(d.acc).reduce((x,a)=>x+a.reg,0),val:Object.values(d.acc).reduce((x,a)=>x+a.val,0)};
+  const dif=d.transTotal-d.cobroTransf;
+  mc.innerHTML=`
+    <div style="margin-bottom:10px"><button class="btn" style="font-size:12px" onclick="eventosTab='${pasado?"pasados":"actuales"}';goView('eventos')">← Eventos${pasado?" pasados":""}</button></div>
+    <div class="sec-header"><div><div class="page-title" style="margin-bottom:2px">📊 Cierre · ${ev.name} ${pasado?`<span style="font-size:12px;background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:20px;vertical-align:middle">🏁 Finalizado · solo lectura</span>`:`<span style="font-size:12px;background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;vertical-align:middle">En curso · cifras parciales</span>`}</div>
+      <div style="font-size:13px;color:#666">${fechaTxt}${ev.start_time?` · ${ev.start_time.slice(0,5)}–${(ev.end_time||"").slice(0,5)}`:""}${ev.venue?` · ${ev.venue}`:""}</div></div>
+      <button class="btn btn-primary" onclick="resEvDescargar('todo')">⬇ Descargar cierre completo</button></div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:14px 0">
+      ${kpi("Total vendido",fmtM(d.totalVendido),"CF + mesas + pulseras extra","#534AB7")}
+      ${kpi("Total cobrado",fmtM(d.totalCobrado),d.totalVendido>d.totalCobrado?`saldo por cobrar ${fmtM(d.totalVendido-d.totalCobrado)}`:"todo cobrado ✓","#166534")}
+      ${kpi("Personas validadas",accTot.val,`de ${accTot.reg} con acceso`)}
+      ${kpi("Transferencias conciliadas",fmtM(d.transTotal),`${d.trans.length} transferencia(s)`)}
+    </div>
+    ${sec("🎫 Accesos: entradas y validados","asistentes",`<table class="data-table"><thead><tr><th>Canal</th>${th("Con acceso")}${th("Validados")}${th("%")}</tr></thead><tbody>
+      ${accRow("👥 Listas",d.acc.listas)}${accRow("🌸 Close Friends (tickets)",d.acc.cf)}${accRow("🍾 Invitados de mesas",d.acc.mesas)}${d.acc.pulseras.reg?accRow("🎟 Pulseras extra",d.acc.pulseras):""}${d.acc.bday.reg?accRow("🎂 Cumpleaños",d.acc.bday):""}
+      <tr style="font-weight:700;background:#f8fafc"><td>Total</td>${tdR(accTot.reg)}${tdR(accTot.val)}${tdR(accTot.reg?Math.round(accTot.val/accTot.reg*100)+"%":"—")}</tr></tbody></table>`)}
+    ${sec(`🌸 Close Friends · ${d.cfTickets} tickets vendidos`,"cf",`<table class="data-table"><thead><tr><th>Valor ticket</th>${th("Tickets")}${th("Órdenes")}${th("Total")}</tr></thead><tbody>
+      ${d.cfPorValor.map(g=>`<tr><td>${fmtM(g.valor)}</td>${tdR(g.tickets)}${tdR(g.ordenes)}${tdR(fmtM(g.total))}</tr>`).join("")||`<tr><td colspan="4" style="color:#999">Sin ventas pagadas.</td></tr>`}
+      <tr style="font-weight:700;background:#f8fafc"><td>Total pagado</td>${tdR(d.cfTickets)}${tdR(d.cfPag.length)}${tdR(fmtM(d.cfTotal))}</tr></tbody></table>
+      ${d.cfSinConc.length?`<div style="font-size:12px;color:#92400E;margin-top:8px">⚠️ ${d.cfSinConc.length} orden(es) con comprobante sin conciliar por ${fmtM(d.cfSinConc.reduce((a,o)=>a+(o.monto_total||0),0))} — no suman al total.</div>`:""}`)}
+    ${sec(`🍾 Mesas VIP · ${d.mesasV.length} vendidas de ${d.mesas.length}`,"mesas",`<table class="data-table"><thead><tr><th>Tipo</th>${th("Precio")}${th("Cantidad")}${th("Total")}${th("Cobrado")}</tr></thead><tbody>
+      ${d.mesaGr.map(g=>`<tr><td>${g.tipo}</td>${tdR(fmtM(g.precio))}${tdR(g.cant)}${tdR(fmtM(g.total))}${tdR(fmtM(g.cobrado))}</tr>`).join("")||`<tr><td colspan="5" style="color:#999">Sin mesas vendidas.</td></tr>`}
+      <tr style="font-weight:700;background:#f8fafc"><td>Total</td><td></td>${tdR(d.mesasV.length)}${tdR(fmtM(d.mesasPrecio))}${tdR(fmtM(d.mesasCobrado))}</tr></tbody></table>
+      <div style="font-size:12px;color:#555;margin-top:8px">Cobrado por medio de pago: 🏦 Transferencia ${fmtM(d.medios.transferencia)} · 💵 Efectivo ${fmtM(d.medios.efectivo)} · 💳 Tarjeta ${fmtM(d.medios.tarjeta)}${d.mesasPrecio>d.mesasCobrado?` · <span style="color:#991B1B;font-weight:600">Saldo por cobrar ${fmtM(d.mesasPrecio-d.mesasCobrado)}</span>`:""}</div>`)}
+    ${d.lotesPag.length?sec(`🎟 Pulseras extra · ${d.pulsPersonas.length} vendidas`,"pulseras",`<div style="font-size:13px">${d.lotesPag.length} pedido(s) pagado(s) · <strong>${fmtM(d.pulsTotal)}</strong></div>`):""}
+    ${sec("🏦 Cruce con transferencias","conc",`<table class="data-table"><tbody>
+      <tr><td>Debió entrar por transferencia (CF + mesas por transferencia + pulseras extra)</td>${tdR(`<strong>${fmtM(d.cobroTransf)}</strong>`)}</tr>
+      <tr><td>Transferencias conciliadas a este evento en Pagos → Conciliación de pagos</td>${tdR(`<strong>${fmtM(d.transTotal)}</strong>`)}</tr>
+      <tr style="background:${Math.abs(dif)<1?"#f0fdf4":"#FEF3C7"}"><td><strong>Diferencia</strong></td>${tdR(`<strong style="color:${Math.abs(dif)<1?"#166534":"#92400E"}">${Math.abs(dif)<1?"✓ Calza":dif<0?`Faltan ${fmtM(-dif)} por vincular`:`Sobran ${fmtM(dif)}`}</strong>`)}</tr></tbody></table>
+      ${d.sinTrans.length?`<div style="font-size:12px;color:#555;margin-top:10px"><strong>${d.sinTrans.length} pago(s) confirmado(s) sin transferencia vinculada</strong> (confirmados antes de la conciliación automática o a mano). Revísalos contra la cartola:</div>
+      <div style="max-height:260px;overflow:auto;margin-top:6px"><table class="data-table" style="font-size:12px"><tbody>${d.sinTrans.map(x=>`<tr><td>${x.tipo}</td><td>${x.nombre}</td><td style="color:#666">${x.detalle}</td>${tdR(fmtM(x.monto))}</tr>`).join("")}</tbody></table></div>`:`<div style="font-size:12px;color:#166534;margin-top:8px">✓ Todos los pagos por transferencia tienen su transferencia vinculada.</div>`}`)}
+    ${ev.cierre?`<div style="font-size:11px;color:#888">🏁 Cierre automático del evento: ${new Date(ev.cierre.at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false})}${ev.cierre.cf_vencidas?` · ${ev.cierre.cf_vencidas} órdenes CF vencidas`:""}${ev.cierre.mesas_no_vendidas?` · ${ev.cierre.mesas_no_vendidas} mesas no vendidas`:""}</div>`:""}`;
+};
+function resEvDescargar(tipo){
+  const d=window._resEvData;if(!d)return;const f=x=>x?fmtDT(x):"";const slug=(d.ev.name||"evento").replace(/[^\w]+/g,"_");
+  const uN=id=>(D.users||[]).find(u=>u.id===id);
+  const estadoCF={conciliado:"Pagada",pagado:"Comprobante sin conciliar",pendiente:"Sin pagar",vencido:"Vencida",rechazado:"Rechazada"};
+  const post=id=>(D.cf_postulantes||[]).find(p=>p.id===id)||{};
+  const transDe=(tipo,id)=>d.trans.find(t=>t.match_tipo===tipo&&String(t.match_id)===String(id));
+  if(tipo==="asistentes")return descargarTabla(`asistentes_${slug}`,[["Nombre","RUT","Lista","Estado","Hora ingreso"],...d.entries.map(e=>[e.name||"",e.rut?fmtRut(e.rut):"",d.listaN(e.list_id),e.status==="checked_in"?"Validado":"No ingresó",f(e.checked_in_at)])],"Asistentes",{titulo:"asistentes"});
+  if(tipo==="cf")return descargarTabla(`close_friends_${slug}`,[["Código","Nombre","RUT","Correo","Tickets","Valor ticket","Monto","Estado","Conciliada el","Transferencia"],...d.ords.map(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id),q=o.cantidad||1;return[o.codigo||"",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",p.email||"",q,Math.round((o.monto_total||0)/q),o.monto_total||0,estadoCF[o.estado]||o.estado||"",f(o.conciliado_at),t?`${t.nombre||""} ${fmtM(t.monto||0)} ${t.fecha?fmtDT(t.fecha):""}`:""];})],"Close Friends",{titulo:"Close Friends"});
+  if(tipo==="mesas")return descargarTabla(`mesas_${slug}`,[["Mesa","Tipo","Comprador","Correo","Estado","Precio","Cobrado","Transferencia","Efectivo","Tarjeta","Saldo","Transferencia vinculada"],...d.mesas.map(m=>{const u=uN(m.comprador_id),t=transDe("mesa",m.id);return[m.table_num,d.tipoN(m),u?.name||"",u?.email||"",ESTADO_MESA[m.estado_reserva]?.label||m.estado_reserva||"",m.price||0,m.amount_paid||0,m.pago_transferencia||0,m.pago_efectivo||0,m.pago_tarjeta||0,Math.max((m.price||0)-(m.amount_paid||0),0),t?`${t.nombre||""} ${fmtM(t.monto||0)}`:""];})],"Mesas",{titulo:"mesas"});
+  if(tipo==="pulseras")return descargarTabla(`pulseras_extra_${slug}`,[["Mesa","Comprador","Personas","Monto","Pagado el"],...d.lotesPag.map(l=>[l._m.table_num,uN(l._m.comprador_id)?.name||"",(l.personas||[]).filter(p=>p.estado==="aprobada").length,l.precio_total||0,f(l.paid_at)])],"Pulseras extra",{titulo:"pulseras extra"});
+  if(tipo==="conc")return descargarTabla(`transferencias_${slug}`,[["Fecha","Transfirió","RUT","Banco","Monto","Asignada a","Origen"],...d.trans.map(t=>[t.fecha?fmtDT(t.fecha):"",t.nombre||"",t.rut?fmtRut(t.rut):"",t.banco||"",t.monto||0,t.match_label||"",t.origen||""]),[],["PAGOS SIN TRANSFERENCIA VINCULADA"],["Tipo","Nombre","Detalle","Monto"],...d.sinTrans.map(x=>[x.tipo.replace(/^\S+\s/,""),x.nombre,x.detalle,x.monto])],"Transferencias",{titulo:"cruce con transferencias"});
+  if(tipo==="todo"){
+    const rows=[["Tipo","Cliente","RUT","Detalle","Valor","Cobrado","Medio de pago","Estado","Transferencia vinculada"]];
+    d.ords.filter(o=>o.estado==="conciliado").forEach(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id);rows.push(["Close Friends",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",`${o.codigo||""} · ${o.cantidad||1} ticket(s)`,o.monto_total||0,o.monto_total||0,"Transferencia","Pagada",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
+    d.mesasV.forEach(m=>{const u=uN(m.comprador_id),t=transDe("mesa",m.id);rows.push(["Mesa",u?.name||"",u?.rut?fmtRut(u.rut):"",`Mesa ${m.table_num}${d.tipoN(m)?" · "+d.tipoN(m):""}`,m.price||0,m.amount_paid||0,[m.pago_transferencia?"Transf. "+fmtM(m.pago_transferencia):"",m.pago_efectivo?"Efectivo "+fmtM(m.pago_efectivo):"",m.pago_tarjeta?"Tarjeta "+fmtM(m.pago_tarjeta):""].filter(Boolean).join(" + ")||"Transferencia",ESTADO_MESA[m.estado_reserva]?.label||m.estado_reserva||"",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
+    d.lotesPag.forEach(l=>{const u=uN(l._m.comprador_id),t=d.trans.find(x=>x.match_tipo==="lote"&&x.match_id===`${l._m.id}:${l.id}`);rows.push(["Pulseras extra",u?.name||"","",`Mesa ${l._m.table_num} · ${(l.personas||[]).filter(p=>p.estado==="aprobada").length} pulsera(s)`,l.precio_total||0,l.precio_total||0,"Transferencia","Pagado",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
+    rows.push([],["RESUMEN"],["Total vendido","","","","",d.totalVendido],["Total cobrado","","","","",d.totalCobrado],["Transferencias conciliadas","","","","",d.transTotal],["Debió entrar por transferencia","","","","",d.cobroTransf]);
+    return descargarTabla(`cierre_${slug}`,rows,"Cierre",{titulo:"cierre del evento"});
+  }
+}
 VIEWS.eventos=()=>{
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const evsAll=D.eventos.filter(e=>prodId===null||e.productora_id===prodId);
@@ -6233,7 +6357,7 @@ VIEWS.eventos=()=>{
       const pasado=eventosTab==="pasados";
       return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${pasado?"#9CA3AF":{active:"#22C55E",draft:"#F59E0B",closed:"#9CA3AF",cancelled:"#EF4444"}[ev.status]||"#aaa"};${pasado?"opacity:.85":""}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <div style="cursor:pointer" onclick="currentEvId='${ev.id}';goView('dashboard')">
+          <div style="cursor:pointer" onclick="${pasado?`abrirResumenEvento('${ev.id}')`:`currentEvId='${ev.id}';goView('dashboard')`}">
             <div style="font-size:16px;font-weight:600">${ev.name} ${ev.id===currentEvId?badge("● Activo","green"):""}${ev.archivado?badge("🗄 Archivado","gray"):""}</div>
             <div style="font-size:12px;color:#888;margin-top:3px">${ev.date} · ${ev.start_time||"23:00"}–${ev.end_time||"06:00"}${ev.venue?" · "+ev.venue:""}${ev.max_capacity?" · "+ev.max_capacity+" máx":""}</div>
             <div style="font-size:12px;color:#888;margin-top:2px">${checked}/${entries.length} acreditados · ${D.vip_tables.filter(t=>t.event_id===ev.id).length} mesas</div>
@@ -6248,6 +6372,7 @@ VIEWS.eventos=()=>{
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${badge({active:"Activo",draft:"Borrador",closed:"🏁 Finalizado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
+            ${["superadmin","owner","coordinator","cashier"].includes(CU.role)?`<button class="btn" style="font-size:11px;padding:4px 10px;font-weight:600" onclick="abrirResumenEvento('${ev.id}')">📊 Cierre</button>`:""}
             ${pasado
               ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>${["superadmin","owner"].includes(CU.role)?`<button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="openEliminarEvento('${ev.id}')">🗑 Eliminar</button>`:""}`
               : `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="openEditarEvento('${ev.id}')">Editar</button>
