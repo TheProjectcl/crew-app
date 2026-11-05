@@ -570,6 +570,8 @@ const ROLE_META = {
   cashier:    {label:"Caja",            badge:"amber",  icon:""},
   ambassador_chief:{label:"Jefe Embajadores",badge:"green",icon:""},
   embajador:  {label:"Embajador",       badge:"green",  icon:""},
+  comprador:  {label:"Comprador de mesa", badge:"blue",  icon:""},
+  cumpleanero:{label:"Cumpleañero/a",   badge:"amber",  icon:""},
 };
 const rm = r=>ROLE_META[r]||{label:r,badge:"gray",icon:""};
 // rm con contexto de usuario: owners muestran nombre de su productora
@@ -6995,36 +6997,65 @@ async function savePulseras(evId){
 }
 
 // ── USUARIOS ──
+// Usuarios: separados en Equipo (trabajan en la productora) y Clientes (público con cuenta: compradores de mesa, cumpleañeros)
+let _usrTab="equipo",_usrQ="";
+const USR_GRUPOS={
+  equipo:[
+    {t:"Administración",roles:["superadmin","owner","coordinator"]},
+    {t:"Puerta, VIP y caja",roles:["door_chief","door_staff","vip_staff","cashier"]},
+    {t:"Embajadores",roles:["ambassador_chief","embajador"]},
+  ],
+  clientes:[
+    {t:"Compradores de mesa",roles:["comprador"]},
+    {t:"Cumpleañeros",roles:["cumpleanero"]},
+  ],
+};
+const USR_ROLES_EQUIPO=new Set(USR_GRUPOS.equipo.flatMap(g=>g.roles));
 VIEWS.usuarios=()=>{
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const users=D.users.filter(u=>prodId===null?true:u.productora_id===prodId);
-  // Marca al owner si está
   const prod=D.productoras.find(p=>p.id===prodId);
+  const equipo=users.filter(u=>USR_ROLES_EQUIPO.has(u.role));
+  const clientes=users.filter(u=>!USR_ROLES_EQUIPO.has(u.role)); // todo lo que no es equipo es público
+  const base=_usrTab==="clientes"?clientes:equipo;
+  const q=acrNorm(_usrQ||"");
+  const lista=q?base.filter(u=>[u.name,u.email,u.rut].some(v=>acrNorm(v||"").includes(q))):base;
+  const grupos=USR_GRUPOS[_usrTab].map(g=>({...g,items:lista.filter(u=>g.roles.includes(u.role))}));
+  const otros=_usrTab==="clientes"?lista.filter(u=>!USR_GRUPOS.clientes.some(g=>g.roles.includes(u.role))):[];
+  if(otros.length)grupos.push({t:"Otros",items:otros});
+  const puedeEditar=CU.role==="superadmin"||["owner","coordinator"].includes(CU.role);
+  const fila=u=>{
+    const esOwnerProd=prod&&u.id===prod.owner_id;
+    // Coordinator no puede editar owners ni otros coordinators (jerarquía)
+    const restringido=CU.role==="coordinator"&&(u.role==="owner"||u.id!==CU.id&&u.role==="coordinator");
+    return `<tr ${esOwnerProd?'style="background:#fef3c7"':""}>
+      <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><strong>${u.name}</strong>${esOwnerProd?` <span style="font-size:10px;font-weight:700;color:#92400E;background:#fde68a;padding:1px 6px;border-radius:4px;margin-left:4px">OWNER</span>`:""}</div></div></td>
+      <td style="font-size:12px;color:#888">${u.email}</td>
+      <td>${badge(rmU(u).label,rmU(u).badge)}</td>
+      ${_usrTab==="equipo"?`<td style="font-size:12px">${u.role==="embajador"||u.role==="ambassador_chief"?(u.puntos||0):""}</td>`:""}
+      <td style="text-align:right">
+        <div style="display:flex;gap:4px;justify-content:flex-end">
+          ${puedeEditar&&!restringido?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openEditUser('${u.id}','usuarios')">✏️</button>`:""}
+          ${u.id!==CU?.id&&!restringido&&!esOwnerProd?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="delUser('${u.id}')">✕</button>`:""}
+        </div>
+      </td>
+    </tr>`;
+  };
+  const cols=_usrTab==="equipo"?5:4;
   $("main-content").innerHTML=`
     <div class="sec-header"><div>
       <div class="page-title" style="margin-bottom:2px">Usuarios</div>
-      <div style="font-size:12px;color:#888">${users.length} usuario${users.length===1?"":"s"} en ${prod?.nombre||"tu productora"}. Toca ✏️ para cambiar email, contraseña o rol.</div>
-    </div><button class="btn btn-primary" onclick="openNuevoUser()">+ Nuevo</button></div>
+      <div style="font-size:12px;color:#888">${_usrTab==="equipo"?`Las personas que trabajan en ${prod?.nombre||"tu productora"}. Toca ✏️ para cambiar email, contraseña o rol.`:"Clientes con cuenta en Guestly (se crean solos al comprar una mesa o inscribirse de cumpleaños). No tienen acceso al panel."}</div>
+    </div>${_usrTab==="equipo"?`<button class="btn btn-primary" onclick="openNuevoUser()">+ Nuevo</button>`:""}</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn ${_usrTab==="equipo"?"btn-primary":""}" style="font-size:13px;padding:7px 16px" onclick="_usrTab='equipo';VIEWS.usuarios()">👥 Equipo (${equipo.length})</button>
+      <button class="btn ${_usrTab==="clientes"?"btn-primary":""}" style="font-size:13px;padding:7px 16px" onclick="_usrTab='clientes';VIEWS.usuarios()">🛍 Clientes · público (${clientes.length})</button>
+      <input class="form-input" id="usr-q" placeholder="🔍 Nombre, correo o RUT…" value="${(_usrQ||"").replace(/"/g,"&quot;")}" style="margin:0 0 0 auto;max-width:280px;font-size:13px" oninput="_usrQ=this.value;VIEWS.usuarios();const i=document.getElementById('usr-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)">
+    </div>
     <div class="card"><div class="table-wrap"><table class="data-table">
-      <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th><th>Pts</th><th></th></tr></thead>
-      <tbody>${users.map(u=>{
-        const esOwnerProd=prod&&u.id===prod.owner_id;
-        const puedeEditar=CU.role==="superadmin"||["owner","coordinator"].includes(CU.role);
-        // Coordinator no puede editar owners ni otros coordinators (jerarquía)
-        const restringido=CU.role==="coordinator"&&(u.role==="owner"||u.id!==CU.id&&u.role==="coordinator");
-        return `<tr ${esOwnerProd?'style="background:#fef3c7"':""}>
-          <td><div style="display:flex;align-items:center;gap:8px">${avEl(u,26)}<div><strong>${u.name}</strong>${esOwnerProd?` <span style="font-size:10px;font-weight:700;color:#92400E;background:#fde68a;padding:1px 6px;border-radius:4px;margin-left:4px">OWNER</span>`:""}</div></div></td>
-          <td style="font-size:12px;color:#888">${u.email}</td>
-          <td>${badge(rmU(u).label,rmU(u).badge)}</td>
-          <td style="font-size:12px">${u.puntos||0}</td>
-          <td style="text-align:right">
-            <div style="display:flex;gap:4px;justify-content:flex-end">
-              ${puedeEditar&&!restringido?`<button class="btn" style="font-size:11px;padding:3px 8px" onclick="openEditUser('${u.id}','usuarios')">✏️</button>`:""}
-              ${u.id!==CU?.id&&!restringido&&!esOwnerProd?`<button class="btn btn-danger" style="font-size:11px;padding:3px 8px" onclick="delUser('${u.id}')">✕</button>`:""}
-            </div>
-          </td>
-        </tr>`;
-      }).join("")}</tbody>
+      <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th>${_usrTab==="equipo"?"<th>Pts</th>":""}<th></th></tr></thead>
+      <tbody>${grupos.filter(g=>g.items.length).map(g=>`<tr><td colspan="${cols}" style="background:#EEEDFE;font-weight:700;font-size:12px;color:#534AB7;padding:6px 12px">${g.t} · ${g.items.length}</td></tr>`+g.items.sort((x,y)=>(x.name||"").localeCompare(y.name||"")).map(fila).join("")).join("")
+        ||`<tr><td colspan="${cols}" style="text-align:center;color:#999;padding:24px">${q?"Nadie coincide con la búsqueda.":_usrTab==="equipo"?"Aún no hay equipo. Agrégalo con + Nuevo.":"Aún no hay clientes con cuenta."}</td></tr>`}</tbody>
     </table></div></div>`;
 };
 function openNuevoUser(){
@@ -7034,6 +7065,7 @@ function openNuevoUser(){
   const puedeCrearOwners=["owner","superadmin"].includes(CU.role);
   const rolesDisponibles=Object.entries(ROLE_META).filter(([k])=>{
     if(k==="superadmin")return false;
+    if(k==="comprador"||k==="cumpleanero")return false; // clientes: se crean solos, no desde aquí
     if(!puedeCrearOwners&&(k==="owner"||k==="coordinator"))return false;
     return true;
   });
@@ -7111,8 +7143,8 @@ function openEditUser(uid,callbackView){
   const prodActual=prods.find(p=>p.id===u.productora_id);
   // Roles disponibles según quién edita
   const rolesDisp=esSuper
-    ? Object.entries(ROLE_META).filter(([k])=>k!=="superadmin"||u.role==="superadmin")
-    : Object.entries(ROLE_META).filter(([k])=>k!=="superadmin"&&(CU.role==="owner"||k!=="owner"));
+    ? Object.entries(ROLE_META).filter(([k])=>(k!=="superadmin"||u.role==="superadmin")&&(!["comprador","cumpleanero"].includes(k)||u.role===k))
+    : Object.entries(ROLE_META).filter(([k])=>k!=="superadmin"&&(CU.role==="owner"||k!=="owner")&&(!["comprador","cumpleanero"].includes(k)||u.role===k));
 
   openModal(`✏️ Editar usuario`,`
     <div style="font-size:11px;color:#888;margin-bottom:10px">Los campos con <span style="color:#EF4444">*</span> son obligatorios</div>
