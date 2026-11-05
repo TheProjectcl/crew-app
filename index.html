@@ -432,7 +432,7 @@ function iniciarRealtime(){
   if(realtimeChannel){try{sbClient.removeChannel(realtimeChannel);}catch(e){}}
   realtimeChannel=sbClient.channel("crew-operacion")
     .on("postgres_changes",{event:"*",schema:"public",table:"acc_entries"},aplicarCambioRealtime)
-    .on("postgres_changes",{event:"*",schema:"public",table:"transferencias"},()=>{if(CURRENT_VIEW==="conciliacion"&&typeof VIEWS.conciliacion==="function")VIEWS.conciliacion();})
+    .on("postgres_changes",{event:"*",schema:"public",table:"transferencias"},()=>{if((CURRENT_VIEW==="conciliacion"||CURRENT_VIEW==="pagos-config")&&typeof VIEWS.conciliacion==="function")VIEWS.conciliacion();})
     .on("postgres_changes",{event:"*",schema:"public",table:"vip_tables"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"acc_lists"},aplicarCambioRealtime)
     .on("postgres_changes",{event:"*",schema:"public",table:"capacity_log"},aplicarCambioRealtime)
@@ -510,6 +510,7 @@ let D = {productoras:[],users:[],equipos:[],eventos:[],acc_lists:[],acc_entries:
 let CU = null;       // current user
 let CP = null;       // current productora
 let currentEvId = null;
+let EV_DENTRO = null; // evento en el que el usuario "entró" (navegación en dos niveles: global → evento)
 
 // ═══════════════════════════════════
 // HELPERS
@@ -730,6 +731,10 @@ async function autoFinalizarEventosPasados(){
     }catch(err){console.warn("[auto-finalizar] falla en",ev.id,err.message);}
   }
   // Si el evento seleccionado fue finalizado, pasar al siguiente evento operativo y refrescar la vista
+  if(EV_DENTRO&&aFinalizar.some(ev=>ev.id===EV_DENTRO)){
+    const evF=D.eventos.find(e=>e.id===EV_DENTRO);toast(`🏁 ${evF?.name||"El evento"} terminó y se cerró. Te dejo en su cierre.`,"info");
+    salirEvento(false);abrirResumenEvento(evF.id);return;
+  }
   if(aFinalizar.some(ev=>ev.id===currentEvId)){
     const prodId=CU?.role==="superadmin"?(CP?.id||null):CU?.productora_id;
     const sig=D.eventos.filter(e=>(prodId===null||!prodId||e.productora_id===prodId)&&esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""))[0];
@@ -1467,7 +1472,7 @@ function doLogout(){
   // Limpiar sesión guardada
   try{localStorage.removeItem("crew-session");}catch(e){}
   if(realtimeChannel&&sbClient){try{sbClient.removeChannel(realtimeChannel);}catch(e){}realtimeChannel=null;}
-  CU=null;CP=null;currentEvId=null;
+  CU=null;CP=null;currentEvId=null;EV_DENTRO=null;try{sessionStorage.removeItem("gl-ev-dentro");}catch(e){}
   ["app","mob-app","emb-app","jefe-app"].forEach(id=>$(id)?.classList.add("hidden"));
   const compApp=$("comp-app");if(compApp)compApp.classList.add("hidden");
   const ls=$("login-screen");
@@ -1496,8 +1501,15 @@ function initAdminApp(){
     $("sb-prod-sub").textContent=rm(CU.role).label.toUpperCase();
     $("sb-prod-color").style.background=CP?.color||"#534AB7";
   }
+  EV_DENTRO=null;
   buildSidebar();
-  goView(CU.role==="superadmin"?"crew-global":"dashboard");
+  if(CU.role==="superadmin")goView("crew-global");
+  else{
+    // Volver al evento en el que estaba (misma sesión del navegador) si sigue activo; si no, a Mis eventos
+    let prev=null;try{prev=sessionStorage.getItem("gl-ev-dentro");}catch(e){}
+    const evPrev=prev&&D.eventos.find(e=>e.id===prev&&e.productora_id===CU.productora_id&&!eventoTermino(e));
+    if(evPrev)entrarEvento(evPrev.id);else goView("eventos");
+  }
   actualizarCampanitas();
   iniciarCFAutoRefresh();
 }
@@ -1524,39 +1536,110 @@ function buildSidebar(){
     }
   }
 
-  allSections.push({label:"Operación",items:[
-    {v:"dashboard",icon:"dashboard",label:"Dashboard"},
-    {v:"puerta",icon:"id-card",label:"Acreditación"},
-    {v:"aforo",icon:"chart",label:"Aforo"},
-  ]});
-  allSections.push({label:"Listas",items:[
-    {v:"vip",icon:"gem",label:"Mesas VIP"},
-    {v:"bloqueo",icon:"ban",label:"Lista bloqueo"},
-    {v:"listas",icon:"list",label:"Listas"},
-    {v:"staff-list",icon:"users",label:"Staff"},
-  ]});
-  allSections.push({label:"Embajadores",items:[
-    {v:"embajadores",icon:"users",label:"Equipos de Embajadores"},
-    {v:"emb-postulaciones",icon:"users",label:"Postulaciones"},
-    {v:"tareas",icon:"megaphone",label:"Campañas"},
-    {v:"incentivos",icon:"trophy",label:"Incentivos"},
-    {v:"canjes",icon:"gift",label:"Canjes"},
-  ]});
-  allSections.push({label:"Marketing",items:[
-    {v:"base-datos",icon:"users",label:"Base de Datos"},
-  ]});
-  allSections.push({label:"Config",items:[
-    {v:"eventos",icon:"calendar",label:"Eventos"},
-    {v:"usuarios",icon:"user-cog",label:"Usuarios"},
-    // Audit log solo para owner y superadmin (info sensible cross-productora si no se filtra bien)
-    ...(["owner","superadmin"].includes(role)?[{v:"audit",icon:"file-text",label:"Audit log"}]:[]),
-  ]});
+  const adm=["superadmin","owner","coordinator"].includes(role);
+  if(EV_DENTRO){
+    // ── Dentro de un evento: solo lo de ese evento ──
+    allSections.push({label:"Operación",items:[
+      {v:"dashboard",icon:"dashboard",label:"Dashboard"},
+      {v:"puerta",icon:"id-card",label:"Acreditación"},
+      {v:"aforo",icon:"chart",label:"Aforo"},
+    ]});
+    allSections.push({label:"Ventas y listas",items:[
+      {v:"vip",icon:"gem",label:"Mesas VIP"},
+      {v:"listas",icon:"list",label:"Listas"},
+      {v:"staff-list",icon:"users",label:"Staff"},
+    ]});
+    if(adm){
+      allSections.push({label:"Close Friends",items:[
+        {v:"cf-postulantes",icon:"users",label:"Postulantes"},
+        {v:"cf-ordenes",icon:"card",label:"Órdenes / Pago"},
+        {v:"cf-planilla",icon:"list",label:"Planilla"},
+        {v:"cf-config",icon:"settings",label:"Config CF"},
+      ]});
+      allSections.push({label:"Cumpleaños",items:[
+        {v:"bday-cumpleaneros",icon:"users",label:"Cumpleañeros"},
+        {v:"bday-beneficios",icon:"gift",label:"Beneficios"},
+      ]});
+    }
+    allSections.push({label:"Embajadores",items:[
+      {v:"tareas",icon:"megaphone",label:"Campañas"},
+    ]});
+    allSections.push({label:"Pagos y cierre",items:[
+      {v:"conciliacion",icon:"card",label:"Conciliación"},
+      {v:"evento-resumen",icon:"chart",label:"Cierre del evento"},
+    ]});
+  } else {
+    // ── Inicio de la productora: eventos + lo que es de todos los eventos ──
+    allSections.push({label:"Eventos",items:[
+      {v:"eventos",icon:"calendar",label:"Mis eventos"},
+    ]});
+    allSections.push({label:"Embajadores",items:[
+      {v:"embajadores",icon:"users",label:"Equipos de Embajadores"},
+      {v:"emb-postulaciones",icon:"users",label:"Postulaciones"},
+      {v:"incentivos",icon:"trophy",label:"Incentivos"},
+      {v:"canjes",icon:"gift",label:"Canjes"},
+    ]});
+    allSections.push({label:"Marketing",items:[
+      {v:"base-datos",icon:"users",label:"Base de Datos"},
+    ]});
+    allSections.push({label:"Productora",items:[
+      {v:"bloqueo",icon:"ban",label:"Lista bloqueo"},
+      ...(adm?[{v:"pagos-config",icon:"card",label:"Configuración de pagos"}]:[]),
+      {v:"usuarios",icon:"user-cog",label:"Usuarios"},
+      // Audit log solo para owner y superadmin (info sensible cross-productora si no se filtra bien)
+      ...(["owner","superadmin"].includes(role)?[{v:"audit",icon:"file-text",label:"Audit log"}]:[]),
+    ]});
+  }
 
-  nav.innerHTML=allSections.map(s=>`
+  // Barra del evento (arriba del menú): en qué evento estoy y cómo salir
+  const evD=EV_DENTRO&&D.eventos.find(e=>e.id===EV_DENTRO);
+  const barra=evD?`<div class="sb-evento" style="margin:2px 10px 10px;padding:10px 12px;border-radius:10px;background:#EEEDFE;border:1px solid #D9D6FB">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#7C74D9;text-transform:uppercase">Evento</div>
+      <div style="font-weight:700;font-size:14px;color:#26215C;line-height:1.25;margin-top:2px">${evD.name}</div>
+      <div style="font-size:11px;color:#534AB7;margin-top:2px">${evD.date?new Date(evD.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"numeric",month:"short"}):""}${evD.venue?" · "+evD.venue:""}</div>
+      <button onclick="salirEvento()" style="margin-top:8px;width:100%;background:#fff;border:1px solid #C9C4F7;color:#534AB7;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:600;cursor:pointer">← Cambiar evento</button>
+    </div>`:"";
+
+  nav.innerHTML=barra+allSections.map(s=>`
     <div class="nav-sec">${s.label}</div>
     ${s.items.map(i=>`<div class="nav-item" data-v="${i.v}" onclick="goView('${i.v}')">${NAV_ICONS[i.icon]||""}<span>${i.label}</span></div>`).join("")}
   `).join("");
 }
+
+// ── Navegación en dos niveles ──
+// Vistas que trabajan sobre UN evento: solo se abren dentro de un evento
+const EV_VIEWS=new Set(["dashboard","puerta","aforo","vip","listas","staff-list","tareas","cf-postulantes","cf-ordenes","cf-planilla","cf-config","cf-conciliacion","bday-cumpleaneros","bday-beneficios","conciliacion"]);
+// Un evento "terminó" si está cerrado/archivado/cancelado o ya pasó su hora de término (los borradores NO han terminado)
+function eventoTermino(ev){
+  if(!ev)return true;
+  if(ev.archivado||["closed","cancelled"].includes(ev.status))return true;
+  const fin=horaFinEvento(ev);return !!(fin&&fin<new Date());
+}
+function entrarEvento(evId,vista){
+  const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
+  if(eventoTermino(ev)){abrirResumenEvento(evId);return;} // los pasados abren su cierre (solo lectura)
+  EV_DENTRO=evId;currentEvId=evId;
+  try{sessionStorage.setItem("gl-ev-dentro",evId);}catch(e){}
+  if(typeof _concEv!=="undefined")_concEv=evId;
+  if(window._bdayEvFiltro!==undefined)window._bdayEvFiltro=evId;
+  buildSidebar();
+  goView(vista||"dashboard");
+}
+function salirEvento(irAEventos=true){
+  EV_DENTRO=null;
+  try{sessionStorage.removeItem("gl-ev-dentro");}catch(e){}
+  if(typeof _concEv!=="undefined")_concEv="";
+  if(window._bdayEvFiltro!==undefined)window._bdayEvFiltro="todos";
+  buildSidebar();
+  if(irAEventos){eventosTab="actuales";goView("eventos");}
+}
+// Dentro de un evento, los selectores de evento que quedan en algunas vistas se bloquean (muestran el evento, no se pueden cambiar)
+new MutationObserver(()=>{
+  if(!EV_DENTRO)return;
+  document.querySelectorAll('#main-content select[onchange^="currentEvId="],#cf-ev-sel,#cf-ord-ev,#cf-plan-ev').forEach(sel=>{
+    if(sel.dataset.evLock)return;sel.dataset.evLock="1";sel.value=EV_DENTRO;sel.disabled=true;sel.title="Para trabajar en otro evento usa ← Cambiar evento";sel.style.opacity=".75";
+  });
+}).observe(document.getElementById("main-content")||document.body,{childList:true,subtree:true});
 
 // Íconos SVG Lucide line-style — usables como `${ICON.check}`, etc. Color heredado de currentColor.
 const _svg=(d,vb="0 0 24 24")=>`<svg viewBox="${vb}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:1em;height:1em;display:inline-block;vertical-align:-.15em;flex-shrink:0">${d}</svg>`;
@@ -1598,6 +1681,8 @@ const ICON={
 
 // Íconos SVG Lucide (line-style) para el menú lateral
 const NAV_ICONS={
+  "card":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>',
+  "settings":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   "dashboard":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
   "id-card":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><circle cx="9" cy="12" r="2.5"/><path d="M15 10h4M15 14h3"/></svg>',
   "chart":'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
@@ -1643,7 +1728,7 @@ function getNotificaciones(){
         titulo:`Mesa ${m.table_num} — Revisar perfiles`,
         detalle:`${(m.perfiles||[]).length} perfiles esperando tu aprobación`,
         contexto:ev?.name||"",
-        accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
+        accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
         fecha:m.updated_at||m.created_at,
       });
     });
@@ -1657,7 +1742,7 @@ function getNotificaciones(){
           titulo:`Mesa ${m.table_num} — Solicitud de reemplazo`,
           detalle:`${s.perfil_original.nombre} → ${s.nuevo_perfil.nombre}`,
           contexto:ev?.name||"",
-          accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
+          accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
           fecha:s.created_at,
         });
       });
@@ -1671,7 +1756,7 @@ function getNotificaciones(){
         titulo:`Mesa ${m.table_num} — Comprobante por revisar`,
         detalle:`El comprador subió comprobante de pago. Confirma para cerrar la mesa.`,
         contexto:ev?.name||"",
-        accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id,"pago"),100);},
+        accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id,"pago"),100);},
         fecha:m.updated_at||m.created_at,
       });
     });
@@ -1685,7 +1770,7 @@ function getNotificaciones(){
           titulo:`Mesa ${m.table_num} — Pulseras extra por revisar`,
           detalle:`El comprador solicita ${(l.personas||[]).length} pulsera${(l.personas||[]).length===1?"":"s"} extra`,
           contexto:ev?.name||"",
-          accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
+          accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
           fecha:l.created_at,
         });
       });
@@ -1699,7 +1784,7 @@ function getNotificaciones(){
           titulo:`Mesa ${m.table_num} — Comprobante de pulseras`,
           detalle:`${aprob} pulsera${aprob===1?"":"s"} · ${fmtM(l.precio_total||0)} — revisa el comprobante`,
           contexto:ev?.name||"",
-          accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
+          accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id,"perfiles"),100);},
           fecha:l.comprobante_at||l.created_at,
         });
       });
@@ -1715,7 +1800,7 @@ function getNotificaciones(){
           titulo:`Mesa ${m.table_num} — Sin avance hace ${diasSinAvance} días`,
           detalle:`El comprador aún no envía comprobante de pago`,
           contexto:ev?.name||"",
-          accion:()=>{currentEvId=m.event_id;cerrarNotifs();goView("vip");setTimeout(()=>openDetallesMesa(m.id),100);},
+          accion:()=>{cerrarNotifs();entrarEvento(m.event_id,"vip");setTimeout(()=>openDetallesMesa(m.id),100);},
           fecha:m.updated_at,
         });
       }
@@ -1754,7 +1839,7 @@ function getNotificaciones(){
           titulo:`${l.name} — ${sinRut} sin RUT`,
           detalle:`Completa los RUT antes del evento (✏️ desde el detalle de la lista)`,
           contexto:ev?.name||"",
-          accion:()=>{currentEvId=l.event_id;cerrarNotifs();goView("listas");setTimeout(()=>openListaDetail(l.id),100);},
+          accion:()=>{cerrarNotifs();entrarEvento(l.event_id,"listas");setTimeout(()=>openListaDetail(l.id),100);},
           fecha:null,
         });
       }
@@ -2422,14 +2507,15 @@ async function impersonateProd(prodId){
   $("sb-prod-name").textContent=CP?.nombre||"Productora";
   $("sb-prod-color").style.background=CP?.color||"#534AB7";
   $("sb-prod-sub").textContent="VIENDO COMO ADMIN";
+  EV_DENTRO=null;
   buildSidebar(); // re-render sidebar para que aparezcan todas las secciones operativas
-  goView("dashboard");
+  goView("eventos");
   toast("Viendo: "+CP?.nombre,"success");
 }
 
 async function salirDeProductora(){
   CP=null;
-  currentEvId=null;
+  currentEvId=null;EV_DENTRO=null;
   $("sb-prod-name").textContent="Guestly";
   $("sb-prod-sub").textContent="SUPERADMIN";
   $("sb-prod-color").style.background="#534AB7";
@@ -2601,9 +2687,9 @@ VIEWS.dashboard=()=>{
       <div style="font-size:20px;font-weight:600"><span class="live-dot"></span>${ev.name}</div>
       <div style="font-size:13px;color:#999">${ev.date} · ${ev.venue}</div>
       ${badge({active:"Activo",draft:"Borrador",closed:"Finalizado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray"}[ev.status]||"gray")}
-      <select style="margin-left:4px;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff" onchange="currentEvId=this.value;VIEWS.dashboard()">
+      ${EV_DENTRO?"":`<select style="margin-left:4px;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff" onchange="currentEvId=this.value;VIEWS.dashboard()">
         ${prodEvs.filter(esEventoOperativo).map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name}</option>`).join("")}
-      </select>
+      </select>`}
     </div>
     <div class="metrics">
       <div class="metric"><div class="metric-label">Acreditados</div><div class="metric-val" style="color:#534AB7">${checked}<span style="font-size:14px;color:#bbb">/${entries.length}</span></div><div class="pbar" style="margin-top:8px"><div class="pfill pfill-p" style="width:${entries.length>0?Math.round(checked/entries.length*100):0}%"></div></div></div>
@@ -6216,6 +6302,7 @@ function esEventoOperativo(ev){
 // se autoselecciona el primer operativo. Devuelve el evento operativo encontrado, o null.
 // Eventos en curso o próximos de la productora (los finalizados/archivados quedan fuera de todos los selectores)
 function evsOperativos(prodId){
+  if(EV_DENTRO){const ev=(D.eventos||[]).find(e=>e.id===EV_DENTRO);return ev?[ev]:[];}
   return (D.eventos||[]).filter(e=>(!prodId||e.productora_id===prodId)&&esEventoOperativo(e)).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
 }
 // Evento por defecto de un selector: el evento con el que se está trabajando si sigue operativo; si no, el más próximo
@@ -6225,6 +6312,15 @@ function asegurarEventoOperativo(){
   const operativos=D.eventos
     .filter(e=>(prodId===null||e.productora_id===prodId)&&esEventoOperativo(e))
     .sort((a,b)=>(a.date||"").localeCompare(b.date||""));
+  if(EV_DENTRO){
+    const evD=D.eventos.find(e=>e.id===EV_DENTRO);
+    currentEvId=EV_DENTRO;
+    if(evD&&eventoTermino(evD)&&!window._evTerminoAviso){ // el evento terminó mientras estaba adentro → al cierre
+      window._evTerminoAviso=true;
+      setTimeout(()=>{window._evTerminoAviso=false;toast(`🏁 ${evD.name} terminó. Te dejo en su cierre.`,"info");salirEvento(false);abrirResumenEvento(evD.id);},50);
+    }
+    return evD||null;
+  }
   const evActual=D.eventos.find(e=>e.id===currentEvId);
   if(!evActual||!operativos.includes(evActual)){
     currentEvId=operativos[0]?.id||null;
@@ -6306,7 +6402,7 @@ VIEWS["evento-resumen"]=async()=>{
   const accTot={reg:Object.values(d.acc).reduce((x,a)=>x+a.reg,0),val:Object.values(d.acc).reduce((x,a)=>x+a.val,0)};
   const dif=d.transTotal-d.cobroTransf;
   mc.innerHTML=`
-    <div style="margin-bottom:10px"><button class="btn" style="font-size:12px" onclick="eventosTab='${pasado?"pasados":"actuales"}';goView('eventos')">← Eventos${pasado?" pasados":""}</button></div>
+    ${EV_DENTRO?"":`<div style="margin-bottom:10px"><button class="btn" style="font-size:12px" onclick="eventosTab='${pasado?"pasados":"actuales"}';goView('eventos')">← ${pasado?"Eventos pasados":"Mis eventos"}</button></div>`}
     <div class="sec-header"><div><div class="page-title" style="margin-bottom:2px">📊 Cierre · ${ev.name} ${pasado?`<span style="font-size:12px;background:#f1f5f9;color:#475569;padding:3px 10px;border-radius:20px;vertical-align:middle">🏁 Finalizado · solo lectura</span>`:`<span style="font-size:12px;background:#dcfce7;color:#166534;padding:3px 10px;border-radius:20px;vertical-align:middle">En curso · cifras parciales</span>`}</div>
       <div style="font-size:13px;color:#666">${fechaTxt}${ev.start_time?` · ${ev.start_time.slice(0,5)}–${(ev.end_time||"").slice(0,5)}`:""}${ev.venue?` · ${ev.venue}`:""}</div></div>
       <button class="btn btn-primary" onclick="resEvDescargar('todo')">⬇ Descargar cierre completo</button></div>
@@ -6365,7 +6461,7 @@ VIEWS.eventos=()=>{
   // Ordenar: actuales por fecha ascendente, pasados por fecha descendente (más reciente arriba)
   evs.sort((a,b)=>eventosTab==="pasados"?(b.date||"").localeCompare(a.date||""):(a.date||"").localeCompare(b.date||""));
   $("main-content").innerHTML=`
-    <div class="sec-header"><div class="page-title">Eventos</div>
+    <div class="sec-header"><div><div class="page-title" style="margin-bottom:2px">Mis eventos</div><div style="font-size:12px;color:#888">Entra a un evento para trabajar en él: acreditación, mesas, Close Friends, cumpleaños, campañas y conciliación.</div></div>
       <div style="display:flex;gap:8px">
         ${["owner","superadmin"].includes(CU.role)?`<button class="btn" onclick="replicarEvento()">Replicar</button><button class="btn btn-primary" onclick="openNuevoEvento()">+ Nuevo</button>`:`<span style="font-size:11px;color:#888;padding:6px 10px;background:#f5f5f5;border-radius:8px">Solo el owner puede crear o replicar eventos</span>`}
       </div>
@@ -6381,8 +6477,8 @@ VIEWS.eventos=()=>{
       const pasado=eventosTab==="pasados";
       return `<div class="card" style="margin-bottom:12px;border-left:4px solid ${pasado?"#9CA3AF":{active:"#22C55E",draft:"#F59E0B",closed:"#9CA3AF",cancelled:"#EF4444"}[ev.status]||"#aaa"};${pasado?"opacity:.85":""}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
-          <div style="cursor:pointer" onclick="${pasado?`abrirResumenEvento('${ev.id}')`:`currentEvId='${ev.id}';goView('dashboard')`}">
-            <div style="font-size:16px;font-weight:600">${ev.name} ${ev.id===currentEvId?badge("● Activo","green"):""}${ev.archivado?badge("🗄 Archivado","gray"):""}</div>
+          <div style="cursor:pointer" onclick="${pasado?`abrirResumenEvento('${ev.id}')`:`entrarEvento('${ev.id}')`}">
+            <div style="font-size:16px;font-weight:600">${ev.name} ${ev.archivado?badge("🗄 Archivado","gray"):""}</div>
             <div style="font-size:12px;color:#888;margin-top:3px">${ev.date} · ${ev.start_time||"23:00"}–${ev.end_time||"06:00"}${ev.venue?" · "+ev.venue:""}${ev.max_capacity?" · "+ev.max_capacity+" máx":""}</div>
             <div style="font-size:12px;color:#888;margin-top:2px">${checked}/${entries.length} acreditados · ${D.vip_tables.filter(t=>t.event_id===ev.id).length} mesas</div>
             ${pasado&&ev.cierre?(()=>{const c=ev.cierre;const warn=(c.mesas_comprobante_sin_revisar||0)+(c.cf_comprobante_sin_conciliar||0)+(c.comprobantes_emb_sin_revisar||0);
@@ -6396,6 +6492,7 @@ VIEWS.eventos=()=>{
           </div>
           <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end">
             ${badge({active:"Activo",draft:"Borrador",closed:"🏁 Finalizado",cancelled:"❌ Cancelado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray",cancelled:"red"}[ev.status]||"gray")}
+            ${pasado?"":`<button class="btn btn-primary" style="font-size:12px;padding:5px 14px;font-weight:700" onclick="entrarEvento('${ev.id}')">Entrar →</button>`}
             ${["superadmin","owner","coordinator","cashier"].includes(CU.role)?`<button class="btn" style="font-size:11px;padding:4px 10px;font-weight:600" onclick="abrirResumenEvento('${ev.id}')">📊 Cierre</button>`:""}
             ${pasado
               ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>${["superadmin","owner"].includes(CU.role)?`<button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="openEliminarEvento('${ev.id}')">🗑 Eliminar</button>`:""}`
@@ -6415,7 +6512,13 @@ VIEWS.eventos=()=>{
             :`<div style="font-size:12px;color:#f87171">⚠️ Sin pulseras ${pasado?"":`<button class="btn btn-danger" style="padding:2px 8px;font-size:11px" onclick="openGestionPulseras('${ev.id}')">Agregar</button>`}</div>`}
         </div>
       </div>`;
-    }).join("")||`<div class="card" style="color:#999">${eventosTab==="pasados"?"No hay eventos pasados.":"Sin eventos próximos. Crea uno con + Nuevo."}</div>`}`;
+    }).join("")||(eventosTab==="pasados"?`<div class="card" style="color:#999">No hay eventos pasados.</div>`
+      :`<div class="card" style="text-align:center;padding:40px 20px">
+          <div style="font-size:40px;margin-bottom:8px">🎉</div>
+          <div style="font-size:17px;font-weight:700;margin-bottom:6px">${evsAll.length?"No tienes eventos próximos":"Crea tu primer evento"}</div>
+          <div style="font-size:13px;color:#666;max-width:420px;margin:0 auto 16px">Todo en Guestly parte de un evento: ahí configuras mesas, listas, Close Friends, cumpleaños y la acreditación.</div>
+          ${["owner","superadmin"].includes(CU.role)?`<button class="btn btn-primary" onclick="openNuevoEvento()">+ Crear evento</button>${evsAll.length?` <button class="btn" onclick="replicarEvento()">Replicar uno anterior</button>`:""}`:`<div style="font-size:12px;color:#888">Pídele al dueño de la productora que cree el evento.</div>`}
+        </div>`)}`;
 };
 async function archivarEvento(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
@@ -9452,6 +9555,7 @@ async function subirComprobanteCF(ordenId){
 const _origBuildSidebar = buildSidebar;
 buildSidebar = function(){
   _origBuildSidebar();
+  return; // Close Friends y Pagos ahora viven en buildSidebar (dentro del evento / Configuración de pagos)
   const nav=$("sidebar-nav"); if(!nav) return;
   const role=CU?.role;
   if(role==="superadmin"&&!CP) return; // sin productora elegida: no mostrar módulos de productora
@@ -11257,6 +11361,7 @@ async function loadBday(prodId){
 const _origBuildSidebarBday = buildSidebar;
 buildSidebar = function(){
   _origBuildSidebarBday();
+  return; // Cumpleaños ahora vive en buildSidebar (dentro del evento)
   const nav=$("sidebar-nav");
   if(!nav)return;
   const role=CU?.role;
@@ -12465,7 +12570,7 @@ else if(_bdayUrl.has("bday_panel")){
     const token=_bdayUrl.get("bday_panel");
     // Cerrar cualquier sesión previa (p.ej. productor) para que no se pise con la del cumpleañero
     try{localStorage.removeItem("crew-session");}catch(e){}
-    CU=null;CP=null;currentEvId=null;
+    CU=null;CP=null;currentEvId=null;EV_DENTRO=null;try{sessionStorage.removeItem("gl-ev-dentro");}catch(e){}
     // Mostrar pantalla de carga mientras buscamos
     document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui">
       <div style="font-size:40px">🎂</div>
@@ -12903,26 +13008,31 @@ function concScore(t,c){
   const ev=concTokens(c.evento);if(cm.some(w=>ev.includes(w)))s+=1; // el mensaje nombra el evento (ej: "saldo vip GTA")
   return s;
 }
+VIEWS["pagos-config"]=()=>VIEWS.conciliacion();
 VIEWS.conciliacion=async()=>{
   const mc=$("main-content");if(!mc)return;
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  mc.innerHTML=`<div class="page-title">💳 Conciliación de pagos</div><div style="color:#888;font-size:13px">Cargando transferencias y comprobantes…</div>`;
+  mc.innerHTML=`<div class="page-title">${EV_DENTRO?"💳 Conciliación":"⚙️ Configuración de pagos"}</div><div style="color:#888;font-size:13px">Cargando transferencias y comprobantes…</div>`;
   if(!D._cfLoaded)await loadCF(prodId).catch(()=>{});
   await loadTransferencias(prodId);
   renderConciliacion();
   clearInterval(_concTimer);
-  _concTimer=setInterval(async()=>{if(CURRENT_VIEW!=="conciliacion"){clearInterval(_concTimer);return;}const antes=(D.transferencias||[]).length;await loadTransferencias(prodId);if((D.transferencias||[]).length!==antes)renderConciliacion();},45000);
+  _concTimer=setInterval(async()=>{if(CURRENT_VIEW!=="conciliacion"&&CURRENT_VIEW!=="pagos-config"){clearInterval(_concTimer);return;}const antes=(D.transferencias||[]).length;await loadTransferencias(prodId);if((D.transferencias||[]).length!==antes)renderConciliacion();},45000);
 };
 function renderConciliacion(){
   const mc=$("main-content");if(!mc)return;
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const prod=(D.productoras||[]).find(p=>p.id===prodId);
+  // Dentro de un evento: solo sus comprobantes y sus conciliadas; las transferencias sin asignar se ven en todos los eventos
+  const enEv=!!EV_DENTRO, evDentro=enEv?D.eventos.find(e=>e.id===EV_DENTRO):null;
+  if(enEv){_concEv=EV_DENTRO;if(["ignorada","todas"].includes(_concFiltro))_concFiltro="pendiente";}
   const candsTodos=concCandidatos(prodId);
   const gruposTodos=concPorEvento(candsTodos);
   if(_concEv&&!gruposTodos.some(g=>g.id===_concEv))_concEv="";
   const cands=_concEv?candsTodos.filter(c=>c.evId===_concEv):candsTodos;
   const grupos=concPorEvento(cands);
-  const todas=(D.transferencias||[]).filter(t=>t.estado!=="sistema");
+  let todas=(D.transferencias||[]).filter(t=>t.estado!=="sistema");
+  if(enEv)todas=todas.filter(t=>t.estado==="pendiente"||(t.estado==="conciliada"&&concTransDeEvento(t,EV_DENTRO)));
   const sistema=(D.transferencias||[]).filter(t=>t.estado==="sistema");
   const cnt=e=>todas.filter(t=>t.estado===e).length;
   const nq=acrNorm(_concQ||"");
@@ -12934,23 +13044,24 @@ function renderConciliacion(){
   const casilla=prod?.pagos_alias?`${prod.pagos_alias}@${CONC_DOMINIO}`:"";
   const opcion=(c,sel,conEv)=>`<option value="${c.key}" ${sel?"selected":""}>${conEv?"📅 "+c.evento+" — ":""}${c.icono} ${c.nombre} · ${c.detalle} · ${fmtM(c.monto)}${c.fecha?" · comp. "+fmtDT(c.fecha):""}</option>`;
   mc.innerHTML=`
-    <div class="sec-header"><div class="page-title">💳 Conciliación de pagos</div>
+    <div class="sec-header"><div><div class="page-title" style="margin-bottom:2px">${enEv?`💳 Conciliación · ${evDentro?.name||""}`:"⚙️ Configuración de pagos"}</div>
+      <div style="font-size:12px;color:#888">${enEv?"Asigna cada transferencia a una persona de este evento. Las transferencias sin asignar aparecen en todos tus eventos activos hasta que las asignes.":"Casilla de avisos del banco, cuenta receptora, cartolas y vista general de todas las transferencias. La conciliación del día a día se hace dentro de cada evento."}</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <button class="btn" onclick="concCartolaModal()">📄 Subir cartola</button>
+        ${enEv?"":`<button class="btn" onclick="concCartolaModal()">📄 Subir cartola</button>`}
         <button class="btn" onclick="concAgregarManual()">+ Transferencia a mano</button>
         <button class="btn" onclick="VIEWS.conciliacion()">↻ Actualizar</button>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
       <div class="card-sm" style="cursor:pointer;${_concFiltro==="pendiente"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='pendiente';renderConciliacion()"><div style="font-size:11px;color:#999">Transferencias por conciliar</div><div style="font-size:22px;font-weight:700;color:#b45309">${cnt("pendiente")}</div></div>
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="conciliada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='conciliada';renderConciliacion()"><div style="font-size:11px;color:#999">Conciliadas</div><div style="font-size:22px;font-weight:700;color:#166534">${cnt("conciliada")}</div></div>
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="ignorada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='ignorada';renderConciliacion()"><div style="font-size:11px;color:#999">No son de eventos</div><div style="font-size:22px;font-weight:700;color:#888">${cnt("ignorada")}</div></div>
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="conciliada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='conciliada';renderConciliacion()"><div style="font-size:11px;color:#999">Conciliadas${enEv?" en este evento":""}</div><div style="font-size:22px;font-weight:700;color:#166534">${cnt("conciliada")}</div></div>
+      ${enEv?"":`      <div class="card-sm" style="cursor:pointer;${_concFiltro==="ignorada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='ignorada';renderConciliacion()"><div style="font-size:11px;color:#999">No son de eventos</div><div style="font-size:22px;font-weight:700;color:#888">${cnt("ignorada")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>`}
       <div class="card-sm"><div style="font-size:11px;color:#999">Comprobantes esperando pago</div><div style="font-size:22px;font-weight:700;color:#534AB7">${cands.length}</div><div style="font-size:10px;color:${cands.length-candConMatch.size?"#991B1B":"#888"}">${cands.length-candConMatch.size} sin transferencia que calce</div></div>
     </div>
-    ${concBloqueConfig(prod,casilla,sistema,todas)}
+    ${enEv?`<div style="font-size:12px;color:#666;margin:-4px 0 12px">📬 Las transferencias llegan solas desde ${casilla?`<strong>${casilla}</strong>`:"tu casilla Guestly"}. La casilla, la cuenta receptora y las cartolas se manejan en <a href="#" onclick="goView('pagos-config');return false" style="color:#534AB7;font-weight:600">Configuración de pagos</a>.</div>`:concBloqueConfig(prod,casilla,sistema,todas)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-      ${gruposTodos.length>1||_concEv?`<select class="form-select" style="margin:0;width:auto;flex:0 0 auto;max-width:280px;font-size:13px" onchange="_concEv=this.value;renderConciliacion()"><option value="">📅 Todos los eventos (${candsTodos.length})</option>${gruposTodos.map(g=>`<option value="${g.id}" ${g.id===_concEv?"selected":""}>${concEvLabel(g)} (${g.items.length})</option>`).join("")}</select>`:""}
+      ${!enEv&&(gruposTodos.length>1||_concEv)?`<select class="form-select" style="margin:0;width:auto;flex:0 0 auto;max-width:280px;font-size:13px" onchange="_concEv=this.value;renderConciliacion()"><option value="">📅 Todos los eventos (${candsTodos.length})</option>${gruposTodos.map(g=>`<option value="${g.id}" ${g.id===_concEv?"selected":""}>${concEvLabel(g)} (${g.items.length})</option>`).join("")}</select>`:""}
       <input class="form-input" id="conc-q" placeholder="🔍 Nombre, RUT, monto, correo, comentario…" value="${(_concQ||"").replace(/"/g,"&quot;")}" oninput="_concQ=this.value;renderConciliacion();const i=document.getElementById('conc-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)" style="flex:1;min-width:240px;margin:0">
       <button class="btn" style="font-size:12px" onclick="concExportar()">⬇ Exportar (CSV / Excel)</button>
     </div>
@@ -12987,6 +13098,12 @@ function renderConciliacion(){
         ${grupos.map(g=>`<tr><td colspan="5" style="background:#EEEDFE;font-weight:700;font-size:12px;color:#534AB7;padding:6px 12px">📅 ${concEvLabel(g)} · ${g.items.length} esperando · ${fmtM(g.items.reduce((a,c)=>a+(c.monto||0),0))}</td></tr>`+g.items.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")).join("")}
       </tbody></table></div>`:`<div style="font-size:13px;color:#999">Nadie está esperando confirmación de pago.</div>`}
     </div>`;
+}
+// ¿Una transferencia conciliada corresponde a algo de este evento? (orden CF, mesa o pulseras extra de una mesa del evento)
+function concTransDeEvento(t,evId){
+  if(t.match_tipo==="cf")return (D.cf_ordenes||[]).some(o=>o.id===t.match_id&&o.evento_id===evId);
+  const mid=t.match_tipo==="lote"?String(t.match_id||"").split(":")[0]:t.match_tipo==="mesa"?t.match_id:null;
+  return !!mid&&(D.vip_tables||[]).some(m=>m.id===mid&&m.event_id===evId);
 }
 // ── Configuración de la casilla de avisos (por productora) + guía paso a paso ──
 function concDestinoPartes(v){
@@ -13633,6 +13750,22 @@ else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
   const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q"].some(k=>_pub.has(k));
   if(!_esLinkPublico) await restaurarSesion();
 })();
+
+// ── Guardia de navegación en dos niveles (envuelve a todos los parches de goView) ──
+const _goViewNav=goView;
+goView=function(v){
+  const panel=CU&&["superadmin","owner","coordinator"].includes(CU.role)&&!(CU.role==="superadmin"&&!CP);
+  if(panel){
+    if(EV_VIEWS.has(v)&&!EV_DENTRO){
+      if(v!=="dashboard")toast("Primero elige el evento en el que quieres trabajar","info");
+      eventosTab="actuales";v="eventos";
+    } else if(EV_DENTRO&&!EV_VIEWS.has(v)&&v!=="evento-resumen"){
+      salirEvento(false); // ir a algo global = salir del evento
+    }
+    if(v==="evento-resumen"&&EV_DENTRO)_resEvId=EV_DENTRO;
+  }
+  return _goViewNav(v);
+};
 </script>
 </body>
 </html>
