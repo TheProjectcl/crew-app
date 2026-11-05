@@ -6730,6 +6730,7 @@ async function saveNuevoEvento(){
   const ev={id,name,date:fechaEv,start_time:$("ne-s")?.value||"23:00",end_time:"06:00",venue:$("ne-v")?.value||"",max_capacity:parseInt($("ne-cap")?.value)||500,status:statusInicial,pulseras:window._nevPuls.map(p=>({...p})),productora_id:prodId,datos_pago};
   D.eventos.push(ev);
   try{await sbPost("eventos",[ev]);await log("add_event","evento",id,`Nuevo evento: ${name} (con datos de transferencia, estado: ${statusInicial})`);}catch(e){toast("Error: "+e.message,"error");}
+  try{const src=await bdayFuenteBeneficios(prodId,id);if(src)await bdayCopiarBeneficios(src,id,{silencioso:true});}catch(e){console.warn("copiar beneficios",e.message);}
   window._nevPuls=[];closeModal();toast("✓ Evento creado y activado","success");VIEWS.eventos();
 }
 
@@ -6921,12 +6922,15 @@ async function eliminarLayout(evId){
 }
 async function replicarEvento(){
   if(!["owner","superadmin"].includes(CU?.role)){toast("Solo el owner puede replicar eventos","error");return;}
-  const orig=D.eventos.find(e=>e.id===currentEvId);if(!orig)return;
-  openModal("Replicar evento",`<div class="alert alert-info">Se duplican listas, mesas y tareas. Check-ins y pagos se resetean.</div><label class="form-label">Nombre</label><input class="form-input" id="rep-n" value="${orig.name} (copia)"><label class="form-label">Fecha</label><input class="form-input" id="rep-d" type="date"><div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveReplica()">Replicar</button></div>`);
+  const prodIdR=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const evsR=D.eventos.filter(e=>!prodIdR||e.productora_id===prodIdR).sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  const orig=D.eventos.find(e=>e.id===currentEvId&&evsR.includes(e))||evsR[0];if(!orig){toast("No hay eventos para replicar","warn");return;}
+  openModal("Replicar evento",`<div class="alert alert-info">Se duplican listas, mesas, tareas y beneficios de cumpleaños. Check-ins y pagos se resetean.</div><label class="form-label">Evento a replicar</label><select class="form-select" id="rep-src" onchange="const e=D.eventos.find(x=>x.id===this.value);$('rep-n').value=(e?.name||'')+' (copia)'">${evsR.map(e=>`<option value="${e.id}" ${e.id===orig.id?"selected":""}>${e.name}${e.date?" — "+e.date:""}</option>`).join("")}</select><label class="form-label">Nombre</label><input class="form-input" id="rep-n" value="${orig.name} (copia)"><label class="form-label">Fecha</label><input class="form-input" id="rep-d" type="date"><div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveReplica()">Replicar</button></div>`);
 }
 async function saveReplica(){
   if(!["owner","superadmin"].includes(CU?.role)){toast("Solo el owner puede replicar eventos","error");return;}
-  const orig=D.eventos.find(e=>e.id===currentEvId);if(!orig)return;
+  const srcId=$("rep-src")?.value||currentEvId;
+  const orig=D.eventos.find(e=>e.id===srcId);if(!orig)return;
   const newId=uid();
   const fechaEv=$("rep-d")?.value||orig.date;
   const hoyStr=new Date().toISOString().slice(0,10);
@@ -6934,16 +6938,19 @@ async function saveReplica(){
   const newEv={...orig,id:newId,name:$("rep-n")?.value||orig.name+" (copia)",date:fechaEv,status:statusInicial,parent_event_id:orig.id};
   D.eventos.push(newEv);
   const lmap={};
-  D.acc_lists.filter(l=>l.event_id===currentEvId).forEach(l=>{const nl=uid();lmap[l.id]=nl;D.acc_lists.push({...l,id:nl,event_id:newId});});
-  D.acc_entries.filter(e=>e.event_id===currentEvId).forEach(e=>{D.acc_entries.push({...e,id:uid(),event_id:newId,list_id:lmap[e.list_id]||null,status:"pending",checked_in_at:null,checked_in_by:null});});
-  D.vip_tables.filter(t=>t.event_id===currentEvId).forEach(t=>{D.vip_tables.push({...t,id:uid(),event_id:newId,list_id:lmap[t.list_id]||null,amount_paid:0,payment_status:"unpaid",consumption_used:0,transfer_ref:""});});
-  D.tareas.filter(t=>t.event_id===currentEvId).forEach(t=>{D.tareas.push({...t,id:uid(),event_id:newId});});
+  D.acc_lists.filter(l=>l.event_id===srcId).forEach(l=>{const nl=uid();lmap[l.id]=nl;D.acc_lists.push({...l,id:nl,event_id:newId});});
+  D.acc_entries.filter(e=>e.event_id===srcId).forEach(e=>{D.acc_entries.push({...e,id:uid(),event_id:newId,list_id:lmap[e.list_id]||null,status:"pending",checked_in_at:null,checked_in_by:null});});
+  D.vip_tables.filter(t=>t.event_id===srcId).forEach(t=>{D.vip_tables.push({...t,id:uid(),event_id:newId,list_id:lmap[t.list_id]||null,amount_paid:0,payment_status:"unpaid",consumption_used:0,transfer_ref:"",
+    // la mesa replicada parte vacía: sin comprador, perfiles, comprobantes ni pagos del evento original (solo se tocan columnas que la mesa ya tiene)
+    ...Object.fromEntries(Object.entries({comprador_id:null,estado_reserva:"disponible",perfiles:[],solicitudes_pulseras:[],comprobante_url:null,pago_efectivo:0,pago_transferencia:0,pago_tarjeta:0,reservada_at:null}).filter(([k])=>k in t))});});
+  D.tareas.filter(t=>t.event_id===srcId).forEach(t=>{D.tareas.push({...t,id:uid(),event_id:newId});});
   try{
     await sbPost("eventos",[newEv]);
     if(D.acc_lists.filter(l=>l.event_id===newId).length)await sbPost("acc_lists",D.acc_lists.filter(l=>l.event_id===newId));
     const ne=D.acc_entries.filter(e=>e.event_id===newId);if(ne.length)await sbPost("acc_entries",ne);
     const nt=D.vip_tables.filter(t=>t.event_id===newId);if(nt.length)await sbPost("vip_tables",nt);
     await log("replicate_event","evento",newId,`Replicado desde: ${orig.name}`);
+    await bdayCopiarBeneficios(orig.id,newId,{silencioso:true});
   }catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ Evento replicado","success");VIEWS.eventos();
 }
@@ -11385,16 +11392,25 @@ buildSidebar = function(){
 VIEWS["bday-beneficios"] = async()=>{
   const prodId = CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   await loadBday(prodId);
-  const bens = D.bday_beneficios||[];
   const mc=$("main-content");if(!mc)return;
+  const evB=D.eventos.find(e=>e.id===EV_DENTRO);
 
   const renderBens=()=>{
+    const bens=(D.bday_beneficios||[]).filter(b=>b.evento_id===EV_DENTRO); // beneficios de ESTE evento
+    const fuentes=bdayFuentesDisponibles(prodId,EV_DENTRO);
+    const selFuente=fuentes.length?`<select class="form-select" id="bb-src" style="margin:0;width:auto;max-width:300px;font-size:13px">${fuentes.map(f=>`<option value="${f.id}">${f.label} (${f.n})</option>`).join("")}</select>`:"";
     mc.innerHTML=`
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px">
-        <h1 style="font-size:22px;font-weight:700;margin:0">🎁 Beneficios Cumpleaños</h1>
-        <button class="btn btn-primary" onclick="bdayNuevoBeneficio()">+ Nuevo beneficio</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;flex-wrap:wrap;gap:10px">
+        <h1 style="font-size:22px;font-weight:700;margin:0">🎁 Beneficios · ${evB?.name||""}</h1>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${fuentes.length&&bens.length?`<button class="btn" onclick="bdayImportarModal()">⬇ Importar de otro evento</button>`:""}<button class="btn btn-primary" onclick="bdayNuevoBeneficio()">+ Nuevo beneficio</button></div>
       </div>
-      ${!bens.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">No hay beneficios creados aún. Crea el primero para empezar.</div>`:""}
+      <div style="font-size:12px;color:#888;margin-bottom:16px">Estos beneficios son solo de este evento. Al crear o replicar un evento se copian solos los del evento anterior, y aquí los ajustas.</div>
+      ${!bens.length?`<div class="card" style="text-align:center;padding:28px">
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px">Este evento aún no tiene beneficios</div>
+          ${fuentes.length?`<div style="font-size:13px;color:#666;margin-bottom:12px">Cópialos de un evento anterior y después ajústalos si quieres:</div>
+          <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${selFuente}<button class="btn btn-primary" onclick="bdayCopiarBeneficios($('bb-src').value,EV_DENTRO).then(()=>VIEWS['bday-beneficios']())">Copiar beneficios</button></div>
+          <div style="font-size:12px;color:#999;margin-top:10px">o crea uno nuevo con “+ Nuevo beneficio”.</div>`:`<div style="font-size:13px;color:#666">Crea el primero con “+ Nuevo beneficio”.</div>`}
+        </div>`:""}
       <div style="display:grid;gap:14px">
         ${bens.map(b=>`
           <div class="card" style="padding:18px">
@@ -11421,6 +11437,12 @@ VIEWS["bday-beneficios"] = async()=>{
   };
   renderBens();
 
+  window.bdayImportarModal=()=>{
+    const fuentes=bdayFuentesDisponibles(prodId,EV_DENTRO);
+    openModal("⬇ Importar beneficios",`<div style="font-size:13px;color:#555;margin-bottom:10px">Se agregan como beneficios nuevos de <strong>${evB?.name||"este evento"}</strong>. Los que ya tienes no se tocan. Las fechas de validez y cierre se corren a la fecha de este evento.</div>
+      <select class="form-select" id="bb-src2">${fuentes.map(f=>`<option value="${f.id}">${f.label} (${f.n})</option>`).join("")}</select>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="bdayCopiarBeneficios($('bb-src2').value,EV_DENTRO).then(()=>{closeModal();VIEWS['bday-beneficios']();})">Importar</button></div>`);
+  };
   window.bdayNuevoBeneficio=()=>bdayFormBeneficio(null,prodId,renderBens);
   window.bdayEditarBeneficio=(id)=>bdayFormBeneficio(id,prodId,renderBens);
   window.bdayEliminarBeneficio=async(id)=>{
@@ -11431,6 +11453,47 @@ VIEWS["bday-beneficios"] = async()=>{
   };
 };
 
+// ── Beneficios por evento: fuentes para copiar y copia con fechas corridas ──
+// "legacy" = beneficios creados antes de que fueran por evento (sin evento_id)
+function bdayFuentesDisponibles(prodId,exceptoEvId){
+  const bens=(D.bday_beneficios||[]).filter(b=>!prodId||b.productora_id===prodId);
+  const porEv={};bens.forEach(b=>{const k=b.evento_id||"legacy";if(k!==exceptoEvId)(porEv[k]=porEv[k]||0,porEv[k]++);});
+  return Object.entries(porEv).map(([k,n])=>{const ev=D.eventos.find(e=>e.id===k);return{id:k,n,fecha:ev?.date||"",label:k==="legacy"?"Beneficios anteriores (sin evento)":`${ev?.name||"Evento"}${ev?.date?" — "+ev.date:""}`};})
+    .sort((a,b)=>a.id==="legacy"?1:b.id==="legacy"?-1:(b.fecha||"").localeCompare(a.fecha||""));
+}
+// Evento más reciente (anterior o igual al nuevo) con beneficios; si no hay, los "anteriores"
+async function bdayFuenteBeneficios(prodId,nuevoEvId){
+  try{if(!D._bdayLoaded&&prodId)await loadBday(prodId);}catch(e){}
+  const f=bdayFuentesDisponibles(prodId,nuevoEvId);return f[0]?.id||null;
+}
+async function bdayCopiarBeneficios(srcId,dstEvId,opt={}){
+  const dst=D.eventos.find(e=>e.id===dstEvId);if(!dst||!srcId)return 0;
+  const prodId=dst.productora_id;
+  const fuente=(D.bday_beneficios||[]).filter(b=>b.productora_id===prodId&&(srcId==="legacy"?!b.evento_id:b.evento_id===srcId));
+  if(!fuente.length)return 0;
+  // Fecha "ancla" de la fuente: su evento; para los anteriores, el evento donde más se usaron
+  const fechaAncla=b=>{
+    if(srcId!=="legacy")return D.eventos.find(e=>e.id===srcId)?.date||null;
+    const usos={};(D.bday_cumpleaneros||[]).filter(c=>c.beneficio_id===b.id).forEach(c=>usos[c.evento_id]=(usos[c.evento_id]||0)+1);
+    const top=Object.entries(usos).sort((x,y)=>y[1]-x[1])[0];return top?D.eventos.find(e=>e.id===top[0])?.date||null:null;
+  };
+  const correr=(f,ancla)=>{if(!f||!ancla||!dst.date)return srcId==="legacy"&&!ancla?null:f;const d=new Date(f+"T12:00:00");d.setDate(d.getDate()+Math.round((new Date(dst.date+"T12:00:00")-new Date(ancla+"T12:00:00"))/864e5));return d.toISOString().slice(0,10);};
+  const mapa={};
+  const nuevos=fuente.map(b=>{const {id,created_at,...resto}=b;const nid=uid();mapa[b.id]=nid;const an=fechaAncla(b);
+    return{...resto,id:nid,evento_id:dstEvId,fecha_validez:correr(b.fecha_validez,an),fecha_cierre:correr(b.fecha_cierre,an),created_at:now()};});
+  try{await sbPost("bday_beneficios",nuevos);}
+  catch(e){if(/evento_id/.test(e.message||"")){if(!opt.silencioso)alert("Falta un ajuste en la base de datos para guardar beneficios por evento.\n\nEn Supabase → SQL Editor ejecuta:\nALTER TABLE bday_beneficios ADD COLUMN IF NOT EXISTS evento_id TEXT;");return 0;}throw e;}
+  D.bday_beneficios=[...(D.bday_beneficios||[]),...nuevos];
+  // Los cumpleañeros de este evento que usaban un beneficio "anterior" pasan a usar la copia del evento
+  if(srcId==="legacy"){
+    for(const c of (D.bday_cumpleaneros||[]).filter(c=>c.evento_id===dstEvId&&mapa[c.beneficio_id])){
+      try{await sbPatch("bday_cumpleaneros",`id=eq.${c.id}`,{beneficio_id:mapa[c.beneficio_id]});c.beneficio_id=mapa[c.beneficio_id];}catch(e){console.warn("repuntar beneficio",e.message);}
+    }
+  }
+  await log("copiar_beneficios","evento",dstEvId,`${nuevos.length} beneficio(s) copiados desde ${srcId==="legacy"?"beneficios anteriores":D.eventos.find(e=>e.id===srcId)?.name||srcId}`);
+  if(!opt.silencioso)toast(`✓ ${nuevos.length} beneficio${nuevos.length===1?"":"s"} copiado${nuevos.length===1?"":"s"} a ${dst.name}`,"success");
+  return nuevos.length;
+}
 function bdayFormBeneficio(id, prodId, cb){
   const b = id?(D.bday_beneficios||[]).find(x=>x.id===id):null;
   openModal(b?"Editar beneficio":"Nuevo beneficio",`
@@ -11506,7 +11569,10 @@ window.bdayGuardarBeneficio=async(id,prodId)=>{
     if(idx>=0)D.bday_beneficios[idx]={...D.bday_beneficios[idx],...data};
     toast("Beneficio actualizado","ok");
   }else{
-    const [nuevo]=await sbPost("bday_beneficios",[{...data,id:uid(),created_at:now()}]);
+    if(EV_DENTRO)data.evento_id=EV_DENTRO;
+    let nuevo;
+    try{[nuevo]=await sbPost("bday_beneficios",[{...data,id:uid(),created_at:now()}]);}
+    catch(e){if(/evento_id/.test(e.message||"")){alert("Falta un ajuste en la base de datos para guardar beneficios por evento.\n\nEn Supabase → SQL Editor ejecuta:\nALTER TABLE bday_beneficios ADD COLUMN IF NOT EXISTS evento_id TEXT;");return;}throw e;}
     D.bday_beneficios.push(nuevo||{...data,id:uid()});
     toast("Beneficio creado","ok");
   }
@@ -11805,7 +11871,10 @@ VIEWS["bday-cumpleaneros"] = async()=>{
 
 function bdayFormCumple(id, prodId, evs){
   const c=id?(D.bday_cumpleaneros||[]).find(x=>x.id===id):null;
-  const bens=(D.bday_beneficios||[]).filter(b=>!prodId||b.productora_id===prodId);
+  const evIni=c?.evento_id||EV_DENTRO||evs?.[0]?.id||null;
+  const bensDe=evId=>(D.bday_beneficios||[]).filter(b=>(!prodId||b.productora_id===prodId)&&(b.evento_id===evId||(c&&b.id===c.beneficio_id)));
+  const bens=bensDe(evIni);
+  window._bdayBensDe=bensDe;
   openModal(c?"Editar cumpleañero":"Registrar cumpleañero",`
     <div style="display:grid;gap:10px">
       <div class="form-row">
@@ -11818,7 +11887,7 @@ function bdayFormCumple(id, prodId, evs){
       </div>
       <div id="bc-status" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;font-weight:600"></div>
       <label class="form-label">Evento</label>
-      <select class="form-select" id="bc-ev">
+      <select class="form-select" id="bc-ev" onchange="(()=>{const bs=window._bdayBensDe(this.value);const sel=$('bc-ben');const cur=sel.value;sel.innerHTML='<option value=&quot;&quot;>— Sin beneficio —</option>'+bs.map(b=>'<option value=&quot;'+b.id+'&quot;'+(b.id===cur?' selected':'')+'>'+b.nombre+'</option>').join('');bdayMostrarBeneficio(sel.value);})()">
         ${evs.map(e=>`<option value="${e.id}"${c?.evento_id===e.id?" selected":""}>${e.name}${e.date?" — "+e.date:""}</option>`).join("")}
       </select>
       <label class="form-label">Beneficio asignado</label>
