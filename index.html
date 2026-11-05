@@ -876,7 +876,7 @@ async function sendEmail(to, subject, html){
 const glEsc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const GL_F="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
 // Asunto del correo de aprobación Close Friends (con el plazo para comprar)
-function cfAsuntoAprobado(ev,cfg){const h=cfg?.horas_vencimiento||24;return `🌸 ¡Quedaste dentro! Tienes ${h<48?h+" horas":h/24+" días"} para comprar tu entrada — ${ev?.name||""}`;}
+function cfAsuntoAprobado(ev,cfg){const h=cfg?.horas_vencimiento||24;return `🌸 ¡Tu postulación fue aprobada! Tienes ${h<48?h+" horas":h/24+" días"} para comprar tu entrada — ${ev?.name||""}`;}
 const glMail={
   shell(accent,inner){
     return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><title>Guestly</title>
@@ -968,7 +968,7 @@ const glMail={
 &#128293; <strong>Las entradas Close Friends son limitadas</strong> y se van por orden de pago.<br>Tu aprobación <strong>no reserva tu cupo</strong>: es tuyo recién cuando pagas. Si se agotan antes, te quedas afuera.</td></tr></table>`;
     return glMail.shell("#16C46B",
       glMail.row(glMail.badge("Aprobado · Close Friends"),"36px 48px 0")+
-      glMail.row(glMail.h1(`¡${glEsc(nombre)}, quedaste dentro! &#127800;`)+glMail.p(mensaje||"Tu postulación a Close Friends fue aprobada. Ahora te toca a ti: <strong style=\"color:#0B0B0C\">compra tu entrada antes de que se agoten</strong>."),"20px 48px 0")+
+      glMail.row(glMail.h1(`¡${glEsc(nombre)}, tu postulación fue aprobada! &#127800;`)+glMail.p(mensaje||"Ahora te toca a ti: <strong style=\"color:#0B0B0C\">compra tu entrada antes de que se agoten</strong>."),"20px 48px 0")+
       glMail.row(reloj,"24px 48px 0")+
       (tipo?glMail.row(glMail.ticket("Tu entrada asignada",glEsc(tipo),"&#10003;&nbsp; Acceso Close Friends"),"20px 48px 0"):"")+
       glMail.row(glMail.button(link,"COMPRAR MI ENTRADA AHORA")+glMail.small(`&#128274;&nbsp; Link personal e intransferible · vence el ${glEsc(limiteTxt)} hrs`),"24px 48px 0")+
