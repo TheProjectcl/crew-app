@@ -11,7 +11,7 @@
 <meta name="theme-color" content="#0B0B0C">
 <link rel="icon" type="image/svg+xml" href="/brand/favicon.svg">
 <link rel="apple-touch-icon" href="/brand/apple-touch-icon.png">
-<script>try{if(localStorage.getItem("crew-session"))location.replace("/app");}catch(e){}</script>
+<script>/* quien ya tiene sesión entra directo al panel (solo en guestly.cl, no en la vista previa /landing) */try{if(location.pathname==="/"&&localStorage.getItem("crew-session"))location.replace("/app");}catch(e){}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
