@@ -13898,7 +13898,7 @@ function mostrarRegistroProductora(){
     .rg-sub{color:#B4B4B8;font-size:14px;text-align:center;margin:0 0 20px;line-height:1.5}
     .rg-lbl{display:block;font-size:12px;font-weight:600;color:#D4D4D8;margin:12px 0 5px}.rg-lbl span{color:#2BE07B}
     .rg-in{width:100%;box-sizing:border-box;background:#0B0B0C;border:1px solid #3A3A3F;border-radius:12px;padding:12px 14px;color:#F5F5F2;font-size:15px;outline:none;font-family:inherit}
-    .rg-in:focus{border-color:#2BE07B}.rg-in.err{border-color:#ef4444}
+    .rg-in:focus{border-color:#2BE07B}.rg-in.err{border-color:#F5F5F2}
     .rg-row{display:flex;gap:8px}.rg-row>*{flex:1;min-width:0}
     .rg-btn{width:100%;margin-top:20px;background:#2BE07B;border:none;color:#0B0B0C;padding:15px;border-radius:999px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}.rg-btn:disabled{opacity:.6}
     .rg-err{color:#f87171;font-size:13px;margin-top:10px;text-align:center;font-weight:600}
@@ -13906,7 +13906,7 @@ function mostrarRegistroProductora(){
     .rg-ok{text-align:center;padding:12px 4px}.rg-ok .ic{width:64px;height:64px;border-radius:50%;background:#2BE07B;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
     @media (max-width:420px){.rg-row{flex-direction:column;gap:0}}
   </style>
-  <div class="rg-wrap"><div class="rg-box" id="rg-box">
+  <div class="rg-wrap"><div class="rg-box" id="rg-box" oninput="if(event.target.classList.contains('rg-in')){event.target.classList.remove('err');if(!document.querySelector('.rg-in.err'))document.getElementById('rg-err').textContent='';}">
     <a class="rg-logo" href="/"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="6" fill="none" stroke="#F5F5F2" stroke-width="3"></rect><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#2BE07B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>GUESTLY</span></a>
     <h1>Solicita tu cuenta</h1>
     <p class="rg-sub">Déjanos los datos de tu productora. Revisamos tu solicitud y te enviamos el acceso a tu correo.</p>
