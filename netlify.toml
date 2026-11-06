@@ -7,3 +7,14 @@
 [[edge_functions]]
   path = "/index.html"
   function = "og"
+
+# Panel de Guestly (login) en guestly.cl/app — es el mismo index.html
+[[redirects]]
+  from = "/app"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/app/"
+  to = "/index.html"
+  status = 200

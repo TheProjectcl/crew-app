@@ -218,6 +218,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <input class="l-input" id="li-pass" placeholder="Contraseña" type="password" onkeydown="if(event.key==='Enter')doLogin()">
     <div id="li-err" class="err-msg hidden">Email o contraseña incorrectos.</div>
     <button class="l-btn" onclick="doLogin()">Ingresar</button>
+    <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--ink-3)">¿Tienes una productora? <a href="/app?registro" style="color:var(--accent-ink,#13894A);font-weight:600;text-decoration:none">Solicita tu cuenta</a></div>
   </div>
 </div>
 
@@ -2362,6 +2363,7 @@ VIEWS.productoras=()=>{
       </div>
       <button class="btn btn-primary" onclick="openNuevaProd()">+ Nueva productora</button>
     </div>
+    ${bloqueSolicitudesProd()}
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:18px">
       ${prods.map(p=>{
         const owner=D.users.find(u=>u.id===p.owner_id);
@@ -13879,8 +13881,118 @@ async function mostrarEntradaQR(tok){
 }
 
 // ── Detectar acceso público CF en la URL ──
+// ═══════════════════════════════════
+// REGISTRO DE PRODUCTORAS (público, con aprobación de Guestly) — NUEVO, no toca nada existente
+// ═══════════════════════════════════
+const GL_AVISOS_EMAIL="guestlycl@gmail.com"; // a dónde llegan las solicitudes nuevas
+const escH=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function mostrarRegistroProductora(){
+  document.title="Solicita tu cuenta — GUESTLY";
+  document.body.innerHTML=`<style>
+    body{margin:0;background:#0B0B0C;font-family:Inter,system-ui,-apple-system,sans-serif;color:#F5F5F2}
+    .rg-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+    .rg-box{background:#161618;border:1px solid #2A2A2E;border-radius:24px;padding:32px 24px;max-width:500px;width:100%;box-sizing:border-box}
+    .rg-logo{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:18px;color:#F5F5F2;text-decoration:none}
+    .rg-logo span{font-weight:700;font-size:20px;letter-spacing:.04em}
+    h1{font-size:26px;margin:0 0 6px;text-align:center;letter-spacing:-.02em}
+    .rg-sub{color:#B4B4B8;font-size:14px;text-align:center;margin:0 0 20px;line-height:1.5}
+    .rg-lbl{display:block;font-size:12px;font-weight:600;color:#D4D4D8;margin:12px 0 5px}.rg-lbl span{color:#2BE07B}
+    .rg-in{width:100%;box-sizing:border-box;background:#0B0B0C;border:1px solid #3A3A3F;border-radius:12px;padding:12px 14px;color:#F5F5F2;font-size:15px;outline:none;font-family:inherit}
+    .rg-in:focus{border-color:#2BE07B}.rg-in.err{border-color:#ef4444}
+    .rg-row{display:flex;gap:8px}.rg-row>*{flex:1;min-width:0}
+    .rg-btn{width:100%;margin-top:20px;background:#2BE07B;border:none;color:#0B0B0C;padding:15px;border-radius:999px;font-size:16px;font-weight:700;cursor:pointer;font-family:inherit}.rg-btn:disabled{opacity:.6}
+    .rg-err{color:#f87171;font-size:13px;margin-top:10px;text-align:center;font-weight:600}
+    .rg-foot{text-align:center;color:#8E8E94;font-size:13px;margin-top:18px}.rg-foot a{color:#2BE07B;text-decoration:none;font-weight:600}
+    .rg-ok{text-align:center;padding:12px 4px}.rg-ok .ic{width:64px;height:64px;border-radius:50%;background:#2BE07B;display:flex;align-items:center;justify-content:center;margin:0 auto 14px}
+    @media (max-width:420px){.rg-row{flex-direction:column;gap:0}}
+  </style>
+  <div class="rg-wrap"><div class="rg-box" id="rg-box">
+    <a class="rg-logo" href="/"><svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="6" fill="none" stroke="#F5F5F2" stroke-width="3"></rect><path d="M9 16.5l4.5 4.5L23 11.5" fill="none" stroke="#2BE07B" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"></path></svg><span>GUESTLY</span></a>
+    <h1>Solicita tu cuenta</h1>
+    <p class="rg-sub">Déjanos los datos de tu productora. Revisamos tu solicitud y te enviamos el acceso a tu correo.</p>
+    <label class="rg-lbl">Nombre de la productora <span>*</span></label><input class="rg-in" id="rg-prod" placeholder="Ej: The Project" autocomplete="organization">
+    <div class="rg-row">
+      <div><label class="rg-lbl">Tu nombre <span>*</span></label><input class="rg-in" id="rg-nom" placeholder="Nombre" autocomplete="given-name"></div>
+      <div><label class="rg-lbl">Apellido <span>*</span></label><input class="rg-in" id="rg-ape" placeholder="Apellido" autocomplete="family-name"></div>
+    </div>
+    <label class="rg-lbl">Correo <span>*</span></label><input class="rg-in" id="rg-email" type="email" placeholder="tu@correo.cl" autocomplete="email">
+    <label class="rg-lbl">WhatsApp <span>*</span></label><input class="rg-in" id="rg-wa" type="tel" placeholder="+56 9 1234 5678" autocomplete="tel">
+    <div class="rg-row">
+      <div><label class="rg-lbl">Instagram de la productora</label><input class="rg-in" id="rg-ig" placeholder="@tuproductora"></div>
+      <div><label class="rg-lbl">Ciudad</label><input class="rg-in" id="rg-ciudad" placeholder="Santiago"></div>
+    </div>
+    <label class="rg-lbl">Cuéntanos de tus eventos (opcional)</label><textarea class="rg-in" id="rg-msg" rows="3" placeholder="Qué tipo de fiestas haces, cada cuánto, cuánta gente…"></textarea>
+    <div id="rg-err" class="rg-err"></div>
+    <button class="rg-btn" id="rg-btn" onclick="enviarRegistroProductora()">Enviar solicitud</button>
+    <div class="rg-foot">¿Ya tienes cuenta? <a href="/app">Ingresar</a></div>
+  </div></div>`;
+}
+async function enviarRegistroProductora(){
+  const v=id=>(document.getElementById(id)?.value||"").trim();
+  const d={nombre_productora:v("rg-prod"),responsable:`${v("rg-nom")} ${v("rg-ape")}`.trim(),email:v("rg-email").toLowerCase(),whatsapp:v("rg-wa"),instagram:v("rg-ig").replace(/^@/,""),ciudad:v("rg-ciudad"),mensaje:v("rg-msg")};
+  const err=document.getElementById("rg-err");err.textContent="";
+  document.querySelectorAll(".rg-in").forEach(i=>i.classList.remove("err"));
+  const faltan=[["rg-prod",d.nombre_productora],["rg-nom",v("rg-nom")],["rg-ape",v("rg-ape")],["rg-email",d.email],["rg-wa",d.whatsapp]].filter(([,x])=>!x);
+  if(faltan.length){faltan.forEach(([id])=>document.getElementById(id).classList.add("err"));err.textContent="Completa los campos obligatorios.";return;}
+  if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)){document.getElementById("rg-email").classList.add("err");err.textContent="Revisa el correo.";return;}
+  if(d.whatsapp.replace(/\D/g,"").length<8){document.getElementById("rg-wa").classList.add("err");err.textContent="Revisa el WhatsApp.";return;}
+  const btn=document.getElementById("rg-btn");btn.disabled=true;btn.textContent="Enviando…";
+  try{
+    await sbPost("registro_productoras",[{id:uid(),...d,estado:"pendiente",created_at:now()}]);
+  }catch(e){btn.disabled=false;btn.textContent="Enviar solicitud";err.textContent="No pudimos enviar tu solicitud. Intenta de nuevo o escríbenos por WhatsApp.";console.error(e);return;}
+  try{await sendEmail(GL_AVISOS_EMAIL,`Nueva solicitud de productora — ${d.nombre_productora}`,`<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6"><h2 style="margin:0 0 10px">Nueva solicitud en Guestly</h2><b>Productora:</b> ${escH(d.nombre_productora)}<br><b>Responsable:</b> ${escH(d.responsable)}<br><b>Correo:</b> ${escH(d.email)}<br><b>WhatsApp:</b> ${escH(d.whatsapp)}<br>${d.instagram?`<b>Instagram:</b> @${escH(d.instagram)}<br>`:""}${d.ciudad?`<b>Ciudad:</b> ${escH(d.ciudad)}<br>`:""}${d.mensaje?`<b>Mensaje:</b> ${escH(d.mensaje)}<br>`:""}<p>Apruébala en Guestly → Productoras → Solicitudes de registro.</p></div>`);}catch(e){}
+  document.getElementById("rg-box").innerHTML=`<div class="rg-ok"><div class="ic"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#0B0B0C" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+    <h1>¡Solicitud enviada!</h1><p class="rg-sub" style="margin-top:8px">Gracias, ${escH(v("rg-nom"))}. Revisaremos los datos de <b style="color:#F5F5F2">${escH(d.nombre_productora)}</b> y te enviaremos el acceso a <b style="color:#F5F5F2">${escH(d.email)}</b>.</p>
+    <div class="rg-foot"><a href="/">← Volver a GUESTLY</a></div></div>`;
+}
+// Superadmin: solicitudes pendientes en Productoras
+let _solicitudesProd=null;
+async function cargarSolicitudesProd(){
+  try{_solicitudesProd=await sbGet("registro_productoras","estado=eq.pendiente&order=created_at.desc");}
+  catch(e){_solicitudesProd=/registro_productoras|relation|does not exist|404/i.test(e.message||"")?"sin_tabla":[];}
+  if(CURRENT_VIEW==="productoras")VIEWS.productoras();
+}
+function bloqueSolicitudesProd(){
+  if(CU?.role!=="superadmin")return "";
+  if(_solicitudesProd===null){cargarSolicitudesProd();return "";}
+  if(_solicitudesProd==="sin_tabla")return `<div class="card" style="margin-top:14px;font-size:12px;color:#92400E;background:#FEF3C7;border-color:#FDE68A">Para recibir solicitudes de registro desde el landing falta crear la tabla en Supabase (archivo <code>supabase/sql-registro.sql</code>).</div>`;
+  if(!_solicitudesProd.length)return "";
+  return `<div class="card" style="margin-top:14px;border-left:4px solid #2BE07B">
+    <div style="font-weight:700;font-size:15px;margin-bottom:10px">📥 Solicitudes de registro (${_solicitudesProd.length})</div>
+    ${_solicitudesProd.map(r=>`<div style="display:flex;gap:12px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)">
+      <div style="font-size:13px;line-height:1.6;min-width:240px;flex:1"><strong style="font-size:14px">${escH(r.nombre_productora)}</strong>${r.ciudad?` · ${escH(r.ciudad)}`:""}<br>
+        ${escH(r.responsable)} · ${escH(r.email)} · <a href="https://wa.me/${String(r.whatsapp||"").replace(/\D/g,"")}" target="_blank" style="color:#13894A">${escH(r.whatsapp)}</a>${r.instagram?` · <a href="https://instagram.com/${escH(r.instagram)}" target="_blank" style="color:#13894A">@${escH(r.instagram)}</a>`:""}
+        ${r.mensaje?`<div style="color:#666;font-size:12px">💬 ${escH(r.mensaje)}</div>`:""}<div style="color:#999;font-size:11px">${fmtDT(r.created_at)}</div></div>
+      <div style="display:flex;gap:6px"><button class="btn btn-primary" style="font-size:12px" onclick="aprobarSolicitudProd('${r.id}')">✓ Aprobar</button><button class="btn" style="font-size:12px" onclick="rechazarSolicitudProd('${r.id}')">Rechazar</button></div>
+    </div>`).join("")}</div>`;
+}
+async function aprobarSolicitudProd(id){
+  const r=(_solicitudesProd||[]).find(x=>x.id===id);if(!r)return;
+  if(!confirm(`¿Aprobar "${r.nombre_productora}"?\n\nSe crea la productora y la cuenta de ${r.responsable} (${r.email}), y le llega un correo con su acceso. Al entrar deberá cambiar su contraseña.`))return;
+  const prodId=uid(),ownerId=uid();
+  const pass="gl-"+Math.random().toString(36).slice(2,8);
+  const ownerU={id:ownerId,name:r.responsable,email:r.email,pass,role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],must_change_pass:true};
+  try{await sbPostUserTolerante(ownerU);}catch(e){toast("Error creando el usuario: "+e.message,"error");return;}
+  const prod={id:prodId,nombre:r.nombre_productora,owner_id:ownerId,color:"#2BE07B",created_at:now()};
+  try{await sbPost("productoras",[prod]);}catch(e){toast("Error creando la productora: "+e.message,"error");return;}
+  D.productoras.push(prod);D.users.push(ownerU);
+  try{await sbPatch("registro_productoras",`id=eq.${id}`,{estado:"aprobada",productora_id:prodId});}catch(e){}
+  try{await log("aprobar_registro","productora",prodId,`Solicitud aprobada: ${r.nombre_productora} — ${r.responsable} (${r.email})`);}catch(e){}
+  try{await sendEmail(r.email,`Tu cuenta Guestly está lista — ${r.nombre_productora}`,emailTemplates.nuevaProductora(r.responsable,r.email,pass,r.nombre_productora));}catch(e){toast("Productora creada, pero el correo no salió: "+e.message,"warn");}
+  _solicitudesProd=_solicitudesProd.filter(x=>x.id!==id);
+  toast(`✓ ${r.nombre_productora} aprobada. Le enviamos su acceso a ${r.email}`,"success");
+  VIEWS.productoras();
+}
+async function rechazarSolicitudProd(id){
+  const r=(_solicitudesProd||[]).find(x=>x.id===id);if(!r)return;
+  if(!confirm(`¿Rechazar la solicitud de "${r.nombre_productora}"? No se le envía ningún correo.`))return;
+  try{await sbPatch("registro_productoras",`id=eq.${id}`,{estado:"rechazada"});}catch(e){toast("Error: "+e.message,"error");return;}
+  _solicitudesProd=_solicitudesProd.filter(x=>x.id!==id);VIEWS.productoras();toast("Solicitud rechazada","warn");
+}
+
 const _cfUrl = new URLSearchParams(window.location.search);
-if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
+if(_cfUrl.has("registro")){ mostrarRegistroProductora(); }
+else if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
 else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
