@@ -83,13 +83,95 @@ async function crear(body: any) {
   return { url: t.url, token: t.token, pago_id: pagoId, base: c.base, cargo, total, ambiente: AMBIENTE };
 }
 
-// Marca como pagado lo que corresponda (solo si Transbank autorizó y el monto calza)
+// ── Entrada confirmada: QR + correo, todo en el servidor (no depende de que el comprador vuelva a la página) ──
+const QR_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const qrToken = () => { const a = new Uint8Array(14); crypto.getRandomValues(a); let s = ""; for (const b of a) s += QR_CHARS[b % 32]; return s; };
+const qrLink = (t: string) => `${SITE}/?q=${t}`;
+const qrImg = (t: string) => `https://api.qrserver.com/v1/create-qr-code/?size=180x180&margin=6&data=${encodeURIComponent(qrLink(t))}`;
+const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+const clp = (n: unknown) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
+
+function correoConfirmada(o: { nombre: string; evento: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any }) {
+  const F = "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
+  const qrs = o.toks.map((t, i) => `<div style="display:inline-block;vertical-align:top;margin:6px;padding:12px;border:1px solid #e8e8e8;border-radius:12px;background:#fff">
+    <a href="${qrLink(t.t)}" style="text-decoration:none"><img src="${qrImg(t.t)}" width="180" height="180" alt="QR" style="display:block;border:0"></a>
+    <div style="${F}font-size:12px;font-weight:700;color:#1a1a1a;margin-top:8px">${o.toks.length > 1 ? `Entrada ${i + 1} de ${o.toks.length}` : esc(o.nombre)}</div>
+    <div style="font-size:11px;color:#888;font-family:monospace">${t.t}</div>
+    <a href="${qrLink(t.t)}" style="${F}font-size:11px;color:#13894A;font-weight:600;text-decoration:none">Abrir entrada digital →</a></div>`).join("");
+  const fila = (a: string, b: string) => `<tr><td style="${F}font-size:12px;color:#777;padding:3px 0">${a}</td><td align="right" style="${F}font-size:12px;color:#1a1a1a;padding:3px 0">${b}</td></tr>`;
+  const r = o.pago.respuesta || {};
+  return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light only"></head>
+<body style="margin:0;padding:0;background:#F2F2EF"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F2F2EF"><tr><td align="center" style="padding:36px 12px 40px">
+<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:100%">
+<tr><td align="center" style="padding:0 0 24px"><img src="${SITE}/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
+<tr><td style="background:#fff;border-radius:16px"><div style="height:4px;background:#16C46B;border-radius:16px 16px 0 0"></div>
+<div style="padding:34px 32px 30px;text-align:center">
+  <div style="font-size:48px;line-height:52px">&#127881;</div>
+  <div style="display:inline-block;margin-top:10px;${F}font-size:11px;font-weight:700;letter-spacing:1px;color:#13894A;background:#E3FAEC;border-radius:20px;padding:5px 12px">PAGO RECIBIDO</div>
+  <p style="margin:16px 0 6px;${F}font-size:22px;font-weight:800;color:#0B0B0C">¡${esc(o.nombre)}, tu entrada está confirmada!</p>
+  <p style="margin:0 0 4px;${F}font-size:14px;color:#555;line-height:1.5">${esc(o.mensaje)}</p>
+  <p style="margin:0;${F}font-size:13px;color:#888">${esc(o.evento)} · Código <b style="color:#0B0B0C">${esc(o.codigo)}</b></p>
+  <div style="margin:22px 0 6px">${qrs}</div>
+  <div style="${F}font-size:11px;color:#888;margin-top:6px;line-height:1.5">Guarda una captura del QR o abre el link antes de llegar.<br>Si no tienes señal, igual puedes acreditarte por lista con tu carnet.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:22px;border-top:1px solid #eee;padding-top:12px">
+    ${fila("Pagado con tarjeta (Webpay)", `<b>${clp(o.pago.total)}</b>`)}${fila(`Incluye cargo por servicio (${Number(o.pago.cargo_pct) || 0}%)`, clp(o.pago.cargo))}
+    ${fila("Orden de compra", esc(o.pago.buy_order))}${r.authorization_code ? fila("Código de autorización", esc(r.authorization_code)) : ""}${r.card_detail?.card_number ? fila("Tarjeta", "•••• " + esc(r.card_detail.card_number)) : ""}
+  </table>
+  ${o.pago.ambiente !== "produccion" ? `<div style="${F}font-size:10px;color:#92400E;margin-top:10px">Pago de prueba (ambiente de integración de Transbank) · no es un cobro real</div>` : ""}
+  <div style="margin-top:20px;${F}font-size:12px;color:#777">&#129706; Recuerda llegar con tu carnet de identidad vigente.</div>
+</div></td></tr>
+<tr><td align="center" style="padding:24px 0 0"><span style="${F}font-size:11px;color:#999">Powered by <a href="${SITE}" style="color:#13894A;text-decoration:none;font-weight:600">Guestly.cl</a></span></td></tr>
+</table></td></tr></table></body></html>`;
+}
+
+// Marca como pagado lo que corresponda (solo si Transbank autorizó y el monto calza) y envía la entrada
 async function aplicarPago(p: any) {
   if (p.tipo === "cf") {
     await dbPatch("cf_ordenes", `id=eq.${p.ref_id}&estado=neq.conciliado`, {
       estado: "conciliado", conciliado_at: new Date().toISOString(), transferencia_id: `webpay:${p.id}`,
     });
+    await enviarEntradaCF(p);
   }
+}
+async function enviarEntradaCF(p: any) {
+  // "Reserva" el envío: solo una ejecución manda el correo, aunque se repita el retorno
+  const r = await fetch(`${SB_URL}/rest/v1/pagos_webpay?id=eq.${p.id}&email_enviado=eq.false`, { method: "PATCH", headers: { ...hdr, Prefer: "return=representation" }, body: JSON.stringify({ email_enviado: true }) });
+  if (!r.ok || !(await r.json()).length) return;
+  try {
+    const o = (await dbGet("cf_ordenes", `id=eq.${p.ref_id}`))[0];
+    if (!o) return;
+    const n = Math.max(1, Number(o.cantidad) || 1);
+    const toks = Array.isArray(o.qr_tokens) ? o.qr_tokens.slice() : [];
+    if (toks.length < n) { while (toks.length < n) toks.push({ t: qrToken(), usado_at: null }); await dbPatch("cf_ordenes", `id=eq.${o.id}`, { qr_tokens: toks }); }
+    const [post, ev, cfg] = await Promise.all([
+      dbGet("cf_postulantes", `id=eq.${o.postulante_id}`).then((a) => a[0]),
+      dbGet("eventos", `id=eq.${o.evento_id}`).then((a) => a[0]),
+      dbGet("cf_config", `evento_id=eq.${o.evento_id}`).then((a) => a[0] || {}),
+    ]);
+    if (!post?.email) return;
+    const html = correoConfirmada({ nombre: post.nombre || "", evento: ev?.name || "", mensaje: cfg.msg_confirmacion || "¡Tu entrada está confirmada! Muestra este QR en la puerta.", codigo: o.codigo || "", toks, pago: p });
+    const s = await fetch(`${SB_URL}/functions/v1/send-email`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SERVICE}` }, body: JSON.stringify({ to: post.email, subject: `¡Entrada confirmada — ${ev?.name || "tu evento"}!`, html }) });
+    if (!s.ok) throw new Error("send-email " + s.status + " " + (await s.text()).slice(0, 200));
+  } catch (e) {
+    // Si falló, se libera para reintentar (la página de resultado vuelve a pedirlo)
+    await dbPatch("pagos_webpay", `id=eq.${p.id}`, { email_enviado: false });
+    throw e;
+  }
+}
+
+// Datos que la página de resultado puede mostrar (la tabla no es legible desde el navegador)
+async function resultado(id: string) {
+  if (!/^[0-9a-f-]{36}$/.test(id)) throw new Error("Pago no válido");
+  const p = (await dbGet("pagos_webpay", `id=eq.${id}`))[0];
+  if (!p) return { encontrado: false };
+  // Respaldo: si quedó aprobado y el correo no salió, se intenta de nuevo
+  if (p.estado === "aprobado" && !p.email_enviado) { try { await aplicarPago(p); } catch { /* se reintenta en la próxima visita */ } }
+  const r = p.respuesta || {};
+  return {
+    encontrado: true, estado: p.estado, tipo: p.tipo, ref_id: p.ref_id, buy_order: p.buy_order, monto_base: p.monto_base, cargo: p.cargo,
+    cargo_pct: p.cargo_pct, total: p.total, ambiente: p.ambiente, volver: p.volver, created_at: p.created_at, confirmado_at: p.confirmado_at,
+    respuesta: { payment_type_code: r.payment_type_code, installments_number: r.installments_number, authorization_code: r.authorization_code, transaction_date: r.transaction_date, card_detail: r.card_detail ? { card_number: r.card_detail.card_number } : undefined },
+  };
 }
 
 async function retorno(params: URLSearchParams) {
@@ -123,6 +205,7 @@ Deno.serve(async (req) => {
   const accion = url.searchParams.get("accion") || "";
   try {
     if (accion === "estado") return json({ ok: true, ambiente: AMBIENTE });
+    if (accion === "resultado") return json(await resultado(url.searchParams.get("id") || ""));
     if (accion === "crear" && req.method === "POST") return json(await crear(await req.json()));
     if (accion === "retorno") {
       const params = new URLSearchParams(url.search);

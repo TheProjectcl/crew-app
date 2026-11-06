@@ -9737,8 +9737,8 @@ function mostrarResultadoPago(pagoId){
   let intentos=0;
   (async function revisar(){
     let p;
-    try{p=(await sbGet("pagos_webpay",`id=eq.${encodeURIComponent(pagoId)}`))[0];}catch(e){}
-    if(!p){cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">No encontramos este pago.</p></div>`;return;}
+    try{const r=await fetch(`${SB_URL}/functions/v1/webpay?accion=resultado&id=${encodeURIComponent(pagoId)}`);const j=await r.json();if(j.encontrado)p=j;}catch(e){}
+    if(!p){if(intentos++<3){setTimeout(revisar,2000);return;}cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">No encontramos este pago.</p></div>`;return;}
     if(["creado","en_webpay"].includes(p.estado)&&intentos++<5){setTimeout(revisar,2500);return;}
     const volver=p.volver&&/^https:\/\/(www\.)?guestly\.cl\//.test(p.volver)?p.volver:null;
     if(p.estado!=="aprobado"){
@@ -9763,27 +9763,11 @@ function mostrarResultadoPago(pagoId){
         cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago recibido</h2><p style="color:#aaa;font-size:13px">Estamos dejando lista tu entrada. Si en unos minutos no te llega el correo, escríbenos con tu orden ${p.buy_order||""}.</p></div>`;
         return;
       }
-      mostrarPagoCF(ord.id); // muestra "¡Pago confirmado!" + QR
-      wpCorreoConfirmacionCF(p,ord);
+      mostrarPagoCF(ord.id); // muestra "¡Pago confirmado!" + QR (el correo lo envía el servidor)
     } else {
       cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px">¡Pago confirmado!</h2></div>`;
     }
   })();
-}
-// Envía una sola vez el correo con el QR (se "reserva" marcando email_enviado antes de mandar)
-async function wpCorreoConfirmacionCF(p,ord){
-  try{
-    if(p.email_enviado)return;
-    const tomado=await sbPatch("pagos_webpay",`id=eq.${p.id}&email_enviado=eq.false`,{email_enviado:true});
-    if(!Array.isArray(tomado)||!tomado.length)return;
-    const [post,ev,cfg]=await Promise.all([
-      sbGet("cf_postulantes",`id=eq.${ord.postulante_id}`).then(a=>a[0]),
-      sbGet("eventos",`id=eq.${ord.evento_id}`).then(a=>a[0]),
-      sbGet("cf_config",`evento_id=eq.${ord.evento_id}`).then(a=>a[0]||{})]);
-    if(!post?.email||!ev)return;
-    let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
-    await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion||"¡Tu entrada está confirmada! Muestra este QR en la puerta.",codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
-  }catch(e){console.warn("correo webpay",e);}
 }
 
 let _compFile = null;
