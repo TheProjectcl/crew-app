@@ -19,7 +19,7 @@
 :root{
   --bg:#fafafa;--surface:#ffffff;--ink:#0a0a0a;--ink-2:#3a3a3a;--ink-3:#6b7280;--ink-4:#9ca3af;
   --line:#ececec;--line-2:#f3f3f3;
-  --accent:#EC4899;--accent-2:#0EA5E9;
+  --accent:#2BE07B;--accent-2:#0EA5E9;--accent-ink:#13894A;--accent-soft:#E3FAEC;--on-accent:#0B0B0C;
   --ok:#10B981;--warn:#F59E0B;--bad:#EF4444;
   --shadow:0 1px 3px rgba(0,0,0,.04);
 }
@@ -43,10 +43,10 @@ body.dark-mode .alert-info{background:#0a1f3a;color:#bfdbfe;border-color:#1e3a8a
 body.dark-mode .alert-warn{background:#2e1f08;color:#fde68a;border-color:#78350f}
 body.dark-mode .alert-danger{background:#2e0a0a;color:#fca5a5;border-color:#7f1d1d}
 body.dark-mode .alert-success{background:#052e1a;color:#86efac;border-color:#065f46}
-body.dark-mode .nav-item.active{background:#2e0f24;color:#f9a8d4}
+body.dark-mode .nav-item.active{background:#0f2e1d;color:#86efac}
 body.dark-mode .ci-ok{background:#052e1a;border-color:#065f46;color:#86efac}
 body.dark-mode .ci-err{background:#2e0a0a;border-color:#7f1d1d;color:#fca5a5}
-body.dark-mode .form-input:focus,body.dark-mode .form-select:focus,body.dark-mode .form-textarea:focus{box-shadow:0 0 0 3px rgba(236,72,153,.18)}
+body.dark-mode .form-input:focus,body.dark-mode .form-select:focus,body.dark-mode .form-textarea:focus{box-shadow:0 0 0 3px rgba(43,224,123,.18)}
 body.dark-mode .filter-chip.active{background:#f5f5f5;color:#0a0a0a;border-color:#f5f5f5}
 /* Toggle modo oscuro */
 .theme-toggle{display:flex;align-items:center;justify-content:center;background:none;border:1px solid var(--line);width:30px;height:30px;border-radius:8px;cursor:pointer;color:var(--ink-3);transition:.15s}
@@ -65,7 +65,7 @@ input,select,textarea,button{font-family:inherit}
 .login-logo p{font-size:11px;color:#888;letter-spacing:2px;margin-top:4px}
 .l-input{width:100%;padding:10px 12px;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:8px;color:#fff;font-size:13px;margin-bottom:10px;outline:none}
 .l-input:focus{border-color:var(--accent)}
-.l-btn{width:100%;padding:11px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+.l-btn{width:100%;padding:11px;background:var(--accent);color:var(--on-accent);border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
 .l-btn:hover{background:#db2777}
 .l-hints{margin-top:16px;padding:12px;background:#1a1a1a;border-radius:8px;font-size:11px;color:#888;line-height:2.2;max-height:180px;overflow-y:auto}
 .l-hints b{color:#bbb}
@@ -79,7 +79,7 @@ input,select,textarea,button{font-family:inherit}
 .nav-sec{padding:14px 16px 6px;font-size:10px;color:var(--ink-4);letter-spacing:1.2px;font-weight:600;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;font-size:13px;cursor:pointer;color:var(--ink-2);transition:.12s;border-radius:8px;margin:1px 8px}
 .nav-item:hover{background:var(--line-2);color:var(--ink)}
-.nav-item.active{color:var(--ink);background:#fce7f3;font-weight:600}
+.nav-item.active{color:var(--ink);background:var(--accent-soft);font-weight:600}
 .nav-item svg{flex-shrink:0;width:18px;height:18px}
 .sb-footer{margin-top:auto;padding:12px 12px;border-top:1px solid var(--line-2);display:flex;align-items:center;gap:6px;min-width:0}
 .sb-footer>div{min-width:0}
@@ -93,7 +93,7 @@ input,select,textarea,button{font-family:inherit}
 .mob-content{padding:14px 14px 90px}
 .mob-nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--surface);border-top:1px solid var(--line);display:flex;z-index:10}
 .mnav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:11px 0;font-size:10px;color:var(--ink-4);cursor:pointer;font-weight:500}
-.mnav-item.active{color:var(--accent)}
+.mnav-item.active{color:var(--accent-ink)}
 .mnav-item .mni{font-size:18px}
 /* CARDS */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:14px}
@@ -118,7 +118,7 @@ input,select,textarea,button{font-family:inherit}
 .btn{padding:8px 14px;font-size:13px;font-weight:500;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;transition:.12s;line-height:1.2}
 .btn:hover{background:var(--line-2);border-color:#d1d5db}
 .btn svg{width:14px;height:14px;flex-shrink:0}
-.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+.btn-primary{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
 .btn-primary:hover{background:#db2777;border-color:#db2777}
 .btn-secondary{background:var(--accent-2);color:#fff;border-color:var(--accent-2);font-weight:600}
 .btn-secondary:hover{background:#0284c7;border-color:#0284c7}
@@ -146,7 +146,7 @@ input,select,textarea,button{font-family:inherit}
 .form-label{font-size:12px;font-weight:600;margin-bottom:5px;display:block;margin-top:14px;color:var(--ink-2);letter-spacing:.2px}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .form-input,.form-select,.form-textarea{width:100%;padding:9px 12px;font-size:13px;border-radius:8px;border:1px solid var(--line);outline:none;background:var(--surface);color:var(--ink);font-family:inherit;transition:.15s}
-.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(236,72,153,.1)}
+.form-input:focus,.form-select:focus,.form-textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(43,224,123,.15)}
 .form-textarea{min-height:80px;resize:vertical}
 /* MODAL */
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
@@ -170,13 +170,13 @@ input,select,textarea,button{font-family:inherit}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .rt-dot{transition:.3s}
 .prod-card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px;cursor:pointer;transition:.15s}
-.prod-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(236,72,153,.08)}
+.prod-card:hover{border-color:var(--accent);box-shadow:0 2px 12px rgba(43,224,123,.12)}
 .upload-zone{border:2px dashed var(--line);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.15s;background:var(--surface)}
 .upload-zone:hover{background:var(--line-2);border-color:var(--accent)}
 /* TABS */
 .tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:18px}
 .tab{padding:9px 16px;font-size:13px;cursor:pointer;color:var(--ink-3);border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
-.tab.active{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tab.active{color:var(--ink);border-bottom-color:var(--accent-ink);font-weight:600}
 /* CI CARD */
 .ci-card{border-radius:14px;padding:24px;text-align:center;margin-top:12px;border:1px solid}
 .ci-ok{background:#f0fdf4;border-color:#86efac;color:#065f46}
@@ -1498,11 +1498,11 @@ function initAdminApp(){
   if(CU.role==="superadmin"){
     $("sb-prod-name").textContent="Guestly";
     $("sb-prod-sub").textContent="SUPERADMIN";
-    $("sb-prod-color").style.background="#534AB7";
+    $("sb-prod-color").style.background="#2BE07B";
   } else {
     $("sb-prod-name").textContent=CP?.nombre||"Mi Productora";
     $("sb-prod-sub").textContent=rm(CU.role).label.toUpperCase();
-    $("sb-prod-color").style.background=CP?.color||"#534AB7";
+    $("sb-prod-color").style.background=CP?.color||"#2BE07B";
   }
   EV_DENTRO=null;
   buildSidebar();
@@ -1596,11 +1596,11 @@ function buildSidebar(){
 
   // Barra del evento (arriba del menú): en qué evento estoy y cómo salir
   const evD=EV_DENTRO&&D.eventos.find(e=>e.id===EV_DENTRO);
-  const barra=evD?`<div class="sb-evento" style="margin:2px 10px 10px;padding:10px 12px;border-radius:10px;background:#EEEDFE;border:1px solid #D9D6FB">
-      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:#7C74D9;text-transform:uppercase">Evento</div>
-      <div style="font-weight:700;font-size:14px;color:#26215C;line-height:1.25;margin-top:2px">${evD.name}</div>
-      <div style="font-size:11px;color:#534AB7;margin-top:2px">${evD.date?new Date(evD.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"numeric",month:"short"}):""}${evD.venue?" · "+evD.venue:""}</div>
-      <button onclick="salirEvento()" style="margin-top:8px;width:100%;background:#fff;border:1px solid #C9C4F7;color:#534AB7;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:600;cursor:pointer">← Cambiar evento</button>
+  const barra=evD?`<div class="sb-evento" style="margin:2px 10px 10px;padding:10px 12px;border-radius:10px;background:var(--accent-soft);border:1px solid #BDEFD1">
+      <div style="font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--accent-ink);text-transform:uppercase">Evento</div>
+      <div style="font-weight:700;font-size:14px;color:var(--ink);line-height:1.25;margin-top:2px">${evD.name}</div>
+      <div style="font-size:11px;color:var(--accent-ink);margin-top:2px">${evD.date?new Date(evD.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"short",day:"numeric",month:"short"}):""}${evD.venue?" · "+evD.venue:""}</div>
+      <button onclick="salirEvento()" style="margin-top:8px;width:100%;background:#fff;border:1px solid #BDEFD1;color:var(--accent-ink);border-radius:8px;padding:6px 8px;font-size:12px;font-weight:600;cursor:pointer">← Cambiar evento</button>
     </div>`:"";
 
   nav.innerHTML=barra+allSections.map(s=>`
@@ -2509,7 +2509,7 @@ async function impersonateProd(prodId){
   const evs=D.eventos.filter(e=>e.productora_id===prodId);
   if(evs.length) currentEvId=evs.find(e=>e.status==="active")?.id||evs[0].id;
   $("sb-prod-name").textContent=CP?.nombre||"Productora";
-  $("sb-prod-color").style.background=CP?.color||"#534AB7";
+  $("sb-prod-color").style.background=CP?.color||"#2BE07B";
   $("sb-prod-sub").textContent="VIENDO COMO ADMIN";
   EV_DENTRO=null;
   buildSidebar(); // re-render sidebar para que aparezcan todas las secciones operativas
@@ -2522,7 +2522,7 @@ async function salirDeProductora(){
   currentEvId=null;EV_DENTRO=null;
   $("sb-prod-name").textContent="Guestly";
   $("sb-prod-sub").textContent="SUPERADMIN";
-  $("sb-prod-color").style.background="#534AB7";
+  $("sb-prod-color").style.background="#2BE07B";
   buildSidebar(); // re-render sidebar para que oculte secciones operativas
   goView("crew-global");
   toast("Vista global de Guestly","success");
@@ -7056,7 +7056,7 @@ VIEWS.usuarios=()=>{
     </div>
     <div class="card"><div class="table-wrap"><table class="data-table">
       <thead><tr><th>Usuario</th><th>Email</th><th>Rol</th>${_usrTab==="equipo"?"<th>Pts</th>":""}<th></th></tr></thead>
-      <tbody>${grupos.filter(g=>g.items.length).map(g=>`<tr><td colspan="${cols}" style="background:#EEEDFE;font-weight:700;font-size:12px;color:#534AB7;padding:6px 12px">${g.t} · ${g.items.length}</td></tr>`+g.items.sort((x,y)=>(x.name||"").localeCompare(y.name||"")).map(fila).join("")).join("")
+      <tbody>${grupos.filter(g=>g.items.length).map(g=>`<tr><td colspan="${cols}" style="background:var(--accent-soft);font-weight:700;font-size:12px;color:var(--accent-ink);padding:6px 12px">${g.t} · ${g.items.length}</td></tr>`+g.items.sort((x,y)=>(x.name||"").localeCompare(y.name||"")).map(fila).join("")).join("")
         ||`<tr><td colspan="${cols}" style="text-align:center;color:#999;padding:24px">${q?"Nadie coincide con la búsqueda.":_usrTab==="equipo"?"Aún no hay equipo. Agrégalo con + Nuevo.":"Aún no hay clientes con cuenta."}</td></tr>`}</tbody>
     </table></div></div>`;
 };
@@ -9832,7 +9832,7 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
         ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
       </td>
       <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
-      <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram||"—"}</a></td>
+      <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram||"—"}</a></td>
       <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
       <td style="padding:8px">
         ${p.doc_instagram?`<a href="${p.doc_instagram}" target="_blank" style="display:inline-flex;align-items:center;gap:3px;font-size:11px;color:#7c3aed;text-decoration:none;background:#f5f3ff;padding:2px 7px;border-radius:5px;margin-bottom:3px;white-space:nowrap">📸 IG</a><br>`:""}
@@ -10270,12 +10270,12 @@ VIEWS.cfOrdenes = async()=>{
       const post=(D.cf_postulantes||[]).find(p=>p.id===o.postulante_id);
       const vence=o.vence_at?new Date(o.vence_at).toLocaleString("es-CL",{hour12:false}):"—";
       return `<tr style="border-bottom:1px solid var(--line)">
-        <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</td>
+        <td style="padding:8px;font-family:monospace;font-weight:600;color:var(--accent-ink)">${o.codigo}</td>
         <td style="padding:8px"><div style="font-weight:500">${post?`${post.nombre} ${post.apellido}`:"—"}</div>${post?.email?`<div style="font-size:11px;color:var(--ink-4)">${post.email}</div>`:""}</td>
         <td style="padding:8px;text-align:center">${o.cantidad||1}</td>
         <td style="padding:8px;font-weight:600">$${(o.monto_total||0).toLocaleString("es-CL")}</td>
         <td style="padding:8px">${estadoBadge(o.estado)}</td>
-        <td style="padding:8px">${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="color:var(--accent)">Ver</a>`:o.estado==="pagado"?"Procesando OCR":"—"}</td>
+        <td style="padding:8px">${o.comprobante_url?`<a href="${o.comprobante_url}" target="_blank" style="color:var(--accent-ink)">Ver</a>`:o.estado==="pagado"?"Procesando OCR":"—"}</td>
         <td style="padding:8px;font-size:11px">${vence}</td>
       </tr>`;
     }).join("");
@@ -10543,7 +10543,7 @@ function renderConcPendientes(prodId,evId){
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
         <div style="flex:1;min-width:0">
           <div style="font-size:18px;font-weight:700;color:var(--ink-1)">${nombre}</div>
-          <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Código: <span style="font-family:monospace;font-weight:600;color:var(--accent)">${o.codigo}</span> · <strong>${monto}</strong> · ${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""}</div>
+          <div style="font-size:13px;color:var(--ink-3);margin-top:2px">Código: <span style="font-family:monospace;font-weight:600;color:var(--accent-ink)">${o.codigo}</span> · <strong>${monto}</strong> · ${o.cantidad||1} entrada${(o.cantidad||1)>1?"s":""}</div>
           ${ocrInfo}
           ${o.comprobante_url?`<div style="margin-top:10px"><a href="${o.comprobante_url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;background:var(--surface-2,#f3f4f6);border:1px solid var(--border,#e5e7eb);border-radius:6px;padding:5px 10px;font-size:12px;color:var(--ink-2);text-decoration:none">🖼 Ver comprobante</a></div>`:`<div style="margin-top:6px;font-size:12px;color:var(--ink-4)">Sin comprobante</div>`}
         </div>
@@ -10678,11 +10678,11 @@ window.cfReenviarRecordatorio=(evIdArg)=>{
       </div>
       <div style="margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div style="font-size:13px;color:var(--ink-3)"><strong>${pendientes.length}</strong> con pago pendiente · <strong>${evNom}</strong></div>
-        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-row-pend .rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todas las pendientes</label>
+        <label style="font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--accent-ink)"><input type="checkbox" id="rcrd-todos" checked onchange="document.querySelectorAll('.rcrd-row-pend .rcrd-chk').forEach(c=>c.checked=this.checked)"> Seleccionar todas las pendientes</label>
       </div>
       <div style="font-size:11px;color:#888;margin-bottom:8px">Solo se incluye a quienes entraron a comprar y aún no pagan. Las aprobadas que nunca iniciaron la compra no reciben este aviso.</div>
       <div style="max-height:220px;overflow-y:auto;padding-right:4px">${todos.map(fila).join("")}</div>
-      <details style="margin-top:10px"><summary style="font-size:12px;color:var(--accent);cursor:pointer;font-weight:600">👁 Ver vista previa del correo</summary>
+      <details style="margin-top:10px"><summary style="font-size:12px;color:var(--accent-ink);cursor:pointer;font-weight:600">👁 Ver vista previa del correo</summary>
         <iframe id="rcrd-prev" style="width:100%;height:380px;border:1px solid var(--line);border-radius:10px;background:#f4f4f6;margin-top:8px"></iframe></details>
       <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
         <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -10769,7 +10769,7 @@ function renderTablaPlanilla(ordenes,posts,q,filtroEstado="todos"){
       return `<tr style="border-bottom:1px solid var(--line);background:${vencida?"#FFF5F5":""}">
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.email}</div></td>
         <td style="padding:8px;font-family:monospace">${p.rut}</td>
-        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram}</a></td>
+        <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram}</a></td>
         <td style="padding:8px">${p.whatsapp}</td>
         <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
         <td style="padding:8px;font-family:monospace">${ord?.codigo||"—"}</td>
@@ -11172,7 +11172,7 @@ VIEWS["base-datos"]=async()=>{
       return `<tr style="border-bottom:1px solid var(--line)">
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut?fmtRut(p.rut):""}</div></td>
         <td style="padding:8px;font-size:12px">${p.email||"—"}</td>
-        <td style="padding:8px;font-size:12px">${p.instagram?`<a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent)">@${p.instagram}</a>`:"—"}</td>
+        <td style="padding:8px;font-size:12px">${p.instagram?`<a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram}</a>`:"—"}</td>
         <td style="padding:8px;font-size:12px">${p.whatsapp||"—"}</td>
         <td style="padding:8px;font-size:11px">${fnac}</td>
         <td style="padding:8px;font-size:12px">${genLbl}</td>
@@ -13209,10 +13209,10 @@ function renderConciliacion(){
       </div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px">
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="pendiente"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='pendiente';renderConciliacion()"><div style="font-size:11px;color:#999">Transferencias por conciliar</div><div style="font-size:22px;font-weight:700;color:#b45309">${cnt("pendiente")}</div></div>
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="conciliada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='conciliada';renderConciliacion()"><div style="font-size:11px;color:#999">Conciliadas${enEv?" en este evento":""}</div><div style="font-size:22px;font-weight:700;color:#166534">${cnt("conciliada")}</div></div>
-      ${enEv?"":`      <div class="card-sm" style="cursor:pointer;${_concFiltro==="ignorada"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='ignorada';renderConciliacion()"><div style="font-size:11px;color:#999">No son de eventos</div><div style="font-size:22px;font-weight:700;color:#888">${cnt("ignorada")}</div></div>
-      <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid #534AB7":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>`}
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="pendiente"?"outline:2px solid var(--accent)":""}" onclick="_concFiltro='pendiente';renderConciliacion()"><div style="font-size:11px;color:#999">Transferencias por conciliar</div><div style="font-size:22px;font-weight:700;color:#b45309">${cnt("pendiente")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="conciliada"?"outline:2px solid var(--accent)":""}" onclick="_concFiltro='conciliada';renderConciliacion()"><div style="font-size:11px;color:#999">Conciliadas${enEv?" en este evento":""}</div><div style="font-size:22px;font-weight:700;color:#166534">${cnt("conciliada")}</div></div>
+      ${enEv?"":`      <div class="card-sm" style="cursor:pointer;${_concFiltro==="ignorada"?"outline:2px solid var(--accent)":""}" onclick="_concFiltro='ignorada';renderConciliacion()"><div style="font-size:11px;color:#999">No son de eventos</div><div style="font-size:22px;font-weight:700;color:#888">${cnt("ignorada")}</div></div>
+      <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid var(--accent)":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>`}
       <div class="card-sm"><div style="font-size:11px;color:#999">Comprobantes esperando pago</div><div style="font-size:22px;font-weight:700;color:#534AB7">${cands.length}</div><div style="font-size:10px;color:${cands.length-candConMatch.size?"#991B1B":"#888"}">${cands.length-candConMatch.size} sin transferencia que calce</div></div>
     </div>
     ${enEv?`<div style="font-size:12px;color:#666;margin:-4px 0 12px">📬 Las transferencias llegan solas desde ${casilla?`<strong>${casilla}</strong>`:"tu casilla Guestly"}. La casilla, la cuenta receptora y las cartolas se manejan en <a href="#" onclick="goView('pagos-config');return false" style="color:#534AB7;font-weight:600">Configuración de pagos</a>.</div>`:concBloqueConfig(prod,casilla,sistema,todas)}
@@ -13251,7 +13251,7 @@ function renderConciliacion(){
     <div class="card" style="margin-top:16px">
       <div class="sec-header"><div class="sec-title">📎 Comprobantes esperando confirmación (${cands.length})</div></div>
       ${cands.length?`<div class="table-wrap"><table class="data-table"><thead><tr><th>Cliente</th><th>Qué pagó</th><th style="text-align:right">Monto</th><th>Comprobante</th><th>Transferencia</th></tr></thead><tbody>
-        ${grupos.map(g=>`<tr><td colspan="5" style="background:#EEEDFE;font-weight:700;font-size:12px;color:#534AB7;padding:6px 12px">📅 ${concEvLabel(g)} · ${g.items.length} esperando · ${fmtM(g.items.reduce((a,c)=>a+(c.monto||0),0))}</td></tr>`+g.items.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")).join("")}
+        ${grupos.map(g=>`<tr><td colspan="5" style="background:var(--accent-soft);font-weight:700;font-size:12px;color:var(--accent-ink);padding:6px 12px">📅 ${concEvLabel(g)} · ${g.items.length} esperando · ${fmtM(g.items.reduce((a,c)=>a+(c.monto||0),0))}</td></tr>`+g.items.map(c=>`<tr><td><strong>${c.icono} ${c.nombre}</strong><div style="font-size:11px;color:#666">${c.rut?fmtRut(c.rut):""}${c.email?" · "+c.email:""}</div></td><td style="font-size:12px">${c.evento}<div style="color:#666">${c.detalle}</div></td><td style="text-align:right;font-weight:600">${fmtM(c.monto)}</td><td>${c.comprobante?`<a href="${c.comprobante}" target="_blank" style="font-size:12px;color:#534AB7;font-weight:600">Ver comprobante</a>`:"—"}${c.fecha?`<div style="font-size:10px;color:#999">${fmtDT(c.fecha)}</div>`:""}</td><td>${candConMatch.has(c.key)?`<span style="font-size:12px;color:#166534;font-weight:600">✓ hay una transferencia que calza</span>`:`<span style="font-size:12px;color:#991B1B;font-weight:600">⚠️ sin transferencia recibida</span><div style="font-size:10px;color:#999">Revisa el comprobante antes de confirmar</div>`}</td></tr>`).join("")).join("")}
       </tbody></table></div>`:`<div style="font-size:13px;color:#999">Nadie está esperando confirmación de pago.</div>`}
     </div>`;
 }
