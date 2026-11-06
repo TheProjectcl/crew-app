@@ -1004,9 +1004,10 @@ const glMail={
   },
 
   // ── 3) Entrada confirmada (después de pagar)
-  confirmada({nombre,mensaje,codigo,qrHtml}){
+  confirmada({nombre,mensaje,codigo,qrHtml,logo,productora}){
+    const cab=logo?`<img src="${glEsc(logo)}" alt="${glEsc(productora||"")}" width="72" height="72" style="display:block;margin:0 auto;width:72px;height:72px;border-radius:16px;object-fit:cover;border:1px solid #eee">`:productora?`<div style="font-size:13px;font-weight:700;letter-spacing:2px;color:#0B0B0C;text-transform:uppercase">${glEsc(productora)}</div>`:"";
     return glMail.shell("#16C46B",
-      glMail.row(`<div style="font-size:52px;line-height:56px">&#127881;</div><div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>`+glMail.badge("Pago recibido"),"40px 48px 0",true)+
+      glMail.row((cab?cab+`<div style="height:18px;line-height:18px;font-size:0">&nbsp;</div>`:"")+glMail.badge("Pago recibido"),"40px 48px 0",true)+
       glMail.row(glMail.h1(`¡${glEsc(nombre)}, tu entrada está confirmada!`)+glMail.p(mensaje||"Ya puedes acercarte a nuestra acreditación el día del evento. ¡Nos vemos!"),"18px 48px 0",true)+
       glMail.row(glMail.ticket("Código de entrada",glEsc(codigo),qrHtml?"Tu QR de ingreso viene más abajo":"Muestra este código en la puerta del evento",true),"30px 48px 0")+
       (qrHtml?glMail.row(qrHtml,"8px 24px 0"):"")+
@@ -10748,7 +10749,7 @@ async function cfConciliarCore(ordenId,extraPatch){
     if(post&&ev){
       const cfg=getCFConfig(ord.evento_id);
       let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
-      await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
+      await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre),logo:(D.productoras||[]).find(p=>p.id===ev.productora_id)?.logo_url||"",productora:(D.productoras||[]).find(p=>p.id===ev.productora_id)?.nombre||""}));
       toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
     } else {
       toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");

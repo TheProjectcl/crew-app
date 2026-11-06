@@ -91,7 +91,7 @@ const qrImg = (t: string) => `https://api.qrserver.com/v1/create-qr-code/?size=1
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const clp = (n: unknown) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
 
-function correoConfirmada(o: { nombre: string; evento: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any }) {
+function correoConfirmada(o: { nombre: string; evento: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any; logo?: string; productora?: string }) {
   const F = "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
   const qrs = o.toks.map((t, i) => `<div style="display:inline-block;vertical-align:top;margin:6px;padding:12px;border:1px solid #e8e8e8;border-radius:12px;background:#fff">
     <a href="${qrLink(t.t)}" style="text-decoration:none"><img src="${qrImg(t.t)}" width="180" height="180" alt="QR" style="display:block;border:0"></a>
@@ -106,8 +106,8 @@ function correoConfirmada(o: { nombre: string; evento: string; mensaje: string; 
 <tr><td align="center" style="padding:0 0 24px"><img src="${SITE}/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
 <tr><td style="background:#fff;border-radius:16px"><div style="height:4px;background:#16C46B;border-radius:16px 16px 0 0"></div>
 <div style="padding:34px 32px 30px;text-align:center">
-  <div style="font-size:48px;line-height:52px">&#127881;</div>
-  <div style="display:inline-block;margin-top:10px;${F}font-size:11px;font-weight:700;letter-spacing:1px;color:#13894A;background:#E3FAEC;border-radius:20px;padding:5px 12px">PAGO RECIBIDO</div>
+  ${o.logo ? `<img src="${esc(o.logo)}" alt="${esc(o.productora || "")}" width="72" height="72" style="display:block;margin:0 auto;width:72px;height:72px;border-radius:16px;object-fit:cover;border:1px solid #eee">` : o.productora ? `<div style="${F}font-size:13px;font-weight:700;letter-spacing:2px;color:#0B0B0C;text-transform:uppercase">${esc(o.productora)}</div>` : ""}
+  <div style="display:inline-block;margin-top:14px;${F}font-size:11px;font-weight:700;letter-spacing:1px;color:#13894A;background:#E3FAEC;border-radius:20px;padding:5px 12px">PAGO RECIBIDO</div>
   <p style="margin:16px 0 6px;${F}font-size:22px;font-weight:800;color:#0B0B0C">¡${esc(o.nombre)}, tu entrada está confirmada!</p>
   <p style="margin:0 0 4px;${F}font-size:14px;color:#555;line-height:1.5">${esc(o.mensaje)}</p>
   <p style="margin:0;${F}font-size:13px;color:#888">${esc(o.evento)} · Código <b style="color:#0B0B0C">${esc(o.codigo)}</b></p>
@@ -118,7 +118,7 @@ function correoConfirmada(o: { nombre: string; evento: string; mensaje: string; 
     ${fila("Orden de compra", esc(o.pago.buy_order))}${r.authorization_code ? fila("Código de autorización", esc(r.authorization_code)) : ""}${r.card_detail?.card_number ? fila("Tarjeta", "•••• " + esc(r.card_detail.card_number)) : ""}
   </table>
   ${o.pago.ambiente !== "produccion" ? `<div style="${F}font-size:10px;color:#92400E;margin-top:10px">Pago de prueba (ambiente de integración de Transbank) · no es un cobro real</div>` : ""}
-  <div style="margin-top:20px;${F}font-size:12px;color:#777">&#129706; Recuerda llegar con tu carnet de identidad vigente.</div>
+  <div style="margin-top:20px;${F}font-size:12px;color:#777">Recuerda llegar con tu carnet de identidad vigente.</div>
 </div></td></tr>
 <tr><td align="center" style="padding:24px 0 0"><span style="${F}font-size:11px;color:#999">Powered by <a href="${SITE}" style="color:#13894A;text-decoration:none;font-weight:600">Guestly.cl</a></span></td></tr>
 </table></td></tr></table></body></html>`;
@@ -149,7 +149,8 @@ async function enviarEntradaCF(p: any) {
       dbGet("cf_config", `evento_id=eq.${o.evento_id}`).then((a) => a[0] || {}),
     ]);
     if (!post?.email) return;
-    const html = correoConfirmada({ nombre: post.nombre || "", evento: ev?.name || "", mensaje: cfg.msg_confirmacion || "¡Tu entrada está confirmada! Muestra este QR en la puerta.", codigo: o.codigo || "", toks, pago: p });
+    const prod = ev?.productora_id ? (await dbGet("productoras", `id=eq.${ev.productora_id}&select=nombre,logo_url`))[0] : null;
+    const html = correoConfirmada({ logo: prod?.logo_url || "", productora: prod?.nombre || "", nombre: post.nombre || "", evento: ev?.name || "", mensaje: cfg.msg_confirmacion || "¡Tu entrada está confirmada! Muestra este QR en la puerta.", codigo: o.codigo || "", toks, pago: p });
     const s = await fetch(`${SB_URL}/functions/v1/send-email`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SERVICE}` }, body: JSON.stringify({ to: post.email, subject: `¡Entrada confirmada — ${ev?.name || "tu evento"}!`, html }) });
     if (!s.ok) throw new Error("send-email " + s.status + " " + (await s.text()).slice(0, 200));
   } catch (e) {
