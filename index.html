@@ -624,7 +624,7 @@ const clearFieldErrors=(root=document)=>{root.querySelectorAll(".field-err").for
 
 const showLoading=(show)=>{
   let el=$("loading-overlay");
-  if(show&&!el){el=document.createElement("div");el.id="loading-overlay";el.style.cssText="position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px";el.innerHTML=`<div style="font-size:32px">⏳</div><div style="font-size:14px;color:#666">Cargando...</div>`;document.body.appendChild(el);}
+  if(show&&!el){el=document.createElement("div");el.id="loading-overlay";el.style.cssText="position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:9998;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px";el.innerHTML=`<style>@keyframes glspin{to{transform:rotate(360deg)}}</style><div style="width:30px;height:30px;border-radius:50%;border:3px solid #E3FAEC;border-top-color:#2BE07B;animation:glspin .8s linear infinite"></div><div style="font-size:14px;color:#666">Cargando...</div>`;document.body.appendChild(el);}
   else if(!show&&el)el.remove();
 };
 
@@ -12930,7 +12930,7 @@ async function mostrarPostulacionEmb(prodId){
     .pe-ev{display:flex;gap:10px;align-items:center;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer;font-size:13px}.pe-ev input{width:16px;height:16px;accent-color:#EC4899}
     .pe-foto{border:1.5px dashed #444;border-radius:12px;padding:14px;text-align:center;color:#aaa;font-size:13px;cursor:pointer;background:#161616}.pe-foto img{max-height:170px;max-width:100%;border-radius:8px;display:block;margin:0 auto 8px}
     .pe-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
-  </style><div class="pe-wrap"><div class="pe-box" id="pe-box"><div class="pe-ok"><div class="ic">⏳</div><p>Cargando…</p></div></div></div>`;
+  </style><div class="pe-wrap"><div class="pe-box" id="pe-box"><div class="pe-ok"><div style="display:flex;justify-content:center;margin-bottom:12px"><style>@keyframes glspin{to{transform:rotate(360deg)}}</style><div style="width:30px;height:30px;border-radius:50%;border:3px solid #2a2a2a;border-top-color:#2BE07B;animation:glspin .8s linear infinite"></div></div><p>Cargando…</p></div></div></div>`;
   const box=document.getElementById("pe-box");
   let prod,evs=[],grupo=null,jefe=null;
   const grupoId=new URLSearchParams(window.location.search).get("grupo");
