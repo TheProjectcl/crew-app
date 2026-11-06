@@ -6374,13 +6374,15 @@ function cierreEventoDatos(ev){
   const trans=(D.transferencias||[]).filter(t=>t.estado==="conciliada"&&((t.match_tipo==="cf"&&ordIds.has(t.match_id))||(t.match_tipo==="mesa"&&mesaIds.has(t.match_id))||(t.match_tipo==="lote"&&mesaIds.has(String(t.match_id||"").split(":")[0]))));
   const transTotal=trans.reduce((a,t)=>a+(t.monto||0),0);
   const conTrans=new Set(trans.map(t=>t.match_tipo+":"+t.match_id));
-  const cobroTransf=cfTotal+medios.transferencia+pulsTotal; // lo que debió entrar por transferencia
+  const esWp=o=>String(o.transferencia_id||"").startsWith("webpay:");
+  const cfWp=cfPag.filter(esWp), cfWpTotal=cfWp.reduce((a,o)=>a+(o.monto_total||0),0);
+  const cobroTransf=cfTotal-cfWpTotal+medios.transferencia+pulsTotal; // lo que debió entrar por transferencia (lo pagado con Webpay no)
   const sinTrans=[
     ...cfPag.filter(o=>!conTrans.has("cf:"+o.id)&&!o.transferencia_id).map(o=>{const p=(D.cf_postulantes||[]).find(x=>x.id===o.postulante_id)||{};return{tipo:"🌸 Close Friends",nombre:`${p.nombre||""} ${p.apellido||""}`.trim(),detalle:`${o.codigo||""} · ${o.cantidad||1} entrada(s)`,monto:o.monto_total||0};}),
     ...mesasV.filter(m=>!conTrans.has("mesa:"+m.id)&&(m.pago_transferencia||0)>0).map(m=>({tipo:"🍾 Mesa",nombre:(D.users||[]).find(u=>u.id===m.comprador_id)?.name||"",detalle:`Mesa ${m.table_num}`,monto:m.pago_transferencia||0})),
     ...lotesPag.filter(l=>!conTrans.has(`lote:${l._m.id}:${l.id}`)).map(l=>({tipo:"🎟 Pulseras extra",nombre:(D.users||[]).find(u=>u.id===l._m.comprador_id)?.name||"",detalle:`Mesa ${l._m.table_num}`,monto:l.precio_total||0})),
   ];
-  return{listaN,entries,ords,cfPag,cfSinConc,cfTickets,cfTotal,cfPorValor:Object.values(cfPorValor).sort((x,y)=>y.valor-x.valor),mesas,mesasV,mesaGr:Object.values(mesaGr).sort((x,y)=>y.precio-x.precio),mesasPrecio,mesasCobrado,medios,lotesPag,pulsPersonas,pulsTotal,acc,trans,transTotal,cobroTransf,sinTrans,tipoN,
+  return{listaN,entries,ords,cfPag,cfSinConc,cfTickets,cfTotal,cfPorValor:Object.values(cfPorValor).sort((x,y)=>y.valor-x.valor),mesas,mesasV,mesaGr:Object.values(mesaGr).sort((x,y)=>y.precio-x.precio),mesasPrecio,mesasCobrado,medios,lotesPag,pulsPersonas,pulsTotal,acc,trans,transTotal,cobroTransf,sinTrans,tipoN,esWp,cfWp,cfWpTotal,
     totalVendido:cfTotal+mesasPrecio+pulsTotal,totalCobrado:cfTotal+mesasCobrado+pulsTotal};
 }
 VIEWS["evento-resumen"]=async()=>{
@@ -6391,10 +6393,11 @@ VIEWS["evento-resumen"]=async()=>{
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   try{if(!D._cfLoaded)await loadCF(prodId);}catch(e){}
   try{await loadTransferencias(prodId);}catch(e){}
+  let wpPagos=[];try{wpPagos=await sbGet("pagos_webpay",`evento_id=eq.${ev.id}&estado=eq.aprobado&order=confirmado_at`);}catch(e){}
   let cumps=[],invs=[];
   try{cumps=await sbGet("bday_cumpleaneros",`evento_id=eq.${ev.id}`);if(cumps.length)invs=await sbGet("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);}catch(e){}
   if(CURRENT_VIEW!=="evento-resumen"||_resEvId!==ev.id)return;
-  const d=cierreEventoDatos(ev);d.cumps=cumps;d.invs=invs;d.ev=ev;
+  const d=cierreEventoDatos(ev);d.cumps=cumps;d.invs=invs;d.ev=ev;d.wp=wpPagos;
   d.acc.bday={reg:cumps.length+invs.filter(i=>i.estado==="aprobado").length,val:cumps.filter(x=>x.llego).length+invs.filter(i=>i.llego).length};
   window._resEvData=d;
   const pasado=esEventoPasado(ev);
@@ -6422,14 +6425,20 @@ VIEWS["evento-resumen"]=async()=>{
     ${sec(`🌸 Close Friends · ${d.cfTickets} tickets vendidos`,"cf",`<table class="data-table"><thead><tr><th>Valor ticket</th>${th("Tickets")}${th("Órdenes")}${th("Total")}</tr></thead><tbody>
       ${d.cfPorValor.map(g=>`<tr><td>${fmtM(g.valor)}</td>${tdR(g.tickets)}${tdR(g.ordenes)}${tdR(fmtM(g.total))}</tr>`).join("")||`<tr><td colspan="4" style="color:#999">Sin ventas pagadas.</td></tr>`}
       <tr style="font-weight:700;background:#f8fafc"><td>Total pagado</td>${tdR(d.cfTickets)}${tdR(d.cfPag.length)}${tdR(fmtM(d.cfTotal))}</tr></tbody></table>
+      ${d.cfWp.length?`<div style="font-size:12px;color:#555;margin-top:8px">💳 ${d.cfWp.length} orden(es) pagadas con tarjeta (Webpay) por ${fmtM(d.cfWpTotal)} · 🏦 ${d.cfPag.length-d.cfWp.length} por transferencia por ${fmtM(d.cfTotal-d.cfWpTotal)}</div>`:""}
       ${d.cfSinConc.length?`<div style="font-size:12px;color:#92400E;margin-top:8px">⚠️ ${d.cfSinConc.length} orden(es) con comprobante sin conciliar por ${fmtM(d.cfSinConc.reduce((a,o)=>a+(o.monto_total||0),0))} — no suman al total.</div>`:""}`)}
     ${sec(`🍾 Mesas VIP · ${d.mesasV.length} vendidas de ${d.mesas.length}`,"mesas",`<table class="data-table"><thead><tr><th>Tipo</th>${th("Precio")}${th("Cantidad")}${th("Total")}${th("Cobrado")}</tr></thead><tbody>
       ${d.mesaGr.map(g=>`<tr><td>${g.tipo}</td>${tdR(fmtM(g.precio))}${tdR(g.cant)}${tdR(fmtM(g.total))}${tdR(fmtM(g.cobrado))}</tr>`).join("")||`<tr><td colspan="5" style="color:#999">Sin mesas vendidas.</td></tr>`}
       <tr style="font-weight:700;background:#f8fafc"><td>Total</td><td></td>${tdR(d.mesasV.length)}${tdR(fmtM(d.mesasPrecio))}${tdR(fmtM(d.mesasCobrado))}</tr></tbody></table>
       <div style="font-size:12px;color:#555;margin-top:8px">Cobrado por medio de pago: 🏦 Transferencia ${fmtM(d.medios.transferencia)} · 💵 Efectivo ${fmtM(d.medios.efectivo)} · 💳 Tarjeta ${fmtM(d.medios.tarjeta)}${d.mesasPrecio>d.mesasCobrado?` · <span style="color:#991B1B;font-weight:600">Saldo por cobrar ${fmtM(d.mesasPrecio-d.mesasCobrado)}</span>`:""}</div>`)}
     ${d.lotesPag.length?sec(`🎟 Pulseras extra · ${d.pulsPersonas.length} vendidas`,"pulseras",`<div style="font-size:13px">${d.lotesPag.length} pedido(s) pagado(s) · <strong>${fmtM(d.pulsTotal)}</strong></div>`):""}
+    ${d.wp.length?sec(`💳 Pagos con tarjeta (Webpay) · ${d.wp.length}`,"webpay",(()=>{const sb=d.wp.reduce((a,x)=>a+(x.monto_base||0),0),sc=d.wp.reduce((a,x)=>a+(x.cargo||0),0),st=d.wp.reduce((a,x)=>a+(x.total||0),0);return `<table class="data-table"><tbody>
+      <tr><td>Valor de lo vendido con tarjeta</td>${tdR(fmtM(sb))}</tr>
+      <tr><td>Cargo por servicio cobrado a los clientes</td>${tdR(fmtM(sc))}</tr>
+      <tr style="font-weight:700;background:#f8fafc"><td>Total pagado con tarjeta</td>${tdR(fmtM(st))}</tr></tbody></table>
+      <div style="font-size:12px;color:#555;margin-top:8px">Lo recauda Guestly vía Transbank; no pasa por tu cuenta, por eso no entra en el cruce con transferencias.${d.wp.some(x=>x.ambiente!=="produccion")?` <span style="color:#92400E">Incluye ${d.wp.filter(x=>x.ambiente!=="produccion").length} pago(s) de prueba.</span>`:""}</div>`;})()):""}
     ${sec("🏦 Cruce con transferencias","conc",`<table class="data-table"><tbody>
-      <tr><td>Debió entrar por transferencia (CF + mesas por transferencia + pulseras extra)</td>${tdR(`<strong>${fmtM(d.cobroTransf)}</strong>`)}</tr>
+      <tr><td>Debió entrar por transferencia (CF${d.cfWp.length?" sin Webpay":""} + mesas por transferencia + pulseras extra)</td>${tdR(`<strong>${fmtM(d.cobroTransf)}</strong>`)}</tr>
       <tr><td>Transferencias conciliadas a este evento en Pagos → Conciliación de pagos</td>${tdR(`<strong>${fmtM(d.transTotal)}</strong>`)}</tr>
       <tr style="background:${Math.abs(dif)<1?"#f0fdf4":"#FEF3C7"}"><td><strong>Diferencia</strong></td>${tdR(`<strong style="color:${Math.abs(dif)<1?"#166534":"#92400E"}">${Math.abs(dif)<1?"✓ Calza":dif<0?`Faltan ${fmtM(-dif)} por vincular`:`Sobran ${fmtM(dif)}`}</strong>`)}</tr></tbody></table>
       ${d.sinTrans.length?`<div style="font-size:12px;color:#555;margin-top:10px"><strong>${d.sinTrans.length} pago(s) confirmado(s) sin transferencia vinculada</strong> (confirmados antes de la conciliación automática o a mano). Revísalos contra la cartola:</div>
@@ -6443,16 +6452,18 @@ function resEvDescargar(tipo){
   const post=id=>(D.cf_postulantes||[]).find(p=>p.id===id)||{};
   const transDe=(tipo,id)=>d.trans.find(t=>t.match_tipo===tipo&&String(t.match_id)===String(id));
   if(tipo==="asistentes")return descargarTabla(`asistentes_${slug}`,[["Nombre","RUT","Lista","Estado","Hora ingreso"],...d.entries.map(e=>[e.name||"",e.rut?fmtRut(e.rut):"",d.listaN(e.list_id),e.status==="checked_in"?"Validado":"No ingresó",f(e.checked_in_at)])],"Asistentes",{titulo:"asistentes"});
-  if(tipo==="cf")return descargarTabla(`close_friends_${slug}`,[["Código","Nombre","RUT","Correo","Tickets","Valor ticket","Monto","Estado","Conciliada el","Transferencia"],...d.ords.map(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id),q=o.cantidad||1;return[o.codigo||"",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",p.email||"",q,Math.round((o.monto_total||0)/q),o.monto_total||0,estadoCF[o.estado]||o.estado||"",f(o.conciliado_at),t?`${t.nombre||""} ${fmtM(t.monto||0)} ${t.fecha?fmtDT(t.fecha):""}`:""];})],"Close Friends",{titulo:"Close Friends"});
+  if(tipo==="cf")return descargarTabla(`close_friends_${slug}`,[["Código","Nombre","RUT","Correo","Tickets","Valor ticket","Monto","Estado","Conciliada el","Transferencia"],...d.ords.map(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id),q=o.cantidad||1;return[o.codigo||"",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",p.email||"",q,Math.round((o.monto_total||0)/q),o.monto_total||0,estadoCF[o.estado]||o.estado||"",f(o.conciliado_at),t?`${t.nombre||""} ${fmtM(t.monto||0)} ${t.fecha?fmtDT(t.fecha):""}`:d.esWp(o)?"Pagada con tarjeta (Webpay)":""];})],"Close Friends",{titulo:"Close Friends"});
   if(tipo==="mesas")return descargarTabla(`mesas_${slug}`,[["Mesa","Tipo","Comprador","Correo","Estado","Precio","Cobrado","Transferencia","Efectivo","Tarjeta","Saldo","Transferencia vinculada"],...d.mesas.map(m=>{const u=uN(m.comprador_id),t=transDe("mesa",m.id);return[m.table_num,d.tipoN(m),u?.name||"",u?.email||"",ESTADO_MESA[m.estado_reserva]?.label||m.estado_reserva||"",m.price||0,m.amount_paid||0,m.pago_transferencia||0,m.pago_efectivo||0,m.pago_tarjeta||0,Math.max((m.price||0)-(m.amount_paid||0),0),t?`${t.nombre||""} ${fmtM(t.monto||0)}`:""];})],"Mesas",{titulo:"mesas"});
   if(tipo==="pulseras")return descargarTabla(`pulseras_extra_${slug}`,[["Mesa","Comprador","Personas","Monto","Pagado el"],...d.lotesPag.map(l=>[l._m.table_num,uN(l._m.comprador_id)?.name||"",(l.personas||[]).filter(p=>p.estado==="aprobada").length,l.precio_total||0,f(l.paid_at)])],"Pulseras extra",{titulo:"pulseras extra"});
+  if(tipo==="webpay")return descargarTabla(`webpay_${slug}`,[["Fecha","Orden de compra","Tipo","Valor","Cargo por servicio","Total pagado","Tarjeta","Autorización","Ambiente"],...(d.wp||[]).map(x=>[f(x.confirmado_at),x.buy_order||"",{cf:"Close Friends",mesa:"Mesa",lote:"Pulseras extra"}[x.tipo]||x.tipo||"",x.monto_base||0,x.cargo||0,x.total||0,x.respuesta?.card_detail?.card_number?"•••• "+x.respuesta.card_detail.card_number:"",x.respuesta?.authorization_code||"",x.ambiente==="produccion"?"Real":"Prueba"])],"Webpay",{titulo:"pagos con tarjeta"});
   if(tipo==="conc")return descargarTabla(`transferencias_${slug}`,[["Fecha","Transfirió","RUT","Banco","Monto","Asignada a","Origen"],...d.trans.map(t=>[t.fecha?fmtDT(t.fecha):"",t.nombre||"",t.rut?fmtRut(t.rut):"",t.banco||"",t.monto||0,t.match_label||"",t.origen||""]),[],["PAGOS SIN TRANSFERENCIA VINCULADA"],["Tipo","Nombre","Detalle","Monto"],...d.sinTrans.map(x=>[x.tipo.replace(/^\S+\s/,""),x.nombre,x.detalle,x.monto])],"Transferencias",{titulo:"cruce con transferencias"});
   if(tipo==="todo"){
     const rows=[["Tipo","Cliente","RUT","Detalle","Valor","Cobrado","Medio de pago","Estado","Transferencia vinculada"]];
-    d.ords.filter(o=>o.estado==="conciliado").forEach(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id);rows.push(["Close Friends",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",`${o.codigo||""} · ${o.cantidad||1} ticket(s)`,o.monto_total||0,o.monto_total||0,"Transferencia","Pagada",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
+    d.ords.filter(o=>o.estado==="conciliado").forEach(o=>{const p=post(o.postulante_id),t=transDe("cf",o.id);rows.push(["Close Friends",`${p.nombre||""} ${p.apellido||""}`.trim(),p.rut?fmtRut(p.rut):"",`${o.codigo||""} · ${o.cantidad||1} ticket(s)`,o.monto_total||0,o.monto_total||0,d.esWp(o)?"Tarjeta (Webpay)":"Transferencia","Pagada",d.esWp(o)?"no aplica (Webpay)":t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
     d.mesasV.forEach(m=>{const u=uN(m.comprador_id),t=transDe("mesa",m.id);rows.push(["Mesa",u?.name||"",u?.rut?fmtRut(u.rut):"",`Mesa ${m.table_num}${d.tipoN(m)?" · "+d.tipoN(m):""}`,m.price||0,m.amount_paid||0,[m.pago_transferencia?"Transf. "+fmtM(m.pago_transferencia):"",m.pago_efectivo?"Efectivo "+fmtM(m.pago_efectivo):"",m.pago_tarjeta?"Tarjeta "+fmtM(m.pago_tarjeta):""].filter(Boolean).join(" + ")||"Transferencia",ESTADO_MESA[m.estado_reserva]?.label||m.estado_reserva||"",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
     d.lotesPag.forEach(l=>{const u=uN(l._m.comprador_id),t=d.trans.find(x=>x.match_tipo==="lote"&&x.match_id===`${l._m.id}:${l.id}`);rows.push(["Pulseras extra",u?.name||"","",`Mesa ${l._m.table_num} · ${(l.personas||[]).filter(p=>p.estado==="aprobada").length} pulsera(s)`,l.precio_total||0,l.precio_total||0,"Transferencia","Pagado",t?`${t.nombre||""} ${fmtM(t.monto||0)}`:"sin vincular"]);});
     rows.push([],["RESUMEN"],["Total vendido","","","","",d.totalVendido],["Total cobrado","","","","",d.totalCobrado],["Transferencias conciliadas","","","","",d.transTotal],["Debió entrar por transferencia","","","","",d.cobroTransf]);
+    if((d.wp||[]).length)rows.push(["Pagado con tarjeta (Webpay)","","","","",d.wp.reduce((a,x)=>a+(x.total||0),0)],["  de eso, cargo por servicio","","","","",d.wp.reduce((a,x)=>a+(x.cargo||0),0)]);
     return descargarTabla(`cierre_${slug}`,rows,"Cierre",{titulo:"cierre del evento"});
   }
 }
@@ -9534,7 +9545,121 @@ function mostrarPagoCF(ordenId){
         <button class="cf-btn" id="comp-btn" onclick="subirComprobanteCF('${ordenId}')" disabled>Enviar comprobante</button>
         <div id="comp-err" class="cf-err" style="display:none"></div>
       </div>`;
+    wpOfrecerCF(ord,cont);
   })();
+}
+// Agrega arriba de la transferencia la opción "Pagar con tarjeta" si la productora la tiene activa (o en prueba con &wp=1)
+async function wpOfrecerCF(ord,cont){
+  try{
+    let prodId=ord.productora_id;
+    if(!prodId){const e=(await sbGet("eventos",`id=eq.${ord.evento_id}&select=productora_id`))[0];prodId=e?.productora_id;}
+    if(!prodId)return;
+    const p=(await sbGet("productoras",`id=eq.${prodId}&select=webpay_modo,webpay_cargo_pct`))[0];
+    const modo=p?.webpay_modo, prueba=modo==="prueba";
+    if(!(modo==="activo"||(prueba&&new URLSearchParams(location.search).get("wp")==="1")))return;
+    const base=Math.round(Number(ord.monto_total)||0); if(base<50)return;
+    const pct=Math.max(0,Math.min(30,Number(p.webpay_cargo_pct??10))), cargo=Math.round(base*pct/100), total=base+cargo;
+    const f=n=>"$"+n.toLocaleString("es-CL");
+    const fila=(a,b,s)=>`<div style="display:flex;justify-content:space-between;font-size:13px;color:${s?"#fff":"#aaa"};${s?"font-weight:700;font-size:15px;border-top:1px solid #2e2e2e;padding-top:8px;margin-top:6px":"margin-bottom:4px"}"><span>${a}</span><span>${b}</span></div>`;
+    const div=document.createElement("div");div.className="cf-card";div.id="wp-card";
+    div.innerHTML=`<h3 style="display:flex;justify-content:space-between;align-items:center">💳 Pagar con tarjeta ${prueba?`<span style="font-size:10px;background:#FEF3C7;color:#92400E;padding:3px 8px;border-radius:20px;font-weight:700">MODO PRUEBA</span>`:""}</h3>
+      <div style="font-size:12px;color:#888;margin-bottom:12px">Débito, crédito o prepago con Webpay. Tu entrada queda confirmada al instante y te llega el QR al correo.</div>
+      <div style="background:#1e1e1e;border-radius:10px;padding:14px">
+        ${fila(`Entrada${(ord.cantidad||1)>1?`s (${ord.cantidad})`:""}`,f(base))}${fila(`Cargo por servicio (${pct}%)`,f(cargo))}${fila("Total a pagar",f(total),true)}
+      </div>
+      <button class="cf-btn" id="wp-btn" style="background:#2BE07B;color:#0B0B0C" onclick="wpIrAPagar('cf','${ord.id}')">Pagar ${f(total)} con Webpay</button>
+      <div id="wp-err" class="cf-err" style="display:none"></div>
+      <div style="text-align:center;font-size:11px;color:#666;margin:16px 0 0">— o paga por transferencia, sin cargo —</div>`;
+    cont.insertBefore(div,cont.firstChild);
+  }catch(e){/* sin Webpay: queda solo la transferencia */}
+}
+async function wpIrAPagar(tipo,id){
+  const btn=document.getElementById("wp-btn"),err=document.getElementById("wp-err");
+  if(btn){btn.disabled=true;btn.textContent="Conectando con Webpay…";} if(err)err.style.display="none";
+  try{
+    const r=await fetch(`${SB_URL}/functions/v1/webpay?accion=crear`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({tipo,id,volver:location.href})});
+    const j=await r.json().catch(()=>({}));
+    if(!r.ok||!j.url||!j.token)throw new Error(j.error||"No se pudo iniciar el pago");
+    const f=document.createElement("form");f.method="POST";f.action=j.url;
+    const i=document.createElement("input");i.type="hidden";i.name="token_ws";i.value=j.token;f.appendChild(i);
+    document.body.appendChild(f);f.submit();
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Reintentar pago con Webpay";}
+    if(err){err.textContent=e.message||"Error";err.style.display="block";}
+  }
+}
+// Página de resultado: Transbank → función webpay → guestly.cl/?pago=<id>
+function mostrarResultadoPago(pagoId){
+  document.body.innerHTML=`<style>
+    *{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,"Inter",sans-serif}
+    body{background:#0a0a0a;min-height:100vh;padding:16px}
+    .cf-wrap{max-width:480px;margin:0 auto}
+    .cf-top{text-align:center;padding:28px 0 20px}
+    .cf-top p{font-size:11px;color:#888;letter-spacing:2px;margin-top:12px}
+    .cf-card{background:#141414;border:1px solid #222;border-radius:14px;padding:22px;margin-bottom:14px}
+    .cf-card h3{font-size:14px;font-weight:600;color:#fff;margin-bottom:14px}
+    .cf-btn{display:block;text-align:center;text-decoration:none;width:100%;padding:12px;background:#2BE07B;color:#0B0B0C;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px}
+    .cf-err{color:#f87171;font-size:12px;margin-top:8px;text-align:center}
+    .cf-ok{text-align:center;padding:24px}
+    .cf-ok .icon{font-size:48px;margin-bottom:12px}
+  </style>
+  <div class="cf-wrap">
+    <div class="cf-top">${glLogo("neg",22,"margin:0 auto")}<p>PAGO CON TARJETA</p></div>
+    <div id="cf-compra-content"><div style="text-align:center;color:#888;padding:40px">Revisando tu pago…</div></div>
+    <div id="wp-comprobante"></div>
+  </div>`;
+  const cont=document.getElementById("cf-compra-content");
+  const f=n=>"$"+Math.round(Number(n)||0).toLocaleString("es-CL");
+  let intentos=0;
+  (async function revisar(){
+    let p;
+    try{p=(await sbGet("pagos_webpay",`id=eq.${encodeURIComponent(pagoId)}`))[0];}catch(e){}
+    if(!p){cont.innerHTML=`<div class="cf-ok"><div class="icon">❌</div><p style="color:#aaa">No encontramos este pago.</p></div>`;return;}
+    if(["creado","en_webpay"].includes(p.estado)&&intentos++<5){setTimeout(revisar,2500);return;}
+    const volver=p.volver&&/^https:\/\/(www\.)?guestly\.cl\//.test(p.volver)?p.volver:null;
+    if(p.estado!=="aprobado"){
+      const msg={rechazado:"Tu banco rechazó el pago. No se hizo ningún cargo.",anulado:"Cancelaste el pago. No se hizo ningún cargo.",expirado:"Se acabó el tiempo para pagar. No se hizo ningún cargo.",error:"Hubo un problema al confirmar el pago con Transbank. Si ves un cargo en tu cuenta, escríbenos con tu número de orden."}[p.estado]||"El pago no se completó.";
+      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">⚠️</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago no realizado</h2><p style="color:#aaa;font-size:13px">${msg}</p><div style="color:#666;font-size:11px;margin-top:10px">Orden ${p.buy_order||""}</div>${volver?`<a class="cf-btn" href="${volver}">Volver a intentar</a>`:""}</div>`;
+      return;
+    }
+    // Comprobante (datos que exige Transbank en la página de éxito)
+    const r=p.respuesta||{};
+    const tipoPago={VD:"Débito",VP:"Prepago",VN:"Crédito",VC:"Crédito en cuotas",SI:"Crédito 3 cuotas sin interés",S2:"Crédito 2 cuotas sin interés",NC:"Crédito cuotas sin interés"}[r.payment_type_code]||"Tarjeta";
+    const fila=(a,b)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#aaa;margin-bottom:5px"><span>${a}</span><span style="color:#fff;text-align:right">${b}</span></div>`;
+    document.getElementById("wp-comprobante").innerHTML=`<div class="cf-card"><h3>🧾 Comprobante de pago</h3>
+      ${fila("Comercio","Guestly · Circle Group SpA")}${fila("Orden de compra",p.buy_order||"")}
+      ${fila("Valor",f(p.monto_base))}${fila(`Cargo por servicio (${Number(p.cargo_pct)||0}%)`,f(p.cargo))}${fila("<strong>Total pagado</strong>",`<strong>${f(p.total)}</strong>`)}
+      ${fila("Tipo de pago",tipoPago)}${r.installments_number>1?fila("Cuotas",r.installments_number):""}
+      ${r.card_detail?.card_number?fila("Tarjeta","•••• "+r.card_detail.card_number):""}${r.authorization_code?fila("Código de autorización",r.authorization_code):""}
+      ${fila("Fecha",new Date(r.transaction_date||p.confirmado_at||p.created_at).toLocaleString("es-CL",{hour12:false}))}
+      ${p.ambiente!=="produccion"?`<div style="font-size:10px;color:#92400E;margin-top:8px;text-align:center">Pago de prueba (ambiente de integración de Transbank) · no es un cobro real</div>`:""}</div>`;
+    if(p.tipo==="cf"){
+      let ord=null;try{ord=(await sbGet("cf_ordenes",`id=eq.${p.ref_id}`))[0];}catch(e){}
+      if(!ord||!["conciliado","confirmado"].includes(ord.estado)){
+        cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago recibido</h2><p style="color:#aaa;font-size:13px">Estamos dejando lista tu entrada. Si en unos minutos no te llega el correo, escríbenos con tu orden ${p.buy_order||""}.</p></div>`;
+        return;
+      }
+      mostrarPagoCF(ord.id); // muestra "¡Pago confirmado!" + QR
+      wpCorreoConfirmacionCF(p,ord);
+    } else {
+      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px">¡Pago confirmado!</h2></div>`;
+    }
+  })();
+}
+// Envía una sola vez el correo con el QR (se "reserva" marcando email_enviado antes de mandar)
+async function wpCorreoConfirmacionCF(p,ord){
+  try{
+    if(p.email_enviado)return;
+    const tomado=await sbPatch("pagos_webpay",`id=eq.${p.id}&email_enviado=eq.false`,{email_enviado:true});
+    if(!Array.isArray(tomado)||!tomado.length)return;
+    const [post,ev,cfg]=await Promise.all([
+      sbGet("cf_postulantes",`id=eq.${ord.postulante_id}`).then(a=>a[0]),
+      sbGet("eventos",`id=eq.${ord.evento_id}`).then(a=>a[0]),
+      sbGet("cf_config",`evento_id=eq.${ord.evento_id}`).then(a=>a[0]||{})]);
+    if(!post?.email||!ev)return;
+    let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
+    await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,glMail.confirmada({nombre:post.nombre,mensaje:cfg.msg_confirmacion||"¡Tu entrada está confirmada! Muestra este QR en la puerta.",codigo:ord.codigo,qrHtml:qrBloqueEmail(qrToks,post.nombre)}));
+  }catch(e){console.warn("correo webpay",e);}
 }
 
 let _compFile = null;
@@ -13215,7 +13340,7 @@ function renderConciliacion(){
       <div class="card-sm" style="cursor:pointer;${_concFiltro==="todas"?"outline:2px solid var(--accent)":""}" onclick="_concFiltro='todas';renderConciliacion()"><div style="font-size:11px;color:#999">Todas</div><div style="font-size:22px;font-weight:700">${todas.length}</div></div>`}
       <div class="card-sm"><div style="font-size:11px;color:#999">Comprobantes esperando pago</div><div style="font-size:22px;font-weight:700;color:#534AB7">${cands.length}</div><div style="font-size:10px;color:${cands.length-candConMatch.size?"#991B1B":"#888"}">${cands.length-candConMatch.size} sin transferencia que calce</div></div>
     </div>
-    ${enEv?`<div style="font-size:12px;color:#666;margin:-4px 0 12px">📬 Las transferencias llegan solas desde ${casilla?`<strong>${casilla}</strong>`:"tu casilla Guestly"}. La casilla, la cuenta receptora y las cartolas se manejan en <a href="#" onclick="goView('pagos-config');return false" style="color:#534AB7;font-weight:600">Configuración de pagos</a>.</div>`:concBloqueConfig(prod,casilla,sistema,todas)}
+    ${enEv?`<div style="font-size:12px;color:#666;margin:-4px 0 12px">📬 Las transferencias llegan solas desde ${casilla?`<strong>${casilla}</strong>`:"tu casilla Guestly"}. La casilla, la cuenta receptora y las cartolas se manejan en <a href="#" onclick="goView('pagos-config');return false" style="color:#534AB7;font-weight:600">Configuración de pagos</a>.</div>`:concBloqueConfig(prod,casilla,sistema,todas)+wpBloqueConfig(prod)}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
       ${!enEv&&(gruposTodos.length>1||_concEv)?`<select class="form-select" style="margin:0;width:auto;flex:0 0 auto;max-width:280px;font-size:13px" onchange="_concEv=this.value;renderConciliacion()"><option value="">📅 Todos los eventos (${candsTodos.length})</option>${gruposTodos.map(g=>`<option value="${g.id}" ${g.id===_concEv?"selected":""}>${concEvLabel(g)} (${g.items.length})</option>`).join("")}</select>`:""}
       <input class="form-input" id="conc-q" placeholder="🔍 Nombre, RUT, monto, correo, comentario…" value="${(_concQ||"").replace(/"/g,"&quot;")}" oninput="_concQ=this.value;renderConciliacion();const i=document.getElementById('conc-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)" style="flex:1;min-width:240px;margin:0">
@@ -13305,6 +13430,46 @@ function concBloqueConfig(prod,casilla,sistema,todas){
       </div>
       ${sistema.length?`<div style="margin-top:10px;background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:8px 12px;font-size:12px">${sistema.map(t=>`<div>🔑 <strong>${t.nombre||"Correo del sistema"}</strong> · ${fmtDT(t.created_at)} · ${t.comentario?`código: <strong style="font-family:monospace;font-size:14px">${t.comentario}</strong>`:""} <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concVerRaw('${t.id}')">ver correo</button> <button class="btn" style="font-size:10px;padding:2px 6px" onclick="concEliminar('${t.id}')">🗑</button></div>`).join("")}</div>`:""}
     </div>`;
+}
+// ── Pago con tarjeta (Webpay Plus · Transbank). Guestly recauda; la productora define si lo ofrece y el % de cargo ──
+const WP_MODOS={off:{t:"Apagado",c:"#64748b",bg:"#f1f5f9",d:"Tus clientes solo pueden pagar por transferencia."},prueba:{t:"En prueba",c:"#92400E",bg:"#FEF3C7",d:"Solo aparece si al link de pago le agregas &wp=1. Se usan tarjetas de prueba de Transbank: no se cobra dinero real."},activo:{t:"Activo",c:"#166534",bg:"#dcfce7",d:"Todos tus clientes ven «Pagar con tarjeta» con el cargo por servicio incluido."}};
+let _wpAmbiente=null;
+function wpBloqueConfig(prod){
+  if(!prod)return "";
+  const modo=WP_MODOS[prod.webpay_modo]?prod.webpay_modo:"off", m=WP_MODOS[modo];
+  const pct=prod.webpay_cargo_pct!=null?Number(prod.webpay_cargo_pct):10;
+  const puede=CU.role==="superadmin";
+  const sinColumnas=!("webpay_modo" in prod);
+  if(_wpAmbiente===null){_wpAmbiente="…";fetch(`${SB_URL}/functions/v1/webpay?accion=estado`).then(r=>r.ok?r.json():null).then(j=>{_wpAmbiente=j?.ambiente||"no";}).catch(()=>{_wpAmbiente="no";}).finally(()=>{const el=document.getElementById("wp-amb");if(el)el.innerHTML=wpAmbTxt();});}
+  return `<div class="card" style="margin-bottom:14px;background:#f8fafc;border-left:4px solid #2BE07B;padding:12px 16px">
+    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:space-between">
+      <div>
+        <div style="font-size:13px;font-weight:700">💳 Pago con tarjeta (Webpay) <span style="font-size:11px;padding:3px 8px;border-radius:20px;background:${m.bg};color:${m.c};font-weight:600;margin-left:4px">${m.t}</span></div>
+        <div style="font-size:11px;color:#666;margin-top:2px">${m.d}</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">Cargo por servicio al pagar con tarjeta: <strong>${pct}%</strong> · Ej.: entrada de ${fmtM(10000)} → el cliente paga ${fmtM(10000+Math.round(10000*pct/100))}</div>
+        <div id="wp-amb" style="font-size:11px;margin-top:4px">${wpAmbTxt()}</div>
+      </div>
+    </div>
+    ${sinColumnas?`<div style="font-size:11px;color:#b45309;margin-top:8px">⚠️ Falta correr el SQL de Webpay en Supabase (supabase/sql-webpay.sql).</div>`
+      :puede?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+        <select class="form-select" id="wp-modo" style="margin:0;width:auto;font-size:12px">${Object.entries(WP_MODOS).map(([k,v])=>`<option value="${k}" ${k===modo?"selected":""}>${v.t}</option>`).join("")}</select>
+        <span style="font-size:12px;color:#555">Cargo</span><input class="form-input" id="wp-pct" type="number" min="0" max="30" step="0.5" value="${pct}" style="width:80px;font-size:12px;margin:0"><span style="font-size:12px;color:#555">%</span>
+        <button class="btn" style="font-size:11px" onclick="wpGuardarConfig()">Guardar</button>
+      </div>`:`<div style="font-size:11px;color:#888;margin-top:6px">Para activar o cambiar el cargo, escríbele a Guestly.</div>`}
+  </div>`;
+}
+function wpAmbTxt(){
+  if(_wpAmbiente==="…"||_wpAmbiente===null)return `<span style="color:#888">Revisando conexión con Transbank…</span>`;
+  if(_wpAmbiente==="no")return `<span style="color:#b45309">○ La función de pagos aún no está instalada en Supabase.</span>`;
+  return _wpAmbiente==="produccion"?`<span style="color:#166534;font-weight:600">✓ Conectado a Transbank · producción (cobros reales)</span>`:`<span style="color:#92400E;font-weight:600">✓ Conectado a Transbank · ambiente de pruebas</span>`;
+}
+async function wpGuardarConfig(){
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);if(!prod)return;
+  const modo=$("wp-modo")?.value||"off", pct=Number($("wp-pct")?.value);
+  if(!(pct>=0&&pct<=30)){toast("El cargo debe estar entre 0% y 30%","warn");return;}
+  if(modo==="activo"&&_wpAmbiente!=="produccion"&&!confirm("Transbank aún está en ambiente de pruebas. Si lo dejas «Activo», tus clientes verán el botón pero el pago no funcionará hasta conectar producción. ¿Guardar igual?"))return;
+  try{await sbPatch("productoras",`id=eq.${prodId}`,{webpay_modo:modo,webpay_cargo_pct:pct});prod.webpay_modo=modo;prod.webpay_cargo_pct=pct;toast("✓ Pago con tarjeta: "+WP_MODOS[modo].t,"success");await log("webpay_config","productoras",prodId,`Webpay ${modo} · cargo ${pct}%`);renderConciliacion();}
+  catch(e){toast("Error: "+e.message,"error");}
 }
 async function concGuardarDestino(){
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;const prod=(D.productoras||[]).find(p=>p.id===prodId);if(!prod)return;
@@ -13997,6 +14162,7 @@ else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
+else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
 
 // ═══════════════════════════════════
 // INIT — verificar si hay datos
@@ -14013,7 +14179,7 @@ else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago"].some(k=>_pub.has(k));
   if(!_esLinkPublico) await restaurarSesion();
 })();
 
