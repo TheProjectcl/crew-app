@@ -15,7 +15,7 @@ const VENCE_MIN = 10;          // minutos que dura un código
 const MAX_INTENTOS = 5;        // intentos fallidos por código
 const ESPERA_SEG = 45;         // tiempo mínimo entre envíos al mismo correo
 const MAX_POR_HORA = 6;        // envíos por correo por hora
-const SESION_DIAS = 30;        // duración de la sesión iniciada con código
+const SESION_HORAS = 12;      // duración máxima de la sesión (una jornada); además la app la cierra tras 15 min sin uso
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
@@ -99,7 +99,7 @@ async function verificar(body: any) {
   const token = tokenNuevo();
   await dbPost("login_sesiones", {
     token_hash: await sha(token), email, created_at: ahora, ultimo_uso_at: ahora,
-    expira_at: new Date(Date.now() + SESION_DIAS * 864e5).toISOString(),
+    expira_at: new Date(Date.now() + SESION_HORAS * 3600e3).toISOString(),
   });
   return json({ ok: true, token, cuentas });
 }

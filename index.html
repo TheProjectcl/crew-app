@@ -1329,7 +1329,7 @@ async function elegirCuentaLogin(cuentas,email,pass){
 function cambiarPerfil(){
   let ses={};try{ses=JSON.parse(localStorage.getItem("crew-session")||"{}");}catch(e){}
   if(!ses.email||!(ses.pass||ses.tok)){doLogout();return;}
-  try{localStorage.setItem("crew-session",JSON.stringify(ses.tok?{email:ses.email,tok:ses.tok}:{email:ses.email,pass:ses.pass}));}catch(e){}
+  try{localStorage.setItem("crew-session",JSON.stringify(ses.tok?{email:ses.email,tok:ses.tok,at:ses.at}:{email:ses.email,pass:ses.pass,at:ses.at}));}catch(e){}
   if(realtimeChannel&&sbClient){try{sbClient.removeChannel(realtimeChannel);}catch(e){}}
   location.href=location.pathname;
 }
@@ -1353,7 +1353,8 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
     }
 
     // Guardar sesión para auto-login posterior
-    try{localStorage.setItem("crew-session",JSON.stringify(pass?{email,pass,uid:CU.id}:{email,tok:window._loginTok,uid:CU.id}));}catch(e){}
+    try{const at=esRestauracion?(JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()):Date.now();
+      localStorage.setItem("crew-session",JSON.stringify(pass?{email,pass,uid:CU.id,at}:{email,tok:window._loginTok,uid:CU.id,at}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
 
     showLoading(false);
     if(!esRestauracion)await log("login","user",CU.id,`Login desde ${navigator.userAgent.slice(0,40)}`);
@@ -1412,7 +1413,7 @@ async function guardarMiPass(){
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
     CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    if(!window._loginPorCodigo){try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id}));}catch(e){}}
+    if(!window._loginPorCodigo){try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id,at:JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()}));}catch(e){}}
     closeModal();toast("✅ Contraseña actualizada","ok");
     try{await log("cambio_pass","user",CU.id,"Cambió su contraseña desde Mi cuenta");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}}
@@ -1443,7 +1444,7 @@ async function guardarPassObligatoria(){
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
     CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id}));}catch(e){}
+    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id,at:JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()}));}catch(e){}
     window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast("✅ Contraseña guardada. ¡Bienvenida!","ok");
     try{await log("cambio_pass","user",CU.id,"Creó su contraseña en el primer ingreso");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar y continuar →";}}
@@ -1515,7 +1516,7 @@ async function loginConCuentas(cuentas,email,tok,esRestauracion){
     const f=uidGuardado&&cuentas.find(u=>u.id===uidGuardado);
     if(f)elegido=f;
     else{
-      try{localStorage.setItem("crew-session",JSON.stringify({email,tok}));}catch(e){}
+      try{localStorage.setItem("crew-session",JSON.stringify({email,tok,at:Date.now()}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
       showLoading(false);elegirCuentaLogin(cuentas,email,null);return false;
     }
   }
@@ -1524,12 +1525,22 @@ async function loginConCuentas(cuentas,email,tok,esRestauracion){
 document.addEventListener("DOMContentLoaded",()=>{try{loginModo(_liModo);}catch(e){}});
 try{if(document.readyState!=="loading")setTimeout(()=>{try{loginModo(_liModo);}catch(e){}},0);}catch(e){}
 
+// Seguridad de la sesión: dura como máximo una jornada y se cierra tras 15 min sin uso (también con la app cerrada)
+const SES_MAX_H=12, SES_INACT_MIN=15;
 // Restaurar sesión guardada al cargar la página (auto-login silencioso)
 async function restaurarSesion(){
   try{
     const raw=localStorage.getItem("crew-session");
     if(!raw)return;
-    const {email,pass,tok}=JSON.parse(raw);
+    const {email,pass,tok,at}=JSON.parse(raw);
+    const ult=Number(localStorage.getItem("gl-ult-act")||0);
+    if(!at||Date.now()-at>SES_MAX_H*3600e3||!ult||Date.now()-ult>SES_INACT_MIN*60e3){
+      // Sesión vieja o sin uso reciente: se pide entrar de nuevo (si roban el celular no queda la cuenta abierta)
+      try{localStorage.removeItem("crew-session");}catch(e){}
+      if(tok)fetch(`${SB_URL}/functions/v1/login-codigo`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({accion:"salir",token:tok})}).catch(()=>{});
+      if(email&&$("li-email"))$("li-email").value=email;
+      return;
+    }
     if(tok){
       showLoading(true);
       let r;try{r=await fetch(`${SB_URL}/functions/v1/login-codigo`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({accion:"sesion",token:tok})});}catch(e){showLoading(false);return;}
@@ -1547,7 +1558,9 @@ async function restaurarSesion(){
 let _inactTimer=null;
 function iniciarInactividad(){
   const MINS=15;
+  let _ultGuardado=0;
   const resetTimer=()=>{
+    const n=Date.now();if(n-_ultGuardado>20000){_ultGuardado=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}}
     clearTimeout(_inactTimer);
     _inactTimer=setTimeout(()=>{
       if(!CU)return;
