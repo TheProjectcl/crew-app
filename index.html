@@ -9756,7 +9756,7 @@ function mostrarResultadoPago(pagoId){
     if(["creado","en_webpay"].includes(p.estado)&&intentos++<5){setTimeout(revisar,2500);return;}
     const volver=p.volver&&/^https:\/\/(www\.)?guestly\.cl\//.test(p.volver)?p.volver:null;
     if(p.estado!=="aprobado"){
-      const msg={rechazado:"Tu banco rechazó el pago. No se hizo ningún cargo.",anulado:"Cancelaste el pago. No se hizo ningún cargo.",expirado:"Se acabó el tiempo para pagar. No se hizo ningún cargo.",error:"Hubo un problema al confirmar el pago con Transbank. Si ves un cargo en tu cuenta, escríbenos con tu número de orden."}[p.estado]||"El pago no se completó.";
+      const msg={rechazado:"Tu banco rechazó el pago. No se hizo ningún cargo.",anulado:"Cancelaste el pago. No se hizo ningún cargo.",expirado:"Se acabó el tiempo para pagar. No se hizo ningún cargo.",error_formulario:"Hubo un problema en el formulario de pago de Webpay. No se hizo ningún cargo; puedes intentar de nuevo.",error:"Hubo un problema al confirmar el pago con Transbank. Si ves un cargo en tu cuenta, escríbenos con tu número de orden."}[p.estado]||"El pago no se completó.";
       cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">⚠️</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago no realizado</h2><p style="color:#aaa;font-size:13px">${msg}</p><div style="color:#666;font-size:11px;margin-top:10px">Orden ${p.buy_order||""}</div>${p.tipo==="test"&&p.token?`<p style="color:#aaa;font-size:12px;margin-top:8px">Token: <span style="font-family:monospace;color:#fff;word-break:break-all">${escH(p.token)}</span></p>`:""}${volver?`<a class="cf-btn" href="${volver}">${p.tipo==="test"?"Hacer otra prueba":"Volver a intentar"}</a>`:""}</div>`;
       return;
     }

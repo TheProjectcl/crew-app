@@ -194,7 +194,9 @@ async function retorno(params: URLSearchParams) {
     const pid = sesion || "";
     const ps = pid ? await dbGet("pagos_webpay", `id=eq.${encodeURIComponent(pid)}`) : orden ? await dbGet("pagos_webpay", `buy_order=eq.${encodeURIComponent(orden)}`) : [];
     const p = ps[0];
-    if (p && !["aprobado"].includes(p.estado)) await dbPatch("pagos_webpay", `id=eq.${p.id}`, { estado: tbkToken ? "anulado" : "expirado", respuesta: Object.fromEntries(params) });
+    // token_ws + TBK_TOKEN juntos = error en el formulario de pago ("intentar nuevamente"): no se confirma ni se cobra
+    const est = tokenWs && tbkToken ? "error_formulario" : tbkToken ? "anulado" : "expirado";
+    if (p && !["aprobado"].includes(p.estado)) await dbPatch("pagos_webpay", `id=eq.${p.id}`, { estado: est, respuesta: Object.fromEntries(params) });
     return p ? volverA(p.id) : new Response(null, { status: 303, headers: { Location: SITE } });
   }
   const p = (await dbGet("pagos_webpay", `token=eq.${encodeURIComponent(tokenWs)}`))[0];
