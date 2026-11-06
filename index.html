@@ -2816,6 +2816,7 @@ VIEWS.dashboard=()=>{
       <div style="font-size:20px;font-weight:600"><span class="live-dot"></span>${ev.name}</div>
       <div style="font-size:13px;color:#999">${ev.date} · ${ev.venue}</div>
       ${badge({active:"Activo",draft:"Borrador",closed:"Finalizado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray"}[ev.status]||"gray")}
+      ${valChipDashboard(ev.id)}
       ${EV_DENTRO?"":`<select style="margin-left:4px;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff" onchange="currentEvId=this.value;VIEWS.dashboard()">
         ${prodEvs.filter(esEventoOperativo).map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name}</option>`).join("")}
       </select>`}
@@ -14012,6 +14013,11 @@ window.abrirScannerQR=async function(){
   // Si se cierra el modal, apagar cámara
   const obs=new MutationObserver(()=>{if(!document.getElementById("qr-video")){qrDetenerScanner();obs.disconnect();}});
   obs.observe($("modal-body"),{childList:true});
+  await qrArrancarCamara();
+};
+// Cámara + lectura continua de QR sobre los elementos #qr-video / #qr-cam-msg / #qr-manual (modal o Validador QR)
+async function qrArrancarCamara(){
+  const inp=$("qr-manual");
   const video=$("qr-video"),msg=$("qr-cam-msg");
   try{
     _qrScanStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false});
@@ -14040,7 +14046,22 @@ window.abrirScannerQR=async function(){
     qrProcesarToken(tok,false);
   },250);
 };
+// Trae el registro fresco desde la base antes de validar (evita doble ingreso si dos puertas escanean el mismo QR)
+async function qrRefrescar(r){
+  try{
+    const fresco=async(t,id)=>(await sbGet(t,`id=eq.${id}`))[0];
+    let f=null;
+    if(r.tipo==="entry")f=await fresco("acc_entries",r.obj.id);
+    else if(r.tipo==="cf")f=await fresco("cf_ordenes",r.obj.id);
+    else if(r.tipo==="cumple")f=await fresco("bday_cumpleaneros",r.obj.id);
+    else if(r.tipo==="inv")f=await fresco("bday_invitados",r.obj.id);
+    else if(r.tipo==="mesa"||r.tipo==="mesa_extra"){const m=await fresco("vip_tables",r.m.id);if(m){Object.assign(r.m,m);return true;}return false;}
+    if(f){Object.assign(r.obj,f);return true;}
+  }catch(e){}
+  return false;
+}
 function qrMostrarResultado(tipo,titulo,detalle,acciones){
+  if(window._valModo&&typeof valRegistrarResultado==="function")valRegistrarResultado(tipo,titulo,detalle);
   const el=$("qr-result");if(!el)return;
   const c={ok:["#DCFCE7","#166534","✅"],warn:["#FEF3C7","#92400E","⚠️"],err:["#FEE2E2","#991B1B","⛔"],usado:["#F97316","#fff","🔁"]}[tipo]||["#eee","#333","ℹ️"];
   el.innerHTML=`<div style="background:${c[0]};color:${c[1]};border-radius:12px;padding:14px 16px">
@@ -14053,8 +14074,10 @@ function qrMostrarResultado(tipo,titulo,detalle,acciones){
 window.qrProcesarToken=async function(tok,manual){
   if(_qrProcesando)return;_qrProcesando=true;
   try{
-    const r=qrResolverLocal(tok);
-    if(!r)return qrMostrarResultado("err","QR no encontrado","No está en ninguna lista de este evento. Busca a la persona por nombre o RUT en la lista.");
+    let r=qrResolverLocal(tok);
+    if(!r&&window._valModo){qrMostrarResultado("warn","Buscando…","Actualizando datos del evento");try{await valRecargarDatos();}catch(e){}r=qrResolverLocal(tok);}
+    if(!r)return qrMostrarResultado("err","QR no encontrado",window._valModo?"No es una entrada de este evento. Envía a la persona a la acreditación con su carnet.":"No está en ninguna lista de este evento. Busca a la persona por nombre o RUT en la lista.");
+    if(await qrRefrescar(r))r=qrResolverLocal(tok)||r; // estado al segundo: si otra puerta ya lo validó, se ve aquí
     const d=qrDescribir(r);
     if(d.evId&&currentEvId&&d.evId!==currentEvId)return qrMostrarResultado("err","Es de otro evento",`${d.nombre} · este QR corresponde a <strong>${d.ev?.name||"otro evento"}</strong>.`);
     const sub=`${d.origen} · Pulsera <strong>${d.pulsera}</strong>${d.n>1?` · entrada ${d.k} de ${d.n}`:""}`;
@@ -14068,6 +14091,7 @@ window.qrProcesarToken=async function(tok,manual){
       if(e.status==="blocked")return qrMostrarResultado("err",`${d.nombre} — BLOQUEADO`,sub);
       const res=await runCheckin(e.id,1);
       if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+      if(res.code==="ALREADY_CHECKED_IN")return qrMostrarResultado("usado","ESTE TICKET YA FUE VALIDADO",`<strong>${d.nombre}</strong> · ${sub}<br><span style="font-size:15px;font-weight:800">Hora validación ${e.checked_in_at?fmtT(e.checked_in_at):"—"}</span>`);
       if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
       if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario). No puede entrar con este ticket.`);
       return qrMostrarResultado("err",d.nombre,`${sub}<br>${res.msg}`);
@@ -14308,8 +14332,191 @@ async function rechazarSolicitudProd(id){
   _solicitudesProd=_solicitudesProd.filter(x=>x.id!==id);VIEWS.productoras();toast("Solicitud rechazada","warn");
 }
 
+// ═══════════════════════════════════
+// VALIDADOR QR DE PUERTA — guestly.cl/validar
+// Sin cuenta: código del evento (fijo) + PIN dinámico (cambia cada 12 h) + nombre del validador.
+// ═══════════════════════════════════
+const VAL_FN=()=>`${SB_URL}/functions/v1/validador`;
+async function valPost(body){
+  let r;try{r=await fetch(VAL_FN(),{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify(body)});}
+  catch(e){throw new Error("Sin conexión. Revisa el internet del celular.");}
+  const j=await r.json().catch(()=>({}));
+  if(r.status===404&&!j.error)throw Object.assign(new Error("El validador aún no está instalado"),{sinFuncion:true});
+  if(!r.ok)throw Object.assign(new Error(j.error||"No se pudo completar"),{status:r.status});
+  return j;
+}
+// ── Dashboard: chip con código + PIN (solo dueño, coordinador o superadmin) ──
+const _valPin={};
+function valChipDashboard(evId){
+  if(!CU||!["owner","coordinator","superadmin"].includes(CU.role))return "";
+  const c=_valPin[evId];
+  if(!c||(c.cambia_at&&Date.now()>new Date(c.cambia_at).getTime())){if(!c||!c.cargando){_valPin[evId]={cargando:true};valCargarPin(evId);}}
+  const v=_valPin[evId]||{};
+  const caja=(lbl,val)=>`<span style="display:inline-flex;flex-direction:column;line-height:1.1"><span style="font-size:9px;letter-spacing:1px;color:#6b7280;font-weight:600">${lbl}</span><span style="font-size:15px;font-weight:800;letter-spacing:2px;font-family:ui-monospace,Menlo,monospace;color:#0B0B0C">${val}</span></span>`;
+  if(v.error)return `<span style="font-size:11px;color:#b45309;background:#FEF3C7;border-radius:10px;padding:6px 10px">Validador QR: ${escH(v.error)}</span>`;
+  const hora=v.cambia_at?new Date(v.cambia_at).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false}):"";
+  return `<span id="val-chip-${evId}" style="display:inline-flex;align-items:center;gap:14px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:6px 12px;margin-left:auto">
+    <span style="font-size:11px;font-weight:700;color:#13894A">VALIDADOR QR</span>
+    ${caja("CÓDIGO EVENTO",v.codigo||"······")}${caja("PIN",v.pin||"······")}
+    ${hora?`<span style="font-size:10px;color:#888">PIN cambia<br>a las ${hora}</span>`:""}
+    <button class="btn" style="font-size:11px;padding:4px 10px" onclick="valCompartir('${evId}')" ${v.pin?"":"disabled"}>Compartir</button>
+  </span>`;
+}
+async function valCargarPin(evId){
+  let ses={};try{ses=JSON.parse(localStorage.getItem("crew-session")||"{}");}catch(e){}
+  try{
+    const j=await valPost({accion:"pin",evento_id:evId,auth:{email:ses.email||CU?.email,pass:ses.pass,tok:ses.tok}});
+    _valPin[evId]={codigo:j.codigo,pin:j.pin,cambia_at:j.cambia_at};
+    const e=D.eventos.find(x=>x.id===evId);if(e)e.codigo_validador=j.codigo;
+  }catch(e){_valPin[evId]={error:e.sinFuncion?"falta instalar la función":/columna|column|codigo_validador/i.test(e.message)?"falta correr el SQL":e.message};}
+  if(CURRENT_VIEW==="dashboard"&&currentEvId===evId){const el=document.getElementById("val-chip-"+evId);const tmp=document.createElement("div");tmp.innerHTML=valChipDashboard(evId);if(el&&tmp.firstElementChild)el.replaceWith(tmp.firstElementChild);else VIEWS.dashboard();}
+}
+function valCompartir(evId){
+  const v=_valPin[evId],ev=D.eventos.find(e=>e.id===evId);if(!v?.pin)return;
+  const hora=new Date(v.cambia_at).toLocaleString("es-CL",{weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false});
+  const txt=`Validador QR — ${ev?.name||""}\nEntra a: guestly.cl/validar\nCódigo del evento: ${v.codigo}\nPIN: ${v.pin} (válido hasta ${hora})`;
+  if(navigator.share){navigator.share({text:txt}).catch(()=>{});return;}
+  navigator.clipboard?.writeText(txt).then(()=>toast("✓ Copiado. Pégalo en el WhatsApp del equipo de puerta","success")).catch(()=>prompt("Copia este texto:",txt));
+}
+
+// ── Página del validador ──
+let _valDatos=null,_valCuenta={ok:0,rech:0},_valHist=[];
+function valEstilos(){return `<style>
+  #val-app{position:fixed;inset:0;overflow:auto;background:#0a0a0a;color:#F5F5F2;font-family:-apple-system,"Inter",sans-serif;z-index:50}
+  #val-app *{box-sizing:border-box}
+  .val-wrap{max-width:480px;margin:0 auto;padding:20px 16px 40px}
+  .val-top{text-align:center;padding:18px 0 22px}.val-top p{font-size:11px;color:#888;letter-spacing:3px;margin-top:10px}
+  .val-card{background:#141414;border:1px solid #222;border-radius:14px;padding:20px;margin-bottom:12px}
+  .val-lbl{font-size:12px;color:#9a9a9a;margin:12px 0 6px;display:block}
+  .val-in{width:100%;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:10px;padding:14px;color:#fff;font-size:16px;outline:none}
+  .val-in:focus{border-color:#2BE07B}
+  .val-big{text-align:center;font-size:26px;letter-spacing:10px;font-weight:800;font-family:ui-monospace,Menlo,monospace}
+  .val-btn{display:block;width:100%;margin-top:16px;padding:14px;border:none;border-radius:10px;background:#2BE07B;color:#0B0B0C;font-size:15px;font-weight:700;cursor:pointer}
+  .val-btn:disabled{opacity:.5}
+  .val-link{background:none;border:none;color:#9a9a9a;font-size:12px;text-decoration:underline;cursor:pointer;margin-top:12px;display:block;width:100%}
+  .val-err{color:#f87171;font-size:13px;margin-top:10px;text-align:center;min-height:16px}
+  .val-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 16px;border-bottom:1px solid #1e1e1e;position:sticky;top:0;background:#0a0a0a;z-index:2}
+  .val-stat{display:flex;gap:8px;margin:12px 0}.val-stat div{flex:1;background:#141414;border:1px solid #222;border-radius:10px;padding:10px;text-align:center}
+  .val-stat b{display:block;font-size:22px}.val-stat span{font-size:10px;color:#888;letter-spacing:1px}
+  #val-app #qr-result>div{border-radius:14px!important;padding:18px!important}
+  #val-app #qr-result>div>div:first-child{font-size:22px!important}
+  #val-app #qr-result>div>div:nth-child(2){font-size:15px!important}
+</style>`;}
+async function mostrarValidadorQR(){
+  document.querySelectorAll("body > *").forEach(el=>{if(!["modal","toast"].includes(el.id)&&el.tagName!=="SCRIPT"&&el.tagName!=="STYLE")el.style.display="none";});
+  let w=document.getElementById("val-app");if(!w){w=document.createElement("div");w.id="val-app";document.body.appendChild(w);}
+  w.innerHTML=valEstilos()+`<div class="val-wrap"><div class="val-top">${glLogo("neg",22,"margin:0 auto")}<p>VALIDADOR QR</p></div><div style="text-align:center;color:#888;padding:30px">Cargando…</div></div>`;
+  let tok=null;try{tok=JSON.parse(localStorage.getItem("gl-validador")||"{}").token;}catch(e){}
+  if(tok){
+    try{const d=await valPost({accion:"sesion",token:tok});return valIniciar({...d,token:tok});}
+    catch(e){if(e.status===401){try{localStorage.removeItem("gl-validador");}catch(_){}}else{return valPantallaEntrada(e.message);}}
+  }
+  valPantallaEntrada();
+}
+function valPantallaEntrada(err){
+  const w=document.getElementById("val-app");
+  w.innerHTML=valEstilos()+`<div class="val-wrap"><div class="val-top">${glLogo("neg",22,"margin:0 auto")}<p>VALIDADOR QR</p></div>
+    <div class="val-card" id="val-paso1">
+      <div style="font-size:15px;font-weight:700">Ingresa el código del evento</div>
+      <div style="font-size:12px;color:#888;margin-top:4px">Te lo entrega el productor. Son 6 números.</div>
+      <input class="val-in val-big" id="val-cod" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="off" style="margin-top:14px" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)" onkeydown="if(event.key==='Enter')valPaso2()">
+      <button class="val-btn" onclick="valPaso2()">Continuar</button>
+      <div class="val-err" id="val-err">${err?escH(err):""}</div>
+    </div></div>`;
+  setTimeout(()=>document.getElementById("val-cod")?.focus(),50);
+}
+async function valPaso2(){
+  const cod=(document.getElementById("val-cod")?.value||"").trim(),err=document.getElementById("val-err");
+  if(cod.length!==6){err.textContent="El código del evento tiene 6 números";return;}
+  let ev=null;try{ev=(await sbGet("eventos",`codigo_validador=eq.${cod}&select=name,date,venue`))[0];}catch(e){}
+  if(!ev){err.textContent="No existe un evento con ese código. Revísalo con el productor.";return;}
+  const fecha=ev.date?new Date(ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}):"";
+  document.getElementById("val-paso1").outerHTML=`<div class="val-card">
+    <div style="font-size:11px;color:#2BE07B;letter-spacing:1px;font-weight:700">EVENTO</div>
+    <div style="font-size:17px;font-weight:700;margin-top:4px">${escH(ev.name)}</div>
+    <div style="font-size:12px;color:#888">${escH(fecha)}${ev.venue?" · "+escH(ev.venue):""}</div>
+    <label class="val-lbl">PIN de acceso (6 números, te lo da el productor)</label>
+    <input class="val-in val-big" id="val-pin" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="one-time-code" oninput="this.value=this.value.replace(/\D/g,'').slice(0,6)">
+    <label class="val-lbl">Tu nombre</label>
+    <input class="val-in" id="val-nom" placeholder="Nombre y apellido" autocomplete="name" onkeydown="if(event.key==='Enter')valEntrar('${cod}')">
+    <button class="val-btn" id="val-btn" onclick="valEntrar('${cod}')">Entrar a validar</button>
+    <button class="val-link" onclick="valPantallaEntrada()">← Cambiar código del evento</button>
+    <div class="val-err" id="val-err"></div>
+  </div>`;
+  setTimeout(()=>document.getElementById("val-pin")?.focus(),50);
+}
+async function valEntrar(cod){
+  const pin=(document.getElementById("val-pin")?.value||"").trim(),nom=(document.getElementById("val-nom")?.value||"").trim(),err=document.getElementById("val-err"),b=document.getElementById("val-btn");
+  if(pin.length!==6){err.textContent="El PIN tiene 6 números";return;}
+  if(!nom){err.textContent="Escribe tu nombre";return;}
+  b.disabled=true;b.textContent="Verificando…";err.textContent="";
+  try{
+    const d=await valPost({accion:"entrar",codigo:cod,pin,nombre:nom});
+    try{localStorage.setItem("gl-validador",JSON.stringify({token:d.token}));}catch(e){}
+    valIniciar(d);
+  }catch(e){err.textContent=e.message;b.disabled=false;b.textContent="Entrar a validar";}
+}
+async function valRecargarDatos(){
+  const pid=_valDatos.productora_id;
+  await loadAll(pid);currentEvId=_valDatos.evento_id;
+  D._cfLoaded=false;D._bdayLoaded=false;
+  await Promise.all([loadCF(pid).catch(()=>{}),loadBday(pid).catch(()=>{})]);
+}
+async function valIniciar(d){
+  _valDatos=d;window._valModo=true;
+  CU={id:null,name:`${d.nombre} (Validador QR)`,role:"door_staff",productora_id:d.productora_id,email:""};
+  currentEvId=d.evento_id;
+  const w=document.getElementById("val-app");
+  w.innerHTML=valEstilos()+`<div style="text-align:center;color:#888;padding:60px 20px">Cargando ${escH(d.evento)}…</div>`;
+  try{await valRecargarDatos();}catch(e){}
+  CP=(D.productoras||[]).find(p=>p.id===d.productora_id)||CP;
+  try{_valCuenta=JSON.parse(sessionStorage.getItem("gl-val-cuenta")||"null")||{ok:0,rech:0};}catch(e){_valCuenta={ok:0,rech:0};}
+  w.innerHTML=valEstilos()+`
+    <div class="val-bar">
+      <div style="min-width:0"><div style="font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(d.evento)}</div><div style="font-size:11px;color:#888">Validador: ${escH(d.nombre)}</div></div>
+      <button onclick="valSalir()" style="background:#1c1c1c;border:1px solid #2e2e2e;color:#ccc;border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">Salir</button>
+    </div>
+    <div class="val-wrap" style="padding-top:12px">
+      <div style="position:relative;background:#000;border-radius:14px;overflow:hidden">
+        <video id="qr-video" playsinline muted autoplay style="width:100%;max-height:44vh;display:block;object-fit:cover"></video>
+        <div id="qr-cam-msg" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;text-align:center;padding:20px">Activando cámara…</div>
+      </div>
+      <div id="qr-result" style="margin-top:12px;min-height:84px"><div style="background:#141414;border:1px dashed #2e2e2e;color:#888;text-align:center;font-size:14px;padding:26px">Apunta la cámara al QR de la entrada</div></div>
+      <div class="val-stat"><div><b id="val-ok" style="color:#2BE07B">${_valCuenta.ok}</b><span>VALIDADOS</span></div><div><b id="val-rech" style="color:#f87171">${_valCuenta.rech}</b><span>RECHAZADOS</span></div></div>
+      <input class="val-in" id="qr-manual" placeholder="Pistola lectora o código escrito + Enter" autocomplete="off" style="font-size:14px">
+      <div id="val-hist" style="margin-top:14px"></div>
+      <div style="font-size:11px;color:#666;text-align:center;margin-top:16px;line-height:1.5">Si alguien no tiene su QR, envíalo a la acreditación con su carnet.<br>Sesión válida hasta ${new Date(d.expira_at).toLocaleString("es-CL",{weekday:"short",hour:"2-digit",minute:"2-digit",hour12:false})}.</div>
+    </div>`;
+  const inp=document.getElementById("qr-manual");
+  inp.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();const tok=qrTokenDeTexto(inp.value);inp.value="";if(tok)qrProcesarToken(tok,true);else qrMostrarResultado("err","Código no válido","Ese texto no parece un QR de Guestly.");}});
+  valPintarHist();
+  qrArrancarCamara();
+}
+function valRegistrarResultado(tipo,titulo,detalle){
+  if(tipo==="warn"&&titulo==="Buscando…")return;
+  if(tipo==="ok")_valCuenta.ok++;else if(tipo==="err"||tipo==="usado")_valCuenta.rech++;else return;
+  try{sessionStorage.setItem("gl-val-cuenta",JSON.stringify(_valCuenta));}catch(e){}
+  const tmp=document.createElement("div");tmp.innerHTML=detalle||"";const nombre=(tmp.querySelector("strong")?.textContent||"").trim();
+  _valHist.unshift({tipo,titulo,nombre,at:new Date()});_valHist=_valHist.slice(0,6);
+  const a=document.getElementById("val-ok"),b=document.getElementById("val-rech");if(a)a.textContent=_valCuenta.ok;if(b)b.textContent=_valCuenta.rech;
+  setTimeout(valPintarHist,0);
+}
+function valPintarHist(){
+  const el=document.getElementById("val-hist");if(!el)return;
+  el.innerHTML=_valHist.length?`<div style="font-size:11px;color:#888;letter-spacing:1px;margin-bottom:6px">ÚLTIMOS</div>`+_valHist.map(h=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:8px 0;border-top:1px solid #1c1c1c"><span style="color:${h.tipo==="ok"?"#2BE07B":h.tipo==="usado"?"#F97316":"#f87171"};font-weight:600">${h.tipo==="ok"?"Validado":h.tipo==="usado"?"Ya validado":"Rechazado"}</span><span style="flex:1;color:#ddd;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escH(h.nombre||h.titulo)}</span><span style="color:#666">${h.at.toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false})}</span></div>`).join(""):"";
+}
+async function valSalir(){
+  if(!confirm("¿Salir del validador? Para volver a entrar necesitarás el código y el PIN."))return;
+  let tok=null;try{tok=JSON.parse(localStorage.getItem("gl-validador")||"{}").token;localStorage.removeItem("gl-validador");sessionStorage.removeItem("gl-val-cuenta");}catch(e){}
+  qrDetenerScanner();
+  if(tok)valPost({accion:"salir",token:tok}).catch(()=>{});
+  location.href="/validar";
+}
+
+const _esValidador=/^\/validar\/?$/.test(location.pathname);
 const _cfUrl = new URLSearchParams(window.location.search);
-if(_cfUrl.has("registro")){ mostrarRegistroProductora(); }
+if(_esValidador){ mostrarValidadorQR(); }
+else if(_cfUrl.has("registro")){ mostrarRegistroProductora(); }
 else if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
 else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
@@ -14333,7 +14540,7 @@ else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
   const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago"].some(k=>_pub.has(k));
-  if(!_esLinkPublico) await restaurarSesion();
+  if(!_esLinkPublico&&!_esValidador) await restaurarSesion();
 })();
 
 // ── Guardia de navegación en dos niveles (envuelve a todos los parches de goView) ──

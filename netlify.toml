@@ -18,3 +18,14 @@
   from = "/app/"
   to = "/index.html"
   status = 200
+
+# Validador QR de puerta (sin cuenta: código del evento + PIN) en guestly.cl/validar
+[[redirects]]
+  from = "/validar"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/validar/"
+  to = "/index.html"
+  status = 200
