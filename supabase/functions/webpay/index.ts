@@ -48,7 +48,12 @@ const tbk = async (method: string, path: string, body?: unknown) => {
 };
 
 // Calcula qué se cobra según el tipo de pago (por ahora: orden de Close Friends)
-async function calcular(tipo: string, id: string) {
+async function calcular(tipo: string, id: string, body?: any) {
+  // Pago de prueba suelto (sin orden): solo en el ambiente de integración, para las pruebas de validación de Transbank
+  if (tipo === "test") {
+    if (PROD) throw new Error("Los pagos de prueba solo funcionan en el ambiente de integración");
+    return { base: Math.max(50, Math.min(500000, Math.round(Number(body?.monto) || 1000))), evento_id: null, productora_id: null, ref: null, glosa: "PRUEBA" };
+  }
   if (tipo === "cf") {
     const o = (await dbGet("cf_ordenes", `id=eq.${encodeURIComponent(id)}&select=id,codigo,estado,monto_total,evento_id,productora_id,postulante_id`))[0];
     if (!o) throw new Error("Orden no encontrada");
@@ -62,12 +67,15 @@ async function calcular(tipo: string, id: string) {
 
 async function crear(body: any) {
   const tipo = String(body?.tipo || ""), id = String(body?.id || "");
-  const c = await calcular(tipo, id);
+  const c = await calcular(tipo, id, body);
   if (!c.base || c.base < 50) throw new Error("Monto inválido");
-  const prod = (await dbGet("productoras", `id=eq.${c.productora_id}&select=id,webpay_modo,webpay_cargo_pct`))[0] || {};
-  if (!prod.webpay_modo || prod.webpay_modo === "off") throw new Error("El pago con tarjeta no está habilitado");
-  if (prod.webpay_modo === "activo" && !PROD) throw new Error("Webpay aún no está conectado a producción");
-  const pct = Math.max(0, Math.min(30, Number(prod.webpay_cargo_pct ?? 10)));
+  let pct = 0;
+  if (tipo !== "test") {
+    const prod = (await dbGet("productoras", `id=eq.${c.productora_id}&select=id,webpay_modo,webpay_cargo_pct`))[0] || {};
+    if (!prod.webpay_modo || prod.webpay_modo === "off") throw new Error("El pago con tarjeta no está habilitado");
+    if (prod.webpay_modo === "activo" && !PROD) throw new Error("Webpay aún no está conectado a producción");
+    pct = Math.max(0, Math.min(30, Number(prod.webpay_cargo_pct ?? 10)));
+  }
   const cargo = Math.round(c.base * pct / 100);
   const total = c.base + cargo;
   const pagoId = crypto.randomUUID();
@@ -171,6 +179,7 @@ async function resultado(id: string) {
   return {
     encontrado: true, estado: p.estado, tipo: p.tipo, ref_id: p.ref_id, buy_order: p.buy_order, monto_base: p.monto_base, cargo: p.cargo,
     cargo_pct: p.cargo_pct, total: p.total, ambiente: p.ambiente, volver: p.volver, created_at: p.created_at, confirmado_at: p.confirmado_at,
+    token: p.tipo === "test" ? p.token : undefined,
     respuesta: { payment_type_code: r.payment_type_code, installments_number: r.installments_number, authorization_code: r.authorization_code, transaction_date: r.transaction_date, card_detail: r.card_detail ? { card_number: r.card_detail.card_number } : undefined },
   };
 }

@@ -9699,11 +9699,11 @@ async function wpOfrecerCF(ord,cont){
     cont.insertBefore(div,cont.firstChild);
   }catch(e){/* sin Webpay: queda solo la transferencia */}
 }
-async function wpIrAPagar(tipo,id){
+async function wpIrAPagar(tipo,id,monto){
   const btn=document.getElementById("wp-btn"),err=document.getElementById("wp-err");
   if(btn){btn.disabled=true;btn.textContent="Conectando con Webpay…";} if(err)err.style.display="none";
   try{
-    const r=await fetch(`${SB_URL}/functions/v1/webpay?accion=crear`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({tipo,id,volver:location.href})});
+    const r=await fetch(`${SB_URL}/functions/v1/webpay?accion=crear`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({tipo,id,monto,volver:location.href})});
     const j=await r.json().catch(()=>({}));
     if(!r.ok||!j.url||!j.token)throw new Error(j.error||"No se pudo iniciar el pago");
     const f=document.createElement("form");f.method="POST";f.action=j.url;
@@ -9713,6 +9713,17 @@ async function wpIrAPagar(tipo,id){
     if(btn){btn.disabled=false;btn.textContent="Reintentar pago con Webpay";}
     if(err){err.textContent=e.message||"Error";err.style.display="block";}
   }
+}
+// Pagos de prueba sueltos (guestly.cl/?wp_test) — solo funcionan en el ambiente de integración de Transbank
+function mostrarPruebaWebpay(){
+  mostrarResultadoPago("__shell__");
+  const cont=document.getElementById("cf-compra-content");
+  cont.innerHTML=`<div class="cf-card"><h3>Pago de prueba (integración Transbank)</h3>
+    <div style="font-size:12px;color:#888;margin-bottom:12px">Para las pruebas de validación: cada pago genera un token nuevo. No se cobra dinero real.</div>
+    <label style="font-size:12px;color:#aaa">Monto</label>
+    <input id="wpt-monto" type="number" value="1000" min="50" style="width:100%;margin-top:6px;background:#1e1e1e;border:1px solid #2e2e2e;border-radius:8px;padding:12px;color:#fff;font-size:16px">
+    <button class="cf-btn" id="wp-btn" onclick="wpIrAPagar('test',null,Number(document.getElementById('wpt-monto').value)||1000)">Pagar con Webpay</button>
+    <div id="wp-err" class="cf-err" style="display:none"></div></div>`;
 }
 // Página de resultado: Transbank → función webpay → guestly.cl/?pago=<id>
 function mostrarResultadoPago(pagoId){
@@ -9735,6 +9746,7 @@ function mostrarResultadoPago(pagoId){
     <div id="wp-comprobante"></div>
   </div>`;
   const cont=document.getElementById("cf-compra-content");
+  if(pagoId==="__shell__")return;
   const f=n=>"$"+Math.round(Number(n)||0).toLocaleString("es-CL");
   let intentos=0;
   (async function revisar(){
@@ -9745,7 +9757,7 @@ function mostrarResultadoPago(pagoId){
     const volver=p.volver&&/^https:\/\/(www\.)?guestly\.cl\//.test(p.volver)?p.volver:null;
     if(p.estado!=="aprobado"){
       const msg={rechazado:"Tu banco rechazó el pago. No se hizo ningún cargo.",anulado:"Cancelaste el pago. No se hizo ningún cargo.",expirado:"Se acabó el tiempo para pagar. No se hizo ningún cargo.",error:"Hubo un problema al confirmar el pago con Transbank. Si ves un cargo en tu cuenta, escríbenos con tu número de orden."}[p.estado]||"El pago no se completó.";
-      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">⚠️</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago no realizado</h2><p style="color:#aaa;font-size:13px">${msg}</p><div style="color:#666;font-size:11px;margin-top:10px">Orden ${p.buy_order||""}</div>${volver?`<a class="cf-btn" href="${volver}">Volver a intentar</a>`:""}</div>`;
+      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">⚠️</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago no realizado</h2><p style="color:#aaa;font-size:13px">${msg}</p><div style="color:#666;font-size:11px;margin-top:10px">Orden ${p.buy_order||""}</div>${p.tipo==="test"&&p.token?`<p style="color:#aaa;font-size:12px;margin-top:8px">Token: <span style="font-family:monospace;color:#fff;word-break:break-all">${escH(p.token)}</span></p>`:""}${volver?`<a class="cf-btn" href="${volver}">${p.tipo==="test"?"Hacer otra prueba":"Volver a intentar"}</a>`:""}</div>`;
       return;
     }
     // Comprobante (datos que exige Transbank en la página de éxito)
@@ -9766,6 +9778,8 @@ function mostrarResultadoPago(pagoId){
         return;
       }
       mostrarPagoCF(ord.id); // muestra "¡Pago confirmado!" + QR (el correo lo envía el servidor)
+    } else if(p.tipo==="test"){
+      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago de prueba aprobado</h2><p style="color:#aaa;font-size:13px">Token: <span style="font-family:monospace;color:#fff;word-break:break-all">${escH(p.token||"")}</span></p>${volver?`<a class="cf-btn" href="${volver}">Hacer otra prueba</a>`:""}</div>`;
     } else {
       cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px">¡Pago confirmado!</h2></div>`;
     }
@@ -14523,6 +14537,7 @@ else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
 else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
+else if(_cfUrl.has("wp_test")){ mostrarPruebaWebpay(); }
 
 // ═══════════════════════════════════
 // INIT — verificar si hay datos
@@ -14539,7 +14554,7 @@ else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test"].some(k=>_pub.has(k));
   if(!_esLinkPublico&&!_esValidador) await restaurarSesion();
 })();
 
