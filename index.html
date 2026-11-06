@@ -2500,7 +2500,8 @@ VIEWS.productoras=()=>{
             <div style="font-size:17px;font-weight:700;flex:1">${p.nombre}</div>
             <button class="btn" style="font-size:11px;padding:3px 8px" onclick="event.stopPropagation();openLogoProductora('${p.id}')">🖼 Logo</button>
           </div>
-          <div style="font-size:12px;color:#888;margin-bottom:12px">${owner?.name||"Sin owner"} · ${owner?.email||""}</div>
+          <div style="font-size:12px;color:#888;margin-bottom:8px">${owner?.name||"Sin owner"} · ${owner?.email||""}</div>
+          ${"webpay_modo" in p?`<div onclick="event.stopPropagation();wpEditarProductora('${p.id}')" title="Cambiar condiciones de pago con tarjeta" style="display:inline-flex;align-items:center;gap:6px;font-size:11px;padding:4px 10px;border-radius:20px;background:${(WP_MODOS[p.webpay_modo]||WP_MODOS.off).bg};color:${(WP_MODOS[p.webpay_modo]||WP_MODOS.off).c};font-weight:600;cursor:pointer;margin-bottom:12px">💳 Tarjeta: ${(WP_MODOS[p.webpay_modo]||WP_MODOS.off).t} · ${p.webpay_cargo_pct??WP_CARGO_DEFAULT}% <span style="opacity:.7">✎</span></div>`:""}
           <div style="display:flex;gap:14px;font-size:12px;color:#555;margin-bottom:10px">
             <div><strong style="color:#0a0a0a">${evsActivos.length}</strong> eventos activos</div>
             <div><strong style="color:#0a0a0a">${mesasCerr}</strong> mesas vendidas</div>
@@ -2546,6 +2547,7 @@ function openNuevaProd(){
       <label class="form-label">Contraseña</label>
       <input class="form-input" id="np-owner-pass" value="guestly123">
     </div>
+    ${wpCamposHTML("np","off",WP_CARGO_DEFAULT)}
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveNuevaProd()">Crear productora</button>
@@ -2559,6 +2561,7 @@ async function saveNuevaProd(){
   const ownerEmail=($("np-owner-email")?.value||"").trim();
   const ownerPass=$("np-owner-pass")?.value||"guestly123";
   if(!nombre||!ownerName||!ownerEmail){toast("Completa todos los campos","error");return;}
+  const wpCfg=wpLeerCampos("np");if(!wpCfg)return;
 
   const prodId=uid(),ownerId=uid();
   const color=window._prodColor||"#534AB7";
@@ -2585,11 +2588,11 @@ async function saveNuevaProd(){
   }catch(e){toast("Error creando usuarios: "+e.message,"error");return;}
 
   // 2) Luego crear la productora (owner_id ya existe en users)
-  const prod={id:prodId,nombre,owner_id:ownerId,color,created_at:now()};
+  const prod={id:prodId,nombre,owner_id:ownerId,color,created_at:now(),...wpCfg};
   if(window._npLogoFile){try{prod.logo_url=await subirLogoArchivo(prodId,window._npLogoFile);}catch(e){toast("Logo no subido: "+e.message,"warn");}}
-  try{await sbPost("productoras",[prod]);}
+  try{await wpPostProductora(prod);}
   catch(e){
-    if(/logo_url/.test(e.message||"")){const {logo_url,...sin}=prod;try{await sbPost("productoras",[sin]);toast("Productora creada, pero falta la columna logo_url para guardar el logo (ver SQL)","warn");}catch(e2){toast("Error: "+e2.message,"error");return;}}
+    if(/logo_url/.test(e.message||"")){const {logo_url,...sin}=prod;try{await wpPostProductora(sin);toast("Productora creada, pero falta la columna logo_url para guardar el logo (ver SQL)","warn");}catch(e2){toast("Error: "+e2.message,"error");return;}}
     else{toast("Error: "+e.message,"error");return;}
   }
 
@@ -13555,6 +13558,42 @@ function concBloqueConfig(prod,casilla,sistema,todas){
 // ── Pago con tarjeta (Webpay Plus · Transbank). Guestly recauda; la productora define si lo ofrece y el % de cargo ──
 const WP_MODOS={off:{t:"Apagado",c:"#64748b",bg:"#f1f5f9",d:"Tus clientes solo pueden pagar por transferencia."},prueba:{t:"En prueba",c:"#92400E",bg:"#FEF3C7",d:"Solo aparece si al link de pago le agregas &wp=1. Se usan tarjetas de prueba de Transbank: no se cobra dinero real."},activo:{t:"Activo",c:"#166534",bg:"#dcfce7",d:"Todos tus clientes ven «Pagar con tarjeta» con el cargo por servicio incluido."}};
 let _wpAmbiente=null;
+const WP_CARGO_DEFAULT=10; // % por defecto si no se negocia otro con la productora
+// Campos "pago con tarjeta" para crear / aprobar / editar una productora (solo superadmin)
+function wpCamposHTML(pre,modo,pct){
+  modo=WP_MODOS[modo]?modo:"off";pct=pct!=null?Number(pct):WP_CARGO_DEFAULT;
+  return `<div style="background:#f9f9f9;border-radius:10px;padding:14px;margin-top:14px">
+    <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">💳 Pago con tarjeta (Webpay)</div>
+    <div style="font-size:11px;color:#888;margin-bottom:10px">Lo acordado con la productora. Si no se negoció nada, queda el ${WP_CARGO_DEFAULT}% por defecto. Se puede cambiar después desde Productoras.</div>
+    <div class="form-row">
+      <div><label class="form-label" style="margin-top:0">Estado</label><select class="form-select" id="${pre}-wp-modo">${Object.entries(WP_MODOS).map(([k,v])=>`<option value="${k}" ${k===modo?"selected":""}>${v.t}</option>`).join("")}</select></div>
+      <div><label class="form-label" style="margin-top:0">Cargo por servicio (%)</label><input class="form-input" id="${pre}-wp-pct" type="number" min="0" max="30" step="0.5" value="${pct}"></div>
+    </div>
+  </div>`;
+}
+function wpLeerCampos(pre){
+  const modo=$(pre+"-wp-modo")?.value||"off";const pct=Number($(pre+"-wp-pct")?.value);
+  if(!(pct>=0&&pct<=30)){toast("El cargo debe estar entre 0% y 30%","warn");return null;}
+  return {webpay_modo:modo,webpay_cargo_pct:pct};
+}
+// Insertar productora con Webpay; si aún no existen las columnas, la crea igual sin esos datos
+async function wpPostProductora(prod){
+  try{await sbPost("productoras",[prod]);return true;}
+  catch(e){
+    if(/webpay_/.test(e.message||"")){const {webpay_modo,webpay_cargo_pct,...sin}=prod;await sbPost("productoras",[sin]);toast("Productora creada, pero falta correr el SQL de Webpay para guardar el cargo","warn");return true;}
+    throw e;
+  }
+}
+function wpEditarProductora(prodId){
+  const p=D.productoras.find(x=>x.id===prodId);if(!p)return;
+  openModal(`💳 Pago con tarjeta — ${escH(p.nombre)}`,`${wpCamposHTML("ep",p.webpay_modo,p.webpay_cargo_pct)}
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="wpGuardarProductora('${prodId}')">Guardar</button></div>`);
+}
+async function wpGuardarProductora(prodId){
+  const p=D.productoras.find(x=>x.id===prodId);const w=wpLeerCampos("ep");if(!p||!w)return;
+  try{await sbPatch("productoras",`id=eq.${prodId}`,w);Object.assign(p,w);closeModal();toast(`✓ ${p.nombre}: tarjeta ${WP_MODOS[w.webpay_modo].t.toLowerCase()} · ${w.webpay_cargo_pct}%`,"success");await log("webpay_config","productoras",prodId,`Webpay ${w.webpay_modo} · cargo ${w.webpay_cargo_pct}%`);if(CURRENT_VIEW==="productoras")VIEWS.productoras();}
+  catch(e){toast("Error: "+e.message,"error");}
+}
 function wpBloqueConfig(prod){
   if(!prod)return "";
   const modo=WP_MODOS[prod.webpay_modo]?prod.webpay_modo:"off", m=WP_MODOS[modo];
@@ -13576,7 +13615,7 @@ function wpBloqueConfig(prod){
         <select class="form-select" id="wp-modo" style="margin:0;width:auto;font-size:12px">${Object.entries(WP_MODOS).map(([k,v])=>`<option value="${k}" ${k===modo?"selected":""}>${v.t}</option>`).join("")}</select>
         <span style="font-size:12px;color:#555">Cargo</span><input class="form-input" id="wp-pct" type="number" min="0" max="30" step="0.5" value="${pct}" style="width:80px;font-size:12px;margin:0"><span style="font-size:12px;color:#555">%</span>
         <button class="btn" style="font-size:11px" onclick="wpGuardarConfig()">Guardar</button>
-      </div>`:`<div style="font-size:11px;color:#888;margin-top:6px">Para activar o cambiar el cargo, escríbele a Guestly.</div>`}
+      </div>`:`<div style="font-size:11px;color:#888;margin-top:6px">El estado y el % de cargo se acuerdan con Guestly al crear tu productora. Para cambiarlos, escríbenos.</div>`}
   </div>`;
 }
 function wpAmbTxt(){
@@ -14252,18 +14291,26 @@ function bloqueSolicitudesProd(){
       <div style="display:flex;gap:6px"><button class="btn btn-primary" style="font-size:12px" onclick="aprobarSolicitudProd('${r.id}')">✓ Aprobar</button><button class="btn" style="font-size:12px" onclick="rechazarSolicitudProd('${r.id}')">Rechazar</button></div>
     </div>`).join("")}</div>`;
 }
-async function aprobarSolicitudProd(id){
+function aprobarSolicitudProd(id){
   const r=(_solicitudesProd||[]).find(x=>x.id===id);if(!r)return;
-  if(!confirm(`¿Aprobar "${r.nombre_productora}"?\n\nSe crea la productora y la cuenta de ${r.responsable} (${r.email}), y le llega un correo con su acceso. Al entrar deberá cambiar su contraseña.`))return;
+  openModal(`Aprobar ${escH(r.nombre_productora)}`,`<div style="font-size:13px;color:#555;line-height:1.6">Se crea la productora y la cuenta de <b>${escH(r.responsable)}</b> (${escH(r.email)}), y le llega un correo con su acceso. Al entrar deberá cambiar su contraseña.</div>
+    ${wpCamposHTML("ap","off",WP_CARGO_DEFAULT)}
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="ap-btn" onclick="aprobarSolicitudProdOk('${id}')">✓ Aprobar productora</button></div>`);
+}
+async function aprobarSolicitudProdOk(id){
+  const r=(_solicitudesProd||[]).find(x=>x.id===id);if(!r)return;
+  const wpCfg=wpLeerCampos("ap");if(!wpCfg)return;
+  const b=$("ap-btn");if(b){b.disabled=true;b.textContent="Creando…";}
+  closeModal();
   const prodId=uid(),ownerId=uid();
   const pass="gl-"+Math.random().toString(36).slice(2,8);
   const ownerU={id:ownerId,name:r.responsable,email:r.email,pass,role:"owner",puntos:0,equipo_id:null,productora_id:prodId,evento_ids:[],must_change_pass:true};
   try{await sbPostUserTolerante(ownerU);}catch(e){toast("Error creando el usuario: "+e.message,"error");return;}
-  const prod={id:prodId,nombre:r.nombre_productora,owner_id:ownerId,color:"#2BE07B",created_at:now()};
-  try{await sbPost("productoras",[prod]);}catch(e){toast("Error creando la productora: "+e.message,"error");return;}
+  const prod={id:prodId,nombre:r.nombre_productora,owner_id:ownerId,color:"#2BE07B",created_at:now(),...wpCfg};
+  try{await wpPostProductora(prod);}catch(e){toast("Error creando la productora: "+e.message,"error");return;}
   D.productoras.push(prod);D.users.push(ownerU);
   try{await sbPatch("registro_productoras",`id=eq.${id}`,{estado:"aprobada",productora_id:prodId});}catch(e){}
-  try{await log("aprobar_registro","productora",prodId,`Solicitud aprobada: ${r.nombre_productora} — ${r.responsable} (${r.email})`);}catch(e){}
+  try{await log("aprobar_registro","productora",prodId,`Solicitud aprobada: ${r.nombre_productora} — ${r.responsable} (${r.email}) · tarjeta ${wpCfg.webpay_modo} ${wpCfg.webpay_cargo_pct}%`);}catch(e){}
   try{await sendEmail(r.email,`Tu cuenta Guestly está lista — ${r.nombre_productora}`,emailTemplates.nuevaProductora(r.responsable,r.email,pass,r.nombre_productora));}catch(e){toast("Productora creada, pero el correo no salió: "+e.message,"warn");}
   _solicitudesProd=_solicitudesProd.filter(x=>x.id!==id);
   toast(`✓ ${r.nombre_productora} aprobada. Le enviamos su acceso a ${r.email}`,"success");
