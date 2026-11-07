@@ -11395,6 +11395,9 @@ VIEWS["base-datos"]=async()=>{
   window._bdPersonas=personas;
   const ORIG={cf:["🌸","Close Friends","#EC4899"],cumple:["🎂","Cumpleañero/a","#854d0e"],inv_cumple:["🎂","Invitado cumple","#b45309"],lista:["👥","Lista / staff","#534AB7"],mesa:["🍾","Mesa VIP","#0e7490"],mesa_comprador:["🍾","Comprador mesa","#0e7490"],embajadora:["📣","Embajadora","#7c3aed"]};
   // ── 3) Filtros y tabla ──
+  // WhatsApp clickeable: abre el chat directo. Números chilenos sin código de país se completan con 56.
+  const bdWaNum=w=>{let d=String(w||"").replace(/\D/g,"");if(d.startsWith("00"))d=d.slice(2);if(d.length===8)d="569"+d;else if(d.length===9&&d[0]==="9")d="56"+d;return d.length>=10?d:"";};
+  const bdWaLink=w=>{if(!w)return "—";const n=bdWaNum(w);const t=escH(String(w));return n?`<a href="https://wa.me/${n}" target="_blank" rel="noopener" title="Abrir chat de WhatsApp" style="color:#128C4B;font-weight:600;text-decoration:none;white-space:nowrap">${t}</a>`:t;};
   const BD_MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
   const bdSelSt='style="margin:0;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--bg,#fff);color:var(--ink);width:auto"';
   const bdSelDia=id=>`<select id="${id}" ${bdSelSt} aria-label="Día"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>`;
@@ -11426,7 +11429,7 @@ VIEWS["base-datos"]=async()=>{
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.rut?fmtRut(p.rut):""}</div></td>
         <td style="padding:8px;font-size:12px">${p.email||"—"}</td>
         <td style="padding:8px;font-size:12px">${p.instagram?`<a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram}</a>`:"—"}</td>
-        <td style="padding:8px;font-size:12px">${p.whatsapp||"—"}</td>
+        <td style="padding:8px;font-size:12px">${bdWaLink(p.whatsapp)}</td>
         <td style="padding:8px;font-size:11px">${fnac}</td>
         <td style="padding:8px;font-size:12px">${genLbl}</td>
         <td style="padding:8px"><div style="display:flex;gap:3px;flex-wrap:wrap">${[...p.origenes].map(o=>{const d=ORIG[o]||["•",o,"#555"];return `<span title="${d[1]}" style="font-size:10px;font-weight:700;color:${d[2]};background:${d[2]}18;border-radius:5px;padding:1px 6px;white-space:nowrap">${d[0]} ${d[1]}</span>`;}).join("")}</div></td>
