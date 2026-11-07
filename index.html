@@ -11395,6 +11395,10 @@ VIEWS["base-datos"]=async()=>{
   window._bdPersonas=personas;
   const ORIG={cf:["🌸","Close Friends","#EC4899"],cumple:["🎂","Cumpleañero/a","#854d0e"],inv_cumple:["🎂","Invitado cumple","#b45309"],lista:["👥","Lista / staff","#534AB7"],mesa:["🍾","Mesa VIP","#0e7490"],mesa_comprador:["🍾","Comprador mesa","#0e7490"],embajadora:["📣","Embajadora","#7c3aed"]};
   // ── 3) Filtros y tabla ──
+  const BD_MESES=["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+  const bdSelSt='style="margin:0;padding:3px 6px;font-size:12px;border:1px solid var(--line);border-radius:6px;background:var(--bg,#fff);color:var(--ink);width:auto"';
+  const bdSelDia=id=>`<select id="${id}" ${bdSelSt} aria-label="Día"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>`;
+  const bdSelMes=id=>`<select id="${id}" ${bdSelSt} aria-label="Mes"><option value="">Mes</option>${BD_MESES.map((m,i)=>`<option value="${String(i+1).padStart(2,"0")}">${m}</option>`).join("")}</select>`;
   let fOrigen="todos",fEv="todos",fGenero="todos",fContacto="todos",fDesde="",fHasta="",q="";
   const renderTabla=()=>{
     let f=personas;
@@ -11415,7 +11419,7 @@ VIEWS["base-datos"]=async()=>{
     const tbody=$("bd-tbody");if(!tbody)return;
     const MAX=500;
     tbody.innerHTML=f.length?f.slice(0,MAX).map(p=>{
-      const fnac=p.fecha_nacimiento?p.fecha_nacimiento.slice(5).replace("-","/")+` (${p.fecha_nacimiento.slice(0,4)})`:"—";
+      const fnac=p.fecha_nacimiento?`${p.fecha_nacimiento.slice(8,10)}/${p.fecha_nacimiento.slice(5,7)}/${p.fecha_nacimiento.slice(0,4)}`:"—";
       const genLbl=p.genero==="m"?"♂ H":p.genero==="f"?"♀ M":"—";
       const evsTxt=[...p.eventos].map(evNombre).filter(Boolean);
       return `<tr style="border-bottom:1px solid var(--line)">
@@ -11452,10 +11456,11 @@ VIEWS["base-datos"]=async()=>{
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
         <div style="display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:4px 10px">
-          <span style="font-size:12px;color:var(--ink-4)">🎂 Cumpleaños entre</span>
-          <input type="text" id="bd-cumple-desde" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
-          <span style="font-size:12px;color:var(--ink-4)">y</span>
-          <input type="text" id="bd-cumple-hasta" placeholder="MM-DD" maxlength="5" style="width:60px;border:none;background:transparent;font-size:12px;outline:none">
+          <span style="font-size:12px;color:var(--ink-4)">🎂 Cumpleaños desde</span>
+          ${bdSelDia("bd-cd-dia")}${bdSelMes("bd-cd-mes")}
+          <span style="font-size:12px;color:var(--ink-4)">hasta</span>
+          ${bdSelDia("bd-ch-dia")}${bdSelMes("bd-ch-mes")}
+          <a href="javascript:void(0)" id="bd-cumple-limpiar" style="font-size:12px;color:var(--ink-4);display:none">Limpiar</a>
         </div>
         <span id="bd-count" style="font-size:12px;color:var(--ink-4)"></span>
         <button class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="window._bdExportar()">⬇ Exportar (CSV / Excel)</button>
@@ -11482,8 +11487,12 @@ VIEWS["base-datos"]=async()=>{
     $("bd-sel-ev").addEventListener("change",e=>{fEv=e.target.value;renderTabla();});
     $("bd-sel-genero").addEventListener("change",e=>{fGenero=e.target.value;renderTabla();});
     $("bd-sel-contacto").addEventListener("change",e=>{fContacto=e.target.value;renderTabla();});
-    $("bd-cumple-desde").addEventListener("input",e=>{fDesde=e.target.value.trim();renderTabla();});
-    $("bd-cumple-hasta").addEventListener("input",e=>{fHasta=e.target.value.trim();renderTabla();});
+    // Cumpleaños: día y mes con menús (internamente se compara como "MM-DD")
+    const bdLeerFecha=(dId,mId,finDeMes)=>{const m=$(mId).value,d=$(dId).value;if(!m)return "";return m+"-"+(d||(finDeMes?"31":"01"));};
+    const bdCumpleCambio=()=>{fDesde=bdLeerFecha("bd-cd-dia","bd-cd-mes",false);fHasta=bdLeerFecha("bd-ch-dia","bd-ch-mes",true);
+      $("bd-cumple-limpiar").style.display=["bd-cd-dia","bd-cd-mes","bd-ch-dia","bd-ch-mes"].some(i=>$(i).value)?"":"none";renderTabla();};
+    ["bd-cd-dia","bd-cd-mes","bd-ch-dia","bd-ch-mes"].forEach(i=>$(i).addEventListener("change",bdCumpleCambio));
+    $("bd-cumple-limpiar").addEventListener("click",()=>{["bd-cd-dia","bd-cd-mes","bd-ch-dia","bd-ch-mes"].forEach(i=>$(i).value="");bdCumpleCambio();});
     renderTabla();
   };
   window._bdCampana=()=>{const p=$("bd-campana-panel");if(p)p.style.display=p.style.display==="none"?"block":"none";};
