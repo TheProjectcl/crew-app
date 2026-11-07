@@ -238,6 +238,7 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div style="display:flex;justify-content:space-between;gap:10px;margin-top:12px;font-size:12px">
       <a href="#" id="li-modo" onclick="loginModo(_liModo==='pass'?'codigo':'pass');return false" style="color:#9a9a9a;text-decoration:underline">Entrar con contraseña</a>
       <a href="#" id="li-reenviar" class="hidden" onclick="loginEnviarCodigo(true);return false" style="color:#9a9a9a;text-decoration:underline">Reenviar código</a>
+      <a href="#" id="li-olvido" class="hidden" onclick="loginOlvido();return false" style="color:#9a9a9a;text-decoration:underline;text-align:right">¿Olvidaste tu contraseña?</a>
     </div>
     <div style="text-align:center;margin-top:16px;font-size:13px;color:var(--ink-3)">¿Tienes una productora? <a href="/app?registro" style="color:var(--accent-ink,#13894A);font-weight:600;text-decoration:none">Solicita tu cuenta</a></div>
   </div>
@@ -1382,7 +1383,8 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
 
     $("login-screen")?.classList.add("hidden");
     const role=CU.role;
-    if(CU.must_change_pass&&!window._loginPorCodigo)setTimeout(()=>mostrarCambioPassObligatorio(),600);
+    if(window._crearPassTrasLogin){window._crearPassTrasLogin=false;setTimeout(()=>mostrarCambioPassObligatorio("recuperar"),600);}
+    else if(CU.must_change_pass&&!window._loginPorCodigo)setTimeout(()=>mostrarCambioPassObligatorio(),600);
     if(["superadmin","owner","coordinator"].includes(role)) initAdminApp();
     else if(["door_chief","door_staff","vip_staff","cashier"].includes(role)) initMobApp();
     else if(role==="ambassador_chief") initJefeApp();
@@ -1443,34 +1445,42 @@ async function guardarMiPass(){
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}}
 }
 // Primer ingreso: obliga a crear una contraseña propia (no se puede cerrar hasta hacerlo)
-function mostrarCambioPassObligatorio(){
+function mostrarCambioPassObligatorio(modo){
   const u=CU;if(!u)return;
-  openModal("🔐 Crea tu contraseña",`
-    <div style="font-size:14px;color:#555;line-height:1.6;margin-bottom:12px">Hola <strong>${(u.name||"").split(" ")[0]}</strong>, entraste con una contraseña temporal. Para que no se te olvide, crea una propia ahora (mínimo 6 caracteres).</div>
+  const rec=modo==="recuperar";window._cpModo=rec?"recuperar":"temporal";
+  openModal(rec?"Crea tu nueva contraseña":"🔐 Crea tu contraseña",`
+    <div style="font-size:14px;color:#555;line-height:1.6;margin-bottom:12px">Hola <strong>${escH((u.name||"").split(" ")[0])}</strong>, ${rec?"escribe tu nueva contraseña (mínimo 6 caracteres). Desde ahora entras con ella.":"entraste con una contraseña temporal. Para que no se te olvide, crea una propia ahora (mínimo 6 caracteres)."}</div>
     <label class="form-label" style="margin-top:0">Nueva contraseña</label>
     <input class="form-input" id="cp-1" type="password" autocomplete="new-password" placeholder="Mínimo 6 caracteres" style="font-size:16px">
     <label class="form-label">Repite la contraseña</label>
     <input class="form-input" id="cp-2" type="password" autocomplete="new-password" placeholder="Otra vez" style="font-size:16px">
     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#666;margin-top:8px;cursor:pointer"><input type="checkbox" onchange="['cp-1','cp-2'].forEach(i=>{const e=document.getElementById(i);if(e)e.type=this.checked?'text':'password';})"> Mostrar contraseña</label>
     <div id="cp-err" style="font-size:12px;color:#dc2626;font-weight:600;margin-top:8px;min-height:16px"></div>
-    <button class="btn btn-primary btn-full" id="cp-btn" style="margin-top:10px;font-size:15px;padding:12px;justify-content:center" onclick="guardarPassObligatoria()">Guardar y continuar →</button>`);
-  window._modalBloqueado=true;
-  document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="none";});
+    <button class="btn btn-primary btn-full" id="cp-btn" style="margin-top:10px;font-size:15px;padding:12px;justify-content:center" onclick="guardarPassObligatoria()">${rec?"Guardar contraseña":"Guardar y continuar →"}</button>`);
+  if(!rec){
+    window._modalBloqueado=true;
+    document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="none";});
+  }
   setTimeout(()=>$("cp-1")?.focus(),100);
 }
 async function guardarPassObligatoria(){
   const p1=$("cp-1")?.value||"",p2=$("cp-2")?.value||"";const err=$("cp-err");
   if(p1.length<6){err.textContent="Debe tener al menos 6 caracteres";return;}
   if(p1!==p2){err.textContent="Las contraseñas no coinciden";return;}
-  if(window._passLogin&&p1===window._passLogin){err.textContent="Elige una contraseña distinta a la temporal";return;}
+  const rec=window._cpModo==="recuperar";
+  if(!rec&&window._passLogin&&p1===window._passLogin){err.textContent="Elige una contraseña distinta a la temporal";return;}
   const btn=$("cp-btn");if(btn){btn.disabled=true;btn.textContent="Guardando…";}
+  // Al recuperar, la clave nueva queda en todas las cuentas de ese correo (el código del correo ya probó que es suyo)
+  const ids=rec&&(window._idsRecuperar||[]).length?window._idsRecuperar:[CU.id];
+  const filtro=ids.length>1?`id=in.(${ids.map(encodeURIComponent).join(",")})`:`id=eq.${ids[0]}`;
   try{
-    try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
-    catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
-    CU.must_change_pass=false;window._passLogin=p1;const du=D.users.find(x=>x.id===CU.id);if(du){du.must_change_pass=false;}
-    window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast("✅ Contraseña guardada. ¡Bienvenida!","ok");
-    try{await log("cambio_pass","user",CU.id,"Creó su contraseña en el primer ingreso");}catch(e){}
-  }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar y continuar →";}}
+    try{await sbPatch("users",filtro,{pass:p1,must_change_pass:false});}
+    catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",filtro,{pass:p1});else throw e;}
+    CU.must_change_pass=false;window._passLogin=p1;window._idsRecuperar=null;ids.forEach(id=>{const du=D.users.find(x=>x.id===id);if(du)du.must_change_pass=false;});
+    if(rec){window._loginPorCodigo=false;try{const ses=JSON.parse(localStorage.getItem("crew-session")||"{}");if(ses.tok){ses.clave=1;localStorage.setItem("crew-session",JSON.stringify(ses));}}catch(e){}}
+    window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast(rec?"Contraseña nueva guardada":"✅ Contraseña guardada. ¡Bienvenida!","ok");
+    try{await log("cambio_pass","user",CU.id,rec?"Recuperó su contraseña con código al correo":"Creó su contraseña en el primer ingreso");}catch(e){}
+  }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent=rec?"Guardar contraseña":"Guardar y continuar →";}}
 }
 // ── Ingreso con código al correo (sin contraseña). La clave sigue disponible ("Entrar con contraseña") ──
 let _liModo=(()=>{try{return localStorage.getItem("gl-login-modo")==="pass"?"pass":"codigo";}catch(e){return "codigo";}})();
@@ -1485,18 +1495,31 @@ async function lcPost(body){
   return j;
 }
 function loginErr(t){const e=$("li-err");if(!e)return;if(t){e.textContent=t;e.classList.remove("hidden");}else e.classList.add("hidden");}
+window._liRecuperar=false;
 function loginModo(m){
   _liModo=m==="pass"?"pass":"codigo";try{localStorage.setItem("gl-login-modo",_liModo);}catch(e){}
-  const pass=_liModo==="pass";
+  const pass=_liModo==="pass";if(pass)window._liRecuperar=false;
+  const rec=!pass&&window._liRecuperar;
+  $("li-olvido")?.classList.toggle("hidden",!pass);
   $("li-pass")?.classList.toggle("hidden",!pass);
   if(pass){$("li-cod")?.classList.add("hidden");$("li-reenviar")?.classList.add("hidden");window._liCodEnviado=false;}
   else $("li-cod")?.classList.toggle("hidden",!window._liCodEnviado);
   const b=$("li-btn");if(b)b.textContent=pass?"Ingresar":window._liCodEnviado?"Ingresar":"Recibir código";
-  const md=$("li-modo");if(md)md.textContent=pass?"Entrar con código al correo":"Entrar con contraseña";
-  const sb=$("li-sub");if(sb)sb.textContent=pass?"Ingresa con tu correo y contraseña.":window._liCodEnviado?`Te enviamos un código a ${$("li-email")?.value.trim()||"tu correo"}. Revisa también spam.`:"Ingresa tu correo y te enviamos un código para entrar, sin contraseña.";
+  const md=$("li-modo");if(md)md.textContent=pass?"Entrar con código al correo":rec?"Volver a entrar con contraseña":"Entrar con contraseña";
+  if(b&&rec&&!window._liCodEnviado)b.textContent="Enviarme un código";
+  const sb=$("li-sub");if(sb)sb.textContent=pass?"Ingresa con tu correo y contraseña."
+    :rec?(window._liCodEnviado?`Te enviamos un código a ${$("li-email")?.value.trim()||"tu correo"} (revisa también spam). Con él entras y creas tu contraseña nueva.`:"Escribe tu correo y te enviamos un código. Con él entras y creas tu contraseña nueva.")
+    :window._liCodEnviado?`Te enviamos un código a ${$("li-email")?.value.trim()||"tu correo"}. Revisa también spam.`:"Ingresa tu correo y te enviamos un código para entrar, sin contraseña.";
   loginErr("");
 }
-function loginReiniciarCodigo(){window._liCodEnviado=false;if($("li-cod"))$("li-cod").value="";$("li-reenviar")?.classList.add("hidden");loginModo("codigo");}
+// "¿Olvidaste tu contraseña?": entra con código al correo y al tiro pide crear una nueva
+function loginOlvido(){
+  window._liRecuperar=true;window._liCodEnviado=false;if($("li-cod"))$("li-cod").value="";if($("li-pass"))$("li-pass").value="";
+  loginModo("codigo");
+  const email=($("li-email")?.value||"").trim();
+  if(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))loginEnviarCodigo(false);else $("li-email")?.focus();
+}
+function loginReiniciarCodigo(){window._liCodEnviado=false;/* se mantiene _liRecuperar si estaba recuperando */if($("li-cod"))$("li-cod").value="";$("li-reenviar")?.classList.add("hidden");loginModo("codigo");}
 function loginAccion(){
   if(_liModo==="pass"){if($("li-pass")?.classList.contains("hidden"))return;return doLogin();}
   return window._liCodEnviado?loginVerificarCodigo():loginEnviarCodigo(false);
@@ -1514,7 +1537,7 @@ async function loginEnviarCodigo(reenvio){
   }catch(e){
     if(e.sinFuncion){loginModo("pass");loginErr("El ingreso con código aún no está disponible. Entra con tu contraseña.");}
     else loginErr(e.message);
-    if(b)b.textContent=_liModo==="pass"?"Ingresar":window._liCodEnviado?"Ingresar":"Recibir código";
+    if(b)b.textContent=_liModo==="pass"?"Ingresar":window._liCodEnviado?"Ingresar":window._liRecuperar?"Enviarme un código":"Recibir código";
   }finally{if(b)b.disabled=false;}
 }
 let _liVerificando=false;
@@ -1525,6 +1548,8 @@ async function loginVerificarCodigo(){
   _liVerificando=true;loginErr("");showLoading(true);
   try{
     const j=await lcPost({accion:"verificar",email,codigo});
+    window._passLogin=null;
+    if(window._liRecuperar){window._crearPassTrasLogin=true;window._idsRecuperar=(j.cuentas||[]).map(c=>c.id);window._liRecuperar=false;}
     await loginConCuentas(j.cuentas,email,j.token,false);
   }catch(e){showLoading(false);loginErr(e.sinFuncion?"El ingreso con código aún no está disponible. Entra con tu contraseña.":e.message);const c=$("li-cod");if(c){c.value="";c.focus();}}
   finally{_liVerificando=false;}
