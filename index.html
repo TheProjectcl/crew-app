@@ -1274,16 +1274,20 @@ async function intentarLogin(email,pass,esRestauracion){
   window._loginTok=null;window._loginPorCodigo=false;
   showLoading(true);
   try{
-    const res=await sbGet("users",`email=ilike.${encodeURIComponent(email)}&pass=eq.${encodeURIComponent(pass)}`);
-    if(!res.length){
+    // La contraseña la verifica el servidor contra la versión encriptada; el navegador nunca ve claves guardadas
+    let j;
+    try{j=await lcPost({accion:"clave",email,pass});}
+    catch(e){
       showLoading(false);
       if(esRestauracion){
         // Sesión guardada inválida (cambiaron la contraseña, etc.) — limpiar
-        try{localStorage.removeItem("crew-session");}catch(e){}
+        if(!/conectarnos/.test(e.message||"")){try{localStorage.removeItem("crew-session");}catch(x){}}
         return false;
       }
-      const er=$("li-err");if(er){er.textContent="Email o contraseña incorrectos.";er.classList.remove("hidden");}return false;
+      const er=$("li-err");if(er){er.textContent=e.message||"Email o contraseña incorrectos.";er.classList.remove("hidden");}return false;
     }
+    const res=j.cuentas||[];
+    window._loginTok=j.token;window._passLogin=pass;
     $("li-err")?.classList.add("hidden");
     // Una persona puede tener más de una cuenta con el mismo correo (p.ej. embajadora + compradora de mesa)
     let elegido=res[0];window._multiPerfil=res.length>1;
@@ -1291,7 +1295,8 @@ async function intentarLogin(email,pass,esRestauracion){
       let uidGuardado=null;try{uidGuardado=JSON.parse(localStorage.getItem("crew-session")||"{}").uid;}catch(e){}
       const f=uidGuardado&&res.find(u=>u.id===uidGuardado);
       if(f)elegido=f;
-      else{showLoading(false);elegirCuentaLogin(res,email,pass);return false;}
+      else{try{localStorage.setItem("crew-session",JSON.stringify({email,tok:window._loginTok,at:Date.now(),clave:1}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
+        showLoading(false);elegirCuentaLogin(res,email,pass);return false;}
     }
     return await finalizarLogin(elegido,email,pass,esRestauracion);
   }catch(e){
@@ -1345,7 +1350,7 @@ async function elegirCuentaLogin(cuentas,email,pass){
 function cambiarPerfil(){
   let ses={};try{ses=JSON.parse(localStorage.getItem("crew-session")||"{}");}catch(e){}
   if(!ses.email||!(ses.pass||ses.tok)){doLogout();return;}
-  try{localStorage.setItem("crew-session",JSON.stringify(ses.tok?{email:ses.email,tok:ses.tok,at:ses.at}:{email:ses.email,pass:ses.pass,at:ses.at}));}catch(e){}
+  try{localStorage.setItem("crew-session",JSON.stringify(ses.tok?{email:ses.email,tok:ses.tok,at:ses.at,...(ses.clave?{clave:1}:{})}:{email:ses.email,pass:ses.pass,at:ses.at}));}catch(e){}
   if(realtimeChannel&&sbClient){try{sbClient.removeChannel(realtimeChannel);}catch(e){}}
   location.href=location.pathname;
 }
@@ -1370,14 +1375,14 @@ async function finalizarLogin(usuario,email,pass,esRestauracion){
 
     // Guardar sesión para auto-login posterior
     try{const at=esRestauracion?(JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()):Date.now();
-      localStorage.setItem("crew-session",JSON.stringify(pass?{email,pass,uid:CU.id,at}:{email,tok:window._loginTok,uid:CU.id,at}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
+      localStorage.setItem("crew-session",JSON.stringify(window._loginPorCodigo?{email,tok:window._loginTok,uid:CU.id,at}:{email,tok:window._loginTok,uid:CU.id,at,clave:1}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
 
     showLoading(false);
     if(!esRestauracion)await log("login","user",CU.id,`Login desde ${navigator.userAgent.slice(0,40)}`);
 
     $("login-screen")?.classList.add("hidden");
     const role=CU.role;
-    if(CU.must_change_pass&&pass)setTimeout(()=>mostrarCambioPassObligatorio(),600);
+    if(CU.must_change_pass&&!window._loginPorCodigo)setTimeout(()=>mostrarCambioPassObligatorio(),600);
     if(["superadmin","owner","coordinator"].includes(role)) initAdminApp();
     else if(["door_chief","door_staff","vip_staff","cashier"].includes(role)) initMobApp();
     else if(role==="ambassador_chief") initJefeApp();
@@ -1420,16 +1425,19 @@ function abrirMiCuenta(){
 }
 async function guardarMiPass(){
   const p0=$("mc-0")?.value||"",p1=$("mc-1")?.value||"",p2=$("mc-2")?.value||"";const err=$("mc-err");
-  if(!window._loginPorCodigo&&p0!==CU.pass){err.textContent="La contraseña actual no es correcta";return;}
+  if(!window._loginPorCodigo&&!p0){err.textContent="Escribe tu contraseña actual";return;}
   if(p1.length<6){err.textContent="La nueva debe tener al menos 6 caracteres";return;}
   if(p1!==p2){err.textContent="Las contraseñas nuevas no coinciden";return;}
   if(!window._loginPorCodigo&&p1===p0){err.textContent="La nueva debe ser distinta a la actual";return;}
   const btn=$("mc-btn");if(btn){btn.disabled=true;btn.textContent="Guardando…";}
+  if(!window._loginPorCodigo){
+    try{const j=await lcPost({accion:"comprobar",email:CU.email,pass:p0});if(!(j.ids||[]).includes(CU.id))throw new Error("La contraseña actual no es correcta");}
+    catch(e){err.textContent=e.message||"La contraseña actual no es correcta";if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}return;}
+  }
   try{
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
-    CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    if(!window._loginPorCodigo){try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id,at:JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()}));}catch(e){}}
+    CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.must_change_pass=false;}
     closeModal();toast("✅ Contraseña actualizada","ok");
     try{await log("cambio_pass","user",CU.id,"Cambió su contraseña desde Mi cuenta");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar nueva contraseña";}}
@@ -1454,13 +1462,12 @@ async function guardarPassObligatoria(){
   const p1=$("cp-1")?.value||"",p2=$("cp-2")?.value||"";const err=$("cp-err");
   if(p1.length<6){err.textContent="Debe tener al menos 6 caracteres";return;}
   if(p1!==p2){err.textContent="Las contraseñas no coinciden";return;}
-  if(p1===CU.pass){err.textContent="Elige una contraseña distinta a la temporal";return;}
+  if(window._passLogin&&p1===window._passLogin){err.textContent="Elige una contraseña distinta a la temporal";return;}
   const btn=$("cp-btn");if(btn){btn.disabled=true;btn.textContent="Guardando…";}
   try{
     try{await sbPatch("users",`id=eq.${CU.id}`,{pass:p1,must_change_pass:false});}
     catch(e){if(/must_change_pass/.test(e.message||""))await sbPatch("users",`id=eq.${CU.id}`,{pass:p1});else throw e;}
-    CU.pass=p1;CU.must_change_pass=false;const du=D.users.find(x=>x.id===CU.id);if(du){du.pass=p1;du.must_change_pass=false;}
-    try{localStorage.setItem("crew-session",JSON.stringify({email:CU.email,pass:p1,uid:CU.id,at:JSON.parse(localStorage.getItem("crew-session")||"{}").at||Date.now()}));}catch(e){}
+    CU.must_change_pass=false;window._passLogin=p1;const du=D.users.find(x=>x.id===CU.id);if(du){du.must_change_pass=false;}
     window._modalBloqueado=false;document.querySelectorAll("#modal-box button, #modal-box .modal-x, #modal-box [onclick*='closeModal']").forEach(b=>{if(!b.closest("#modal-body"))b.style.display="";});closeModal();toast("✅ Contraseña guardada. ¡Bienvenida!","ok");
     try{await log("cambio_pass","user",CU.id,"Creó su contraseña en el primer ingreso");}catch(e){}
   }catch(e){err.textContent="No se pudo guardar: "+e.message;if(btn){btn.disabled=false;btn.textContent="Guardar y continuar →";}}
@@ -1523,8 +1530,8 @@ async function loginVerificarCodigo(){
   finally{_liVerificando=false;}
 }
 // Entra con las cuentas que devolvió el servidor (código o sesión guardada). Si hay varias, muestra el INICIO para elegir.
-async function loginConCuentas(cuentas,email,tok,esRestauracion){
-  window._loginTok=tok;window._loginPorCodigo=true;
+async function loginConCuentas(cuentas,email,tok,esRestauracion,porClave){
+  window._loginTok=tok;window._loginPorCodigo=!porClave;
   window._multiPerfil=cuentas.length>1;
   let elegido=cuentas[0];
   if(cuentas.length>1){
@@ -1532,7 +1539,7 @@ async function loginConCuentas(cuentas,email,tok,esRestauracion){
     const f=uidGuardado&&cuentas.find(u=>u.id===uidGuardado);
     if(f)elegido=f;
     else{
-      try{localStorage.setItem("crew-session",JSON.stringify({email,tok,at:Date.now()}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
+      try{localStorage.setItem("crew-session",JSON.stringify(porClave?{email,tok,at:Date.now(),clave:1}:{email,tok,at:Date.now()}));localStorage.setItem("gl-ult-act",String(Date.now()));}catch(e){}
       showLoading(false);elegirCuentaLogin(cuentas,email,null);return false;
     }
   }
@@ -1548,7 +1555,7 @@ async function restaurarSesion(){
   try{
     const raw=localStorage.getItem("crew-session");
     if(!raw)return;
-    const {email,pass,tok,at}=JSON.parse(raw);
+    const {email,pass,tok,at,clave}=JSON.parse(raw);
     const ult=Number(localStorage.getItem("gl-ult-act")||0);
     if(!at||Date.now()-at>SES_MAX_H*3600e3||!ult||Date.now()-ult>SES_INACT_MIN*60e3){
       // Sesión vieja o sin uso reciente: se pide entrar de nuevo (si roban el celular no queda la cuenta abierta)
@@ -1562,9 +1569,10 @@ async function restaurarSesion(){
       let r;try{r=await fetch(`${SB_URL}/functions/v1/login-codigo`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({accion:"sesion",token:tok})});}catch(e){showLoading(false);return;}
       const j=await r.json().catch(()=>({}));
       if(!r.ok||!j.cuentas){showLoading(false);if(r.status===401){try{localStorage.removeItem("crew-session");}catch(e){}}return;}
-      await loginConCuentas(j.cuentas,j.email||email,tok,true);
+      await loginConCuentas(j.cuentas,j.email||email,tok,true,!!clave);
       return;
     }
+    // Sesión antigua que guardaba la clave: se valida una vez en el servidor y se reemplaza por una sesión sin clave
     if(!email||!pass)return;
     await intentarLogin(email,pass,true);
   }catch(e){console.warn("No se pudo restaurar sesión:",e);}
@@ -13003,10 +13011,10 @@ else if(_bdayUrl.has("bday_panel")){
         </div>`;
         return;
       }
-      const c=cumps[0];
-      // Buscar usuario asociado
-      const users=await sbGet("users",`email=eq.${encodeURIComponent(c.email)}&role=eq.cumpleanero`);
-      if(!users.length){
+      // El servidor abre la sesión del cumpleañero (ya no se lee su clave desde la página)
+      let jb=null,sinUsuario=false;
+      try{jb=await lcPost({accion:"bday",token_invitacion:token});}catch(e){sinUsuario=!!e.sinUsuario||/no está activo/.test(e.message||"");}
+      if(sinUsuario){
         document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui;padding:24px;text-align:center">
           <div style="font-size:40px">😕</div>
           <p style="color:#fff;font-size:15px">Tu usuario aún no está activo.<br><span style="color:#aaa;font-size:13px">Pídele al productor que reenvíe tu correo de bienvenida.</span></p>
@@ -13014,9 +13022,8 @@ else if(_bdayUrl.has("bday_panel")){
         </div>`;
         return;
       }
-      const u=users[0];
-      // Login automático con credenciales del usuario
-      const ok=await intentarLogin(u.email,u.pass,true);
+      // Login automático con la sesión que entregó el servidor
+      const ok=jb&&jb.cuentas&&jb.cuentas.length?await loginConCuentas(jb.cuentas,jb.email||jb.cuentas[0].email,jb.token,true,true):false;
       if(!ok){
         document.body.innerHTML=`<div style="min-height:100vh;background:#0a0a0a;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px;font-family:system-ui;padding:24px;text-align:center">
           <div style="font-size:40px">⚠️</div>

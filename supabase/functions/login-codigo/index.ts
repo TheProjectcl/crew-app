@@ -4,6 +4,12 @@
 //   POST { accion: "verificar", email, codigo }    → si es correcto devuelve { token, cuentas: [...] }
 //   POST { accion: "sesion",    token }            → reanuda la sesión guardada en el navegador → { cuentas }
 //   POST { accion: "salir",     token }            → cierra esa sesión
+//   POST { accion: "clave",     email, pass }      → ingreso con contraseña (se verifica encriptada) → { token, cuentas }
+//   POST { accion: "comprobar", email, pass }      → solo verifica la contraseña (para cambiarla) → { ok, ids }
+//   POST { accion: "bday",      token_invitacion } → ingreso del cumpleañero por su link personal → { token, cuentas }
+//
+// Las contraseñas se guardan encriptadas (bcrypt) en la tabla users_claves (ver sql-claves.sql).
+// La verificación la hace la base de datos (función guestly_verificar_clave); el navegador nunca ve una clave.
 //
 // Los códigos y sesiones se guardan solo como hash (SHA-256) en tablas con RLS activado y sin políticas:
 // el navegador no las puede leer; solo esta función (service role).
@@ -16,6 +22,7 @@ const MAX_INTENTOS = 5;        // intentos fallidos por código
 const ESPERA_SEG = 45;         // tiempo mínimo entre envíos al mismo correo
 const MAX_POR_HORA = 6;        // envíos por correo por hora
 const SESION_HORAS = 12;      // duración máxima de la sesión (una jornada); además la app la cierra tras 15 min sin uso
+const MAX_FALLOS_CLAVE = 10;   // contraseñas incorrectas por correo cada 15 minutos
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
@@ -30,11 +37,41 @@ const emailOk = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e) && e.length 
 const codigo6 = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return String(a[0] % 1000000).padStart(6, "0"); };
 const tokenNuevo = () => { const a = new Uint8Array(32); crypto.getRandomValues(a); return Array.from(a).map(b => b.toString(16).padStart(2, "0")).join(""); };
 
+// Nunca devolver la columna de contraseña al navegador
+const sinClave = (u: any) => { const { pass, ...resto } = u || {}; return resto; };
 // Cuentas activas con ese correo (una persona puede tener varias: embajadora + compradora de mesa, etc.)
 const cuentasDe = async (email: string) => {
   const us = await dbGet("users", `email=ilike.${encodeURIComponent(email)}`);
-  return (us || []).filter((u: any) => u.activo !== false && u.active !== false);
+  return (us || []).filter((u: any) => u.activo !== false && u.active !== false).map(sinClave);
 };
+const nuevaSesion = async (email: string) => {
+  const token = tokenNuevo(), ahora = new Date().toISOString();
+  await dbPost("login_sesiones", {
+    token_hash: await sha(token), email, created_at: ahora, ultimo_uso_at: ahora,
+    expira_at: new Date(Date.now() + SESION_HORAS * 3600e3).toISOString(),
+  });
+  return token;
+};
+
+// IDs de las cuentas de ese correo cuya contraseña coincide. La compara la base de datos contra la versión encriptada.
+async function idsConClave(email: string, pass: string): Promise<string[]> {
+  if (!pass) return [];
+  const r = await fetch(`${SB_URL}/rest/v1/rpc/guestly_verificar_clave`, { method: "POST", headers: hdr, body: JSON.stringify({ p_email: email, p_pass: pass }) });
+  if (r.ok) return ((await r.json()) || []).map((x: any) => typeof x === "string" ? x : x?.id).filter(Boolean);
+  if (r.status === 404) {
+    // Todavía no se instaló sql-claves.sql: comparar como antes (transición)
+    const us = await dbGet("users", `email=ilike.${encodeURIComponent(email)}&select=id,pass`);
+    return us.filter((u: any) => u.pass && u.pass === pass).map((u: any) => u.id);
+  }
+  throw new Error("No se pudo verificar la contraseña");
+}
+// Freno contra quien prueba muchas claves (si la tabla no existe todavía, no frena)
+async function fallosRecientes(email: string) {
+  try { return (await dbGet("login_intentos", `email=eq.${encodeURIComponent(email)}&created_at=gte.${new Date(Date.now() - 15 * 60e3).toISOString()}&select=id`)).length; } catch { return 0; }
+}
+async function anotarFallo(email: string) {
+  try { await dbPost("login_intentos", { id: crypto.randomUUID(), email, created_at: new Date().toISOString() }); } catch { /* sin tabla */ }
+}
 
 function correoCodigo(codigo: string, nombre: string) {
   const F = "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
@@ -96,12 +133,33 @@ async function verificar(body: any) {
   await dbPatch("login_codigos", `id=eq.${c.id}`, { usado: true });
   const cuentas = await cuentasDe(email);
   if (!cuentas.length) return json({ error: "No encontramos una cuenta con ese correo" }, 400);
-  const token = tokenNuevo();
-  await dbPost("login_sesiones", {
-    token_hash: await sha(token), email, created_at: ahora, ultimo_uso_at: ahora,
-    expira_at: new Date(Date.now() + SESION_HORAS * 3600e3).toISOString(),
-  });
+  const token = await nuevaSesion(email);
   return json({ ok: true, token, cuentas });
+}
+
+async function clave(body: any, soloComprobar: boolean) {
+  const email = normEmail(body?.email), pass = String(body?.pass ?? "");
+  if (!emailOk(email) || !pass) return json({ error: "Email o contraseña incorrectos." }, 400);
+  if (await fallosRecientes(email) >= MAX_FALLOS_CLAVE) return json({ error: "Demasiados intentos. Espera unos minutos o entra con código al correo." }, 429);
+  const ids = await idsConClave(email, pass);
+  const cuentas = ids.length ? (await cuentasDe(email)).filter((u: any) => ids.includes(u.id)) : [];
+  if (!cuentas.length) { await anotarFallo(email); return json({ error: soloComprobar ? "La contraseña actual no es correcta" : "Email o contraseña incorrectos." }, 400); }
+  if (soloComprobar) return json({ ok: true, ids: cuentas.map((u: any) => u.id) });
+  const token = await nuevaSesion(email);
+  return json({ ok: true, token, cuentas });
+}
+
+// El cumpleañero entra con su link personal (?bday_panel=TOKEN), sin escribir clave
+async function bday(body: any) {
+  const t = String(body?.token_invitacion || "");
+  if (!t || t.length > 200) return json({ error: "Link no válido o expirado." }, 400);
+  const c = (await dbGet("bday_cumpleaneros", `token_invitacion=eq.${encodeURIComponent(t)}&select=email`))[0];
+  if (!c?.email) return json({ error: "Link no válido o expirado." }, 400);
+  const email = normEmail(c.email);
+  const u = (await dbGet("users", `email=eq.${encodeURIComponent(c.email)}&role=eq.cumpleanero`))[0];
+  if (!u) return json({ error: "Tu usuario aún no está activo.", sinUsuario: true }, 400);
+  const token = await nuevaSesion(email);
+  return json({ ok: true, token, email, cuentas: [sinClave(u)] });
 }
 
 async function sesion(body: any) {
@@ -132,6 +190,9 @@ Deno.serve(async (req) => {
     if (a === "verificar") return await verificar(body);
     if (a === "sesion") return await sesion(body);
     if (a === "salir") return await salir(body);
+    if (a === "clave") return await clave(body, false);
+    if (a === "comprobar") return await clave(body, true);
+    if (a === "bday") return await bday(body);
     return json({ error: "acción no válida" }, 400);
   } catch (e) {
     return json({ error: String((e as Error)?.message || e) }, 500);
