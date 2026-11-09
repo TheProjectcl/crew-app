@@ -49,10 +49,10 @@ const tbk = async (method: string, path: string, body?: unknown) => {
 
 // Calcula qué se cobra según el tipo de pago (por ahora: orden de Close Friends)
 async function calcular(tipo: string, id: string, body?: any) {
-  // Pago de prueba suelto (sin orden). En integración: monto libre (pruebas de validación de Transbank).
-  // En producción: solo el "producto de prueba" de $50 que exige Transbank para la puesta en producción (cobro real).
+  // Pago de prueba suelto (sin orden): solo en el ambiente de integración.
+  // (El producto de prueba de $50 para la puesta en producción ya se usó el 09-11-2026 y quedó desactivado.)
   if (tipo === "test") {
-    if (PROD) return { base: 50, evento_id: null, productora_id: null, ref: null, glosa: "VALIDACION" };
+    if (PROD) throw new Error("Los pagos de prueba están desactivados");
     return { base: Math.max(50, Math.min(500000, Math.round(Number(body?.monto) || 1000))), evento_id: null, productora_id: null, ref: null, glosa: "PRUEBA" };
   }
   if (tipo === "cf") {
