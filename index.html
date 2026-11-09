@@ -9748,9 +9748,19 @@ async function wpIrAPagar(tipo,id,monto){
   }
 }
 // Pagos de prueba sueltos (guestly.cl/?wp_test) — solo funcionan en el ambiente de integración de Transbank
-function mostrarPruebaWebpay(){
+async function mostrarPruebaWebpay(){
   mostrarResultadoPago("__shell__");
   const cont=document.getElementById("cf-compra-content");
+  let amb="";try{amb=(await (await fetch(`${SB_URL}/functions/v1/webpay?accion=estado`)).json()).ambiente||"";}catch(e){}
+  if(amb==="produccion"){
+    // Producto de prueba de $50 que pide Transbank para la puesta en producción: cobro real con tarjeta real
+    cont.innerHTML=`<div class="cf-card"><h3>Producto de prueba — Guestly</h3>
+      <div style="font-size:13px;color:#aaa;line-height:1.6;margin-bottom:6px">Pago de validación del medio de pago Webpay Plus. Es un <b style="color:#fff">cobro real</b> con tarjeta de crédito o débito.</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid #222;margin-top:12px;padding-top:12px"><span style="color:#aaa;font-size:13px">Total</span><span style="color:#fff;font-size:22px;font-weight:700">$50</span></div>
+      <button class="cf-btn" id="wp-btn" onclick="wpIrAPagar('test',null,50)">Pagar $50 con Webpay</button>
+      <div id="wp-err" class="cf-err" style="display:none"></div></div>`;
+    return;
+  }
   cont.innerHTML=`<div class="cf-card"><h3>Pago de prueba (integración Transbank)</h3>
     <div style="font-size:12px;color:#888;margin-bottom:12px">Para las pruebas de validación: cada pago genera un token nuevo. No se cobra dinero real.</div>
     <label style="font-size:12px;color:#aaa">Monto</label>
@@ -9812,7 +9822,7 @@ function mostrarResultadoPago(pagoId){
       }
       mostrarPagoCF(ord.id); // muestra "¡Pago confirmado!" + QR (el correo lo envía el servidor)
     } else if(p.tipo==="test"){
-      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">Pago de prueba aprobado</h2><p style="color:#aaa;font-size:13px">Token: <span style="font-family:monospace;color:#fff;word-break:break-all">${escH(p.token||"")}</span></p>${volver?`<a class="cf-btn" href="${volver}">Hacer otra prueba</a>`:""}</div>`;
+      cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px;margin-bottom:8px">${p.ambiente==="produccion"?"Pago de validación aprobado":"Pago de prueba aprobado"}</h2><p style="color:#aaa;font-size:13px">Token: <span style="font-family:monospace;color:#fff;word-break:break-all">${escH(p.token||"")}</span></p>${volver?`<a class="cf-btn" href="${volver}">Hacer otra prueba</a>`:""}</div>`;
     } else {
       cont.innerHTML=`<div class="cf-card cf-ok"><div class="icon">✅</div><h2 style="color:#fff;font-size:18px">¡Pago confirmado!</h2></div>`;
     }
@@ -13600,7 +13610,7 @@ function concBloqueConfig(prod,casilla,sistema,todas){
     </div>`;
 }
 // ── Pago con tarjeta (Webpay Plus · Transbank). Guestly recauda; la productora define si lo ofrece y el % de cargo ──
-const WP_MODOS={off:{t:"Apagado",c:"#64748b",bg:"#f1f5f9",d:"Tus clientes solo pueden pagar por transferencia."},prueba:{t:"En prueba",c:"#92400E",bg:"#FEF3C7",d:"Solo aparece si al link de pago le agregas &wp=1. Se usan tarjetas de prueba de Transbank: no se cobra dinero real."},activo:{t:"Activo",c:"#166534",bg:"#dcfce7",d:"Todos tus clientes ven «Pagar con tarjeta» con el cargo por servicio incluido."}};
+const WP_MODOS={off:{t:"Apagado",c:"#64748b",bg:"#f1f5f9",d:"Tus clientes solo pueden pagar por transferencia."},prueba:{t:"En prueba",c:"#92400E",bg:"#FEF3C7",d:"Solo aparece si al link de pago le agregas &wp=1, para probar antes de activarlo. En ambiente de pruebas se usan tarjetas de prueba; en producción el cobro es real."},activo:{t:"Activo",c:"#166534",bg:"#dcfce7",d:"Todos tus clientes ven «Pagar con tarjeta» con el cargo por servicio incluido."}};
 let _wpAmbiente=null;
 const WP_CARGO_DEFAULT=10; // % por defecto si no se negocia otro con la productora
 // Campos "pago con tarjeta" para crear / aprobar / editar una productora (solo superadmin)
