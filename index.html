@@ -14807,7 +14807,9 @@ const CART_CSS=`
   .c-slide{display:none;flex-wrap:wrap;background:#141416;border:1px solid #1F1F22;border-radius:22px;overflow:hidden;text-decoration:none}
   .c-slide.on{display:flex}
   .c-slide.c-ban{border:0;background:none}
-  .c-banimg{width:100%;aspect-ratio:800/286;object-fit:cover;display:block;border-radius:22px}
+  .c-slide.c-ban.on{display:block;max-width:900px;margin:0 auto}
+  .c-banimg{width:100%;aspect-ratio:800/286;object-fit:cover;display:block;border-radius:18px}
+  .c-dest:has(.c-ban.on) .c-dots{justify-content:center}
   .c-slide .c-fl{flex:0 0 auto;width:min(420px,100%);aspect-ratio:1/1;height:auto;object-fit:cover;display:block}
   .c-slide .c-tx{flex:1 1 320px;padding:44px 44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px}
   .c-tag{display:inline-block;background:#2BE07B;color:#0B0B0C;font-size:12px;font-weight:700;letter-spacing:1.5px;padding:6px 10px;border-radius:6px}
