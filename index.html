@@ -14807,9 +14807,14 @@ const CART_CSS=`
   .c-slide{display:none;flex-wrap:wrap;background:#141416;border:1px solid #1F1F22;border-radius:22px;overflow:hidden;text-decoration:none}
   .c-slide.on{display:flex}
   .c-slide.c-ban{border:0;background:none}
-  .c-slide.c-ban.on{display:block;max-width:900px;margin:0 auto}
-  .c-banimg{width:100%;aspect-ratio:800/286;object-fit:cover;display:block;border-radius:18px}
-  .c-dest:has(.c-ban.on) .c-dots{justify-content:center}
+  /* Banner tipo Passline: franja de lado a lado bajo el menú, con el banner al centro y su propio color difuminado a los costados */
+  .c-dest.c-full{width:100vw;margin:0 0 0 calc(50% - 50vw);overflow:hidden}
+  .c-dest.c-full .c-slide{border-radius:0;border:0}
+  .c-slide.c-ban{position:relative;background:#111;justify-content:center;align-items:center}
+  .c-slide.c-ban.on{display:flex}
+  .c-banfondo{position:absolute;inset:-40px;width:calc(100% + 80px);height:calc(100% + 80px);object-fit:cover;filter:blur(40px) saturate(1.2);opacity:.75}
+  .c-banimg{position:relative;width:100%;max-width:1200px;aspect-ratio:800/286;object-fit:cover;display:block}
+  .c-dest.c-full .c-dots{justify-content:center;margin-top:14px}
   .c-slide .c-fl{flex:0 0 auto;width:min(420px,100%);aspect-ratio:1/1;height:auto;object-fit:cover;display:block}
   .c-slide .c-tx{flex:1 1 320px;padding:44px 44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px}
   .c-tag{display:inline-block;background:#2BE07B;color:#0B0B0C;font-size:12px;font-weight:700;letter-spacing:1.5px;padding:6px 10px;border-radius:6px}
@@ -14934,14 +14939,14 @@ async function mostrarCartelera(){
   let evs=[];try{evs=(await cartPost({accion:"listar"})).eventos||[];}catch(e){evs=[];}
   _cartEventos=evs;
   const dest=(evs.filter(e=>e.destacado).length?evs.filter(e=>e.destacado):evs).slice(0,5);
-  const slide=(e,i)=>e.banner?`<a class="c-slide c-ban${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}" aria-label="${escH(e.nombre)}"><img class="c-banimg" src="${escH(e.banner)}" alt="${escH(e.nombre)}"></a>`:`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
+  const slide=(e,i)=>e.banner?`<a class="c-slide c-ban${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}" aria-label="${escH(e.nombre)}"><img class="c-banfondo" src="${escH(e.banner)}" alt="" aria-hidden="true"><img class="c-banimg" src="${escH(e.banner)}" alt="${escH(e.nombre)}"></a>`:`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
       ${cartFlyer(e,evs.indexOf(e),"c-fl")}
       <div class="c-tx"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${e.destacado?`<span class="c-tag">DESTACADO</span>`:""}<span style="color:#9A9AA0;font-size:14px">${escH(e.productora.nombre)}</span></div>
         <h1 class="c-h1">${escH(e.nombre)}</h1>
         <div class="c-meta">${escH(cartFecha(e.fecha,true))}${e.hora?` · ${escH(cartHora(e.hora))}`:""}<br>${escH(e.lugar||"Lugar por confirmar")}</div>
         <div><span class="c-btn">Ver evento</span></div></div></a>`;
   document.getElementById("c-main").innerHTML=`
-    ${dest.length?`<section class="c-dest" aria-label="Eventos destacados">${dest.map(slide).join("")}
+    ${dest.length?`<section class="c-dest${dest[0].banner?" c-full":""}" aria-label="Eventos destacados" style="${dest[0].banner?"margin-top:0":""}">${dest.map(slide).join("")}
       ${dest.length>1?`<div class="c-dots">${dest.map((_,i)=>`<button type="button" aria-label="Ver destacado ${i+1}" class="${i===0?"on":""}" onclick="cartIrSlide(${i})"></button>`).join("")}</div>`:""}</section>`:""}
     <section class="c-sec" id="eventos" aria-label="Próximos eventos">
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px">
