@@ -9467,6 +9467,8 @@ function mostrarCompraCF(token){
         </div>`;
 
       actualizarTotalCF(precio);
+      // Close Friends con Webpay activo: solo pago con tarjeta (sin transferencia)
+      cfActivarSoloTarjeta(post.productora_id||ev.productora_id,precio);
 
       // Iniciar countdown timer si aplica
       if(fineTimer&&fineTimer>new Date()){
@@ -9486,6 +9488,31 @@ function mostrarCompraCF(token){
 }
 
 function actualizarTotalCF(precio){
+  actualizarTotalCFBase(precio);
+  const st=window._cfSoloTarjeta;if(!st)return;
+  const cant=parseInt(document.getElementById("cf-cantidad")?.value||1);
+  const modo=document.getElementById("cf-pago-modo")?.value||"separado";
+  const base=cant>=2&&modo!=="separado"?cant*precio:precio;
+  const cargo=Math.round(base*st.pct/100);
+  const totalEl=document.getElementById("cf-total"),labelEl=document.getElementById("cf-total-label");
+  if(totalEl)totalEl.textContent="$"+(base+cargo).toLocaleString("es-CL");
+  if(labelEl)labelEl.textContent=(cant>=2?(modo==="separado"?"Tu entrada con tarjeta (ella paga la suya aparte)":"Total por las dos entradas con tarjeta"):"Total a pagar con tarjeta")+(st.pct?` · incluye ${st.pct}% de cargo por servicio`:"");
+}
+// Si la productora tiene Webpay "Activo", Close Friends se paga solo con tarjeta
+async function cfModoTarjeta(prodId){
+  try{
+    if(!prodId)return null;
+    const p=(await sbGet("productoras",`id=eq.${prodId}&select=webpay_modo,webpay_cargo_pct`))[0];
+    if(p?.webpay_modo!=="activo")return null;
+    return {pct:Math.max(0,Math.min(30,Number(p.webpay_cargo_pct??10)))};
+  }catch(e){return null;}
+}
+async function cfActivarSoloTarjeta(prodId,precio){
+  const st=await cfModoTarjeta(prodId);if(!st)return;
+  window._cfSoloTarjeta=st;actualizarTotalCF(precio);
+  const btn=document.querySelector(".cf-btn");if(btn&&!btn.disabled)btn.textContent="Pagar con tarjeta";
+}
+function actualizarTotalCFBase(precio){
   const cant = parseInt(document.getElementById("cf-cantidad")?.value||1);
   const totalEl = document.getElementById("cf-total");
   const labelEl = document.getElementById("cf-total-label");
@@ -9611,7 +9638,7 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
         await sendEmail(amiga2.email,`¡Tienes una entrada reservada — ${ev.name||"Close Friends"}!`,glMail.amigaReservada({nombre:amiga2.nombre,evento:ev.name||"Close Friends",link:amigaLink}));
       }catch(emailErr){ console.warn("Email amiga no enviado:",emailErr); }
 
-      mostrarPagoCF(ordId);
+      mostrarPagoCF(ordId,{irAWebpay:!!window._cfSoloTarjeta});
     } else {
       // Modo junto (o solo): una orden con el total de entradas
       const ordId = uid(); const codigo = cfCodigo();
@@ -9624,9 +9651,9 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
         conciliado_por:null, conciliado_at:null
       };
       await sbPost("cf_ordenes",[orden]);
-      mostrarPagoCF(ordId);
+      mostrarPagoCF(ordId,{irAWebpay:!!window._cfSoloTarjeta});
     }
-  }catch(e){ btn.disabled=false; btn.textContent="Confirmar y ver datos de pago"; show("Error: "+e.message); }
+  }catch(e){ btn.disabled=false; btn.textContent=window._cfSoloTarjeta?"Pagar con tarjeta":"Confirmar y ver datos de pago"; show("Error: "+e.message); }
 }
 
 function copiarDatosTransferencia(){
@@ -9648,7 +9675,7 @@ function copiarDatosTransferencia(){
 }
 
 // ── PÁGINA PÚBLICA: Pago ──
-function mostrarPagoCF(ordenId){
+function mostrarPagoCF(ordenId,opts){
   const cont = document.getElementById("cf-compra-content")||document.body;
   (async()=>{
     const [ordArr] = await Promise.all([sbGet("cf_ordenes",`id=eq.${ordenId}`)]);
@@ -9668,6 +9695,17 @@ function mostrarPagoCF(ordenId){
     const cfg = cfgArr[0]||{};
     const vence = ord.vence_at ? new Date(ord.vence_at).toLocaleString("es-CL",{hour12:false}) : "24 horas";
     const monto = (ord.monto_total||0).toLocaleString("es-CL");
+    // Solo tarjeta (Webpay activo): sin datos de transferencia. Si ya subió un comprobante, se respeta lo que hizo.
+    let prodIdOrd=ord.productora_id;
+    if(!prodIdOrd){try{prodIdOrd=(await sbGet("eventos",`id=eq.${ord.evento_id}&select=productora_id`))[0]?.productora_id;}catch(e){}}
+    const soloTarjeta=!ord.comprobante_url&&await cfModoTarjeta(prodIdOrd);
+    if(soloTarjeta){
+      cont.innerHTML=`<div class="cf-card"><h3 style="color:#EC4899;margin-bottom:6px">Código de orden: ${escH(ord.codigo||"")}</h3><div style="font-size:12px;color:#888">Reserva válida hasta: ${escH(vence)}</div></div>`;
+      await wpOfrecerCF(ord,cont,{solo:true});
+      if(!document.getElementById("wp-card"))cont.innerHTML+=`<div class="cf-card"><div style="color:#f87171;font-size:13px;text-align:center">El pago con tarjeta no está disponible en este momento. Intenta de nuevo en unos minutos.</div></div>`;
+      else if(opts?.irAWebpay)wpIrAPagar("cf",ord.id);
+      return;
+    }
 
     cont.innerHTML=`
       <div class="cf-card">
@@ -9708,7 +9746,7 @@ function mostrarPagoCF(ordenId){
   })();
 }
 // Agrega arriba de la transferencia la opción "Pagar con tarjeta" si la productora la tiene activa (o en prueba con &wp=1)
-async function wpOfrecerCF(ord,cont){
+async function wpOfrecerCF(ord,cont,opts){
   try{
     let prodId=ord.productora_id;
     if(!prodId){const e=(await sbGet("eventos",`id=eq.${ord.evento_id}&select=productora_id`))[0];prodId=e?.productora_id;}
@@ -9728,8 +9766,8 @@ async function wpOfrecerCF(ord,cont){
       </div>
       <button class="cf-btn" id="wp-btn" style="background:#2BE07B;color:#0B0B0C" onclick="wpIrAPagar('cf','${ord.id}')">Pagar ${f(total)} con Webpay</button>
       <div id="wp-err" class="cf-err" style="display:none"></div>
-      <div style="text-align:center;font-size:11px;color:#666;margin:16px 0 0">— o paga por transferencia, sin cargo —</div>`;
-    cont.insertBefore(div,cont.firstChild);
+      ${opts?.solo?"":`<div style="text-align:center;font-size:11px;color:#666;margin:16px 0 0">— o paga por transferencia, sin cargo —</div>`}`;
+    if(opts?.solo)cont.appendChild(div);else cont.insertBefore(div,cont.firstChild);
   }catch(e){/* sin Webpay: queda solo la transferencia */}
 }
 async function wpIrAPagar(tipo,id,monto){
