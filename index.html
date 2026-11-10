@@ -14807,6 +14807,7 @@ function cartShell(contenido){
           <a href="/#por-que"><b>¿Por qué vender con Guestly?</b><small>Ventas, puerta y comunidad en un solo lugar</small></a>
           <a href="/#servicios"><b>Servicios</b><small>Venta, acreditación, validador QR, embajadores y más</small></a>
           <a href="/#contacto"><b>Contáctanos</b><small>Te mostramos la plataforma</small></a>
+          <a href="/validar" style="border-top:1px solid #26262A;border-radius:0 0 10px 10px;margin-top:4px"><b style="display:flex;align-items:center;gap:8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2BE07B" stroke-width="2.2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>Validador QR</b><small>Para tu equipo en la puerta: entra con el código del evento y el PIN</small></a>
         </div></div>
       <a href="/app">Ingresar</a>
       <a class="ch-cta" href="/?registro">Crea tu evento</a>
@@ -14815,7 +14816,7 @@ function cartShell(contenido){
   <main class="cw" id="c-main">${contenido}</main>
   <footer class="cw c-pie">
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>Circle Group SpA</span></div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/app">Ingresar</a></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/validar">Validador QR</a><a href="/app">Ingresar</a></div>
   </footer>`;
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-dd"))document.querySelectorAll(".ch-menu.on").forEach(m=>{m.classList.remove("on");m.previousElementSibling?.setAttribute("aria-expanded","false");});});
 }
