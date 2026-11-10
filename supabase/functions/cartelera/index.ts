@@ -15,7 +15,15 @@ const TZ = "America/Santiago";
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json", ...CORS } });
 const hdr = { apikey: SB_SERVICE, Authorization: `Bearer ${SB_SERVICE}`, "Content-Type": "application/json" };
-const dbGet = async (t: string, q: string) => { const r = await fetch(`${SB_URL}/rest/v1/${t}?${q}`, { headers: hdr }); if (!r.ok) throw new Error(`${t}: ${await r.text()}`); return await r.json(); };
+const dbGet = async (t: string, q: string): Promise<any> => {
+  const r = await fetch(`${SB_URL}/rest/v1/${t}?${q}`, { headers: hdr });
+  if (!r.ok) {
+    const txt = await r.text();
+    if (q.includes("banner_url") && txt.includes("banner_url")) return dbGet(t, q.replace(",banner_url", "")); // falta sql-cartelera-banner.sql
+    throw new Error(`${t}: ${txt}`);
+  }
+  return await r.json();
+};
 const dbPost = async (t: string, row: unknown) => { const r = await fetch(`${SB_URL}/rest/v1/${t}`, { method: "POST", headers: { ...hdr, Prefer: "return=minimal" }, body: JSON.stringify([row]) }); if (!r.ok) throw new Error(`${t}: ${await r.text()}`); };
 
 const hoyChile = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
@@ -23,7 +31,7 @@ const idOk = (s: unknown) => typeof s === "string" && /^[A-Za-z0-9_-]{1,64}$/.te
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
 const urlOk = (u: unknown) => typeof u === "string" && /^https:\/\//.test(u) ? u : null;
 
-const CAMPOS_EV = "id,name,date,start_time,venue,status,productora_id,publicado,destacado,pub_cf,pub_embajadores,flyer_url,descripcion";
+const CAMPOS_EV = "id,name,date,start_time,venue,status,productora_id,publicado,destacado,pub_cf,pub_embajadores,flyer_url,banner_url,descripcion";
 
 // Solo lo que puede ver cualquiera
 async function armar(evs: any[]) {
@@ -41,7 +49,7 @@ async function armar(evs: any[]) {
     const p = P[e.productora_id] || {};
     return {
       id: e.id, nombre: e.name || "", fecha: e.date || null, hora: e.start_time || null, lugar: e.venue || "",
-      flyer: urlOk(e.flyer_url), descripcion: e.descripcion || "", destacado: !!e.destacado,
+      flyer: urlOk(e.flyer_url), banner: urlOk(e.banner_url), descripcion: e.descripcion || "", destacado: !!e.destacado,
       pasado: !!(e.date && e.date < hoy),
       productora: { id: e.productora_id || null, nombre: p.nombre || "", logo: urlOk(p.logo_url) },
       cf: !!e.pub_cf && cfActivo.has(e.id),

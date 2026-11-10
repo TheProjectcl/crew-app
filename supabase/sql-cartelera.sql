@@ -7,6 +7,7 @@ ALTER TABLE eventos ADD COLUMN IF NOT EXISTS pub_cf BOOLEAN DEFAULT false;      
 ALTER TABLE eventos ADD COLUMN IF NOT EXISTS pub_embajadores BOOLEAN DEFAULT false;  -- botón "Quiero ser embajador"
 ALTER TABLE eventos ADD COLUMN IF NOT EXISTS flyer_url TEXT;
 ALTER TABLE eventos ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE eventos ADD COLUMN IF NOT EXISTS banner_url TEXT;  -- banner 800x286 para el carrusel de la portada
 
 -- Mensajes del formulario "Contáctanos". RLS sin políticas: solo la función del servidor los guarda y lee.
 CREATE TABLE IF NOT EXISTS contactos (

@@ -14501,7 +14501,7 @@ function pubSwitch(id,t,d,on){
 }
 function pubAbrir(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
-  window._pubFlyer=null;
+  window._pubFlyer=null;window._pubBanner=null;
   const sinCols=!("publicado" in ev);
   openModal("Publicación en la cartelera",`
     ${sinCols?`<div class="alert alert-info" style="margin-top:0">Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql). Hasta entonces no se puede publicar.</div>`:""}
@@ -14514,9 +14514,16 @@ function pubAbrir(evId){
       <label class="form-label" style="margin-top:0">Flyer</label>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <div id="pub-fl-prev" style="width:84px;height:84px;border-radius:12px;background:#f2f2ef center/cover no-repeat;${ev.flyer_url?`background-image:url('${escH(ev.flyer_url)}')`:""}"></div>
-        <div><input type="file" id="pub-fl" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="pubElegirFlyer(this)">
+        <div><input type="file" id="pub-fl" accept="image/png,image/jpeg" style="display:none" onchange="pubElegirFlyer(this)">
           <button class="btn" type="button" onclick="document.getElementById('pub-fl').click()">${ev.flyer_url?"Cambiar flyer":"Subir flyer"}</button>
-          <div style="font-size:11px;color:#999;margin-top:4px">Cuadrado, JPG o PNG, máximo 5 MB.</div></div>
+          <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.5">Tamaño: 800 x 800 · Peso máx: 4 MB · Formato: JPG, PNG<br>Si no es cuadrado, se recorta al centro.</div></div>
+      </div>
+      <label class="form-label">Banner de portada</label>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div id="pub-bn-prev" style="width:168px;height:60px;border-radius:8px;background:#f2f2ef center/cover no-repeat;${ev.banner_url?`background-image:url('${escH(ev.banner_url)}')`:""}"></div>
+        <div><input type="file" id="pub-bn" accept="image/png,image/jpeg" style="display:none" onchange="pubElegirBanner(this)">
+          <button class="btn" type="button" onclick="document.getElementById('pub-bn').click()">${ev.banner_url?"Cambiar banner":"Subir banner"}</button>
+          <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.5">Tamaño: 800 x 286 · Peso máx: 4 MB · Formato: JPG, PNG<br>Sale grande arriba en la portada. Sin banner se muestra el flyer.</div></div>
       </div>
       <label class="form-label">Descripción</label>
       <textarea class="form-textarea" id="pub-desc" maxlength="1500" placeholder="Concepto, line up, código de vestimenta, edad mínima…">${escH(ev.descripcion||"")}</textarea>
@@ -14528,32 +14535,53 @@ function pubAbrir(evId){
       <button class="btn btn-primary" id="pub-btn" ${sinCols?"disabled":""} onclick="pubGuardar('${ev.id}')">Guardar</button>
     </div>`);
 }
-function pubElegirFlyer(input){
+// Ajusta una imagen al tamaño pedido (recorte al centro). Banner: si la imagen es grande, se guarda al doble para que se vea nítido.
+function pubProcesarImagen(input,{w,h,max2x,prevId,clave,nombre}){
   const f=input.files?.[0];if(!f)return;
-  if(f.size>5*1024*1024){$("pub-err").textContent="El flyer pesa más de 5 MB.";input.value="";return;}
-  window._pubFlyer=f;$("pub-err").textContent="";
-  const r=new FileReader();r.onload=()=>{const p=$("pub-fl-prev");if(p)p.style.backgroundImage=`url('${r.result}')`;};r.readAsDataURL(f);
+  const err=$("pub-err");err.textContent="";
+  if(!/^image\/(jpeg|png)$/.test(f.type)){err.textContent=`El ${nombre} debe ser JPG o PNG.`;input.value="";return;}
+  if(f.size>4*1024*1024){err.textContent=`El ${nombre} pesa más de 4 MB.`;input.value="";return;}
+  const url=URL.createObjectURL(f),img=new Image();
+  img.onload=()=>{
+    const W=img.naturalWidth,H=img.naturalHeight,r=w/h;
+    let cw=W,ch=W/r;if(ch>H){ch=H;cw=H*r;}
+    const esc=max2x&&cw>=w*2?2:1,ow=w*esc,oh=h*esc;
+    const c=document.createElement("canvas");c.width=ow;c.height=oh;const ctx=c.getContext("2d");
+    ctx.fillStyle="#000";ctx.fillRect(0,0,ow,oh);ctx.imageSmoothingQuality="high";ctx.drawImage(img,(W-cw)/2,(H-ch)/2,cw,ch,0,0,ow,oh);
+    URL.revokeObjectURL(url);
+    c.toBlob(b=>{
+      if(!b){err.textContent="No se pudo procesar la imagen.";return;}
+      window[clave]=new File([b],nombre+".jpg",{type:"image/jpeg"});
+      const p=$(prevId);if(p)p.style.backgroundImage=`url('${c.toDataURL("image/jpeg",.7)}')`;
+      if(W<w||H<h)err.innerHTML=`<span style="color:#92400E">El ${nombre} mide ${W} x ${H}: se verá menos nítido. Ideal ${w} x ${h} o más.</span>`;
+    },"image/jpeg",.88);
+  };
+  img.onerror=()=>{URL.revokeObjectURL(url);err.textContent="No se pudo leer la imagen.";input.value="";};
+  img.src=url;
 }
+function pubElegirFlyer(input){pubProcesarImagen(input,{w:800,h:800,max2x:false,prevId:"pub-fl-prev",clave:"_pubFlyer",nombre:"flyer"});}
+function pubElegirBanner(input){pubProcesarImagen(input,{w:800,h:286,max2x:true,prevId:"pub-bn-prev",clave:"_pubBanner",nombre:"banner"});}
 async function pubGuardar(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
   const btn=$("pub-btn"),err=$("pub-err");btn.disabled=true;btn.textContent="Guardando…";err.textContent="";
   try{
     const cambios={publicado:!!$("pub-on")?.checked,pub_cf:!!$("pub-cf")?.checked,pub_embajadores:!!$("pub-emb")?.checked,descripcion:($("pub-desc")?.value||"").trim()};
     if(CU.role==="superadmin"&&$("pub-dest"))cambios.destacado=!!$("pub-dest").checked;
-    if(window._pubFlyer){
-      const f=window._pubFlyer,ext=((f.name.split(".").pop()||"jpg").toLowerCase().replace("jpeg","jpg")).replace(/[^a-z0-9]/g,"")||"jpg";
-      const path=`flyers/${evId}_${Date.now()}.${ext}`;
-      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":f.type||"image/jpeg","x-upsert":"true"},body:f});
-      if(!up.ok)throw new Error("No se pudo subir el flyer");
-      cambios.flyer_url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
-    }
+    const subir=async(f,carpeta)=>{
+      const path=`${carpeta}/${evId}_${Date.now()}.jpg`;
+      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:f});
+      if(!up.ok)throw new Error(`No se pudo subir el ${carpeta==="flyers"?"flyer":"banner"}`);
+      return `${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+    };
+    if(window._pubFlyer)cambios.flyer_url=await subir(window._pubFlyer,"flyers");
+    if(window._pubBanner)cambios.banner_url=await subir(window._pubBanner,"banners");
     await sbPatch("eventos",`id=eq.${evId}`,cambios);
-    Object.assign(ev,cambios);window._pubFlyer=null;
+    Object.assign(ev,cambios);window._pubFlyer=null;window._pubBanner=null;
     try{await log("publicacion_evento","evento",evId,`Cartelera: ${cambios.publicado?"publicado":"no publicado"}`);}catch(e){}
     closeModal();toast(cambios.publicado?"Evento publicado en la cartelera":"Cambios guardados","success");
     if(CURRENT_VIEW==="dashboard")VIEWS.dashboard();
   }catch(e){
-    err.textContent=/publicado|pub_cf|pub_embajadores|descripcion|flyer_url|destacado/.test(e.message||"")?"Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql).":"No se pudo guardar: "+(e.message||e);
+    err.textContent=/banner_url/.test(e.message||"")?"Falta instalar el banner en Supabase (supabase/sql-cartelera-banner.sql).":/publicado|pub_cf|pub_embajadores|descripcion|flyer_url|destacado/.test(e.message||"")?"Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql).":"No se pudo guardar: "+(e.message||e);
     btn.disabled=false;btn.textContent="Guardar";
   }
 }
@@ -14778,8 +14806,10 @@ const CART_CSS=`
   .c-dest{position:relative;margin-top:28px}
   .c-slide{display:none;flex-wrap:wrap;background:#141416;border:1px solid #1F1F22;border-radius:22px;overflow:hidden;text-decoration:none}
   .c-slide.on{display:flex}
-  .c-slide .c-fl{flex:1 1 460px;min-height:360px;max-height:520px;width:100%;object-fit:cover;display:block}
-  .c-slide .c-tx{flex:1 1 380px;padding:44px 44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px}
+  .c-slide.c-ban{border:0;background:none}
+  .c-banimg{width:100%;aspect-ratio:800/286;object-fit:cover;display:block;border-radius:22px}
+  .c-slide .c-fl{flex:0 0 auto;width:min(420px,100%);aspect-ratio:1/1;height:auto;object-fit:cover;display:block}
+  .c-slide .c-tx{flex:1 1 320px;padding:44px 44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px}
   .c-tag{display:inline-block;background:#2BE07B;color:#0B0B0C;font-size:12px;font-weight:700;letter-spacing:1.5px;padding:6px 10px;border-radius:6px}
   .c-h1{margin:0;font-family:"Space Grotesk",Inter,sans-serif;font-size:52px;line-height:1.02;letter-spacing:-1px}
   .c-meta{color:#D6D6D2;font-size:17px;line-height:1.6}
@@ -14831,7 +14861,7 @@ const CART_CSS=`
   .c-err{color:#7f1d1d;font-size:13px;font-weight:600}
   .c-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   html,body{overflow-x:hidden}
-  @media (max-width:640px){.ch-menu{left:0;right:auto;width:min(320px,calc(100vw - 24px))}.c-pie{flex-direction:column;align-items:flex-start}.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
+  @media (max-width:640px){.c-slide .c-fl{width:100%}.ch-menu{left:0;right:auto;width:min(320px,calc(100vw - 24px))}.c-pie{flex-direction:column;align-items:flex-start}.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
 `;
 function cartShell(contenido){
   document.title="Guestly · Eventos";
@@ -14902,7 +14932,7 @@ async function mostrarCartelera(){
   let evs=[];try{evs=(await cartPost({accion:"listar"})).eventos||[];}catch(e){evs=[];}
   _cartEventos=evs;
   const dest=(evs.filter(e=>e.destacado).length?evs.filter(e=>e.destacado):evs).slice(0,5);
-  const slide=(e,i)=>`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
+  const slide=(e,i)=>e.banner?`<a class="c-slide c-ban${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}" aria-label="${escH(e.nombre)}"><img class="c-banimg" src="${escH(e.banner)}" alt="${escH(e.nombre)}"></a>`:`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
       ${cartFlyer(e,evs.indexOf(e),"c-fl")}
       <div class="c-tx"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${e.destacado?`<span class="c-tag">DESTACADO</span>`:""}<span style="color:#9A9AA0;font-size:14px">${escH(e.productora.nombre)}</span></div>
         <h1 class="c-h1">${escH(e.nombre)}</h1>
