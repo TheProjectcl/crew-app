@@ -9882,7 +9882,7 @@ function mostrarResultadoPago(pagoId){
     const tipoPago={VD:"Débito",VP:"Prepago",VN:"Crédito",VC:"Crédito en cuotas",SI:"Crédito 3 cuotas sin interés",S2:"Crédito 2 cuotas sin interés",NC:"Crédito cuotas sin interés"}[r.payment_type_code]||"Tarjeta";
     const fila=(a,b)=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#aaa;margin-bottom:5px"><span>${a}</span><span style="color:#fff;text-align:right">${b}</span></div>`;
     document.getElementById("wp-comprobante").innerHTML=`<div class="cf-card"><h3>🧾 Comprobante de pago</h3>
-      ${fila("Comercio","Guestly · Circle Group SpA")}${fila("Orden de compra",p.buy_order||"")}
+      ${fila("Comercio","Guestly")}${fila("Orden de compra",p.buy_order||"")}
       ${fila("Valor",f(p.monto_base))}${fila(`Cargo por servicio (${Number(p.cargo_pct)||0}%)`,f(p.cargo))}${fila("<strong>Total pagado</strong>",`<strong>${f(p.total)}</strong>`)}
       ${fila("Tipo de pago",tipoPago)}${r.installments_number>1?fila("Cuotas",r.installments_number):""}
       ${r.card_detail?.card_number?fila("Tarjeta","•••• "+r.card_detail.card_number):""}${r.authorization_code?fila("Código de autorización",r.authorization_code):""}
@@ -14858,7 +14858,7 @@ function cartShell(contenido){
   </div></header>
   <main class="cw" id="c-main">${contenido}</main>
   <footer class="cw c-pie">
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>Circle Group SpA</span></div>
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>© ${new Date().getFullYear()} Guestly</span></div>
     <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/validar">Validador QR</a><a href="/app">Ingresar</a></div>
   </footer>`;
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-dd"))document.querySelectorAll(".ch-menu.on").forEach(m=>{m.classList.remove("on");m.previousElementSibling?.setAttribute("aria-expanded","false");});});
