@@ -2850,6 +2850,7 @@ VIEWS.dashboard=()=>{
       <div style="font-size:13px;color:#999">${ev.date} · ${ev.venue}</div>
       ${badge({active:"Activo",draft:"Borrador",closed:"Finalizado"}[ev.status]||ev.status,{active:"teal",draft:"amber",closed:"gray"}[ev.status]||"gray")}
       ${valChipDashboard(ev.id)}
+      ${pubChipDashboard(ev)}
       ${EV_DENTRO?"":`<select style="margin-left:4px;font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid #ddd;background:#fff" onchange="currentEvId=this.value;VIEWS.dashboard()">
         ${prodEvs.filter(esEventoOperativo).map(e=>`<option value="${e.id}" ${e.id===currentEvId?"selected":""}>${e.name}</option>`).join("")}
       </select>`}
@@ -14446,6 +14447,76 @@ async function valPost(body){
   if(!r.ok)throw Object.assign(new Error(j.error||"No se pudo completar"),{status:r.status});
   return j;
 }
+// ── Publicación del evento en la cartelera de guestly.cl (dueño, coordinador o superadmin) ──
+function pubChipDashboard(ev){
+  if(!CU||!["owner","coordinator","superadmin"].includes(CU.role)||!ev)return "";
+  const on=!!ev.publicado;
+  return `<button type="button" onclick="pubAbrir('${ev.id}')" title="Publicación en la cartelera de guestly.cl" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 11px;border-radius:20px;cursor:pointer;border:1px solid ${on?"#86efac":"#e5e5e5"};background:${on?"#f0fdf4":"#fff"};color:${on?"#166534":"#555"}">
+    <span style="width:7px;height:7px;border-radius:50%;background:${on?"#16a34a":"#bbb"}"></span>Cartelera: ${on?"publicado":"no publicado"}</button>`;
+}
+function pubSwitch(id,t,d,on){
+  return `<label style="display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px 0;border-top:1px solid #f0f0f0;cursor:pointer">
+    <span><span style="display:block;font-weight:600;font-size:14px">${t}</span><span style="display:block;color:#777;font-size:12px;line-height:1.45;margin-top:2px">${d}</span></span>
+    <input type="checkbox" id="${id}" ${on?"checked":""} style="width:20px;height:20px;accent-color:#13894A;flex:0 0 auto"></label>`;
+}
+function pubAbrir(evId){
+  const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
+  window._pubFlyer=null;
+  const sinCols=!("publicado" in ev);
+  openModal("Publicación en la cartelera",`
+    ${sinCols?`<div class="alert alert-info" style="margin-top:0">Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql). Hasta entonces no se puede publicar.</div>`:""}
+    <div style="font-size:13px;color:#666;margin-bottom:6px">Elige qué ve el público de <strong>${escH(ev.name)}</strong> en guestly.cl.</div>
+    ${pubSwitch("pub-on","Publicar en la cartelera","El evento aparece en guestly.cl para todo el público.",ev.publicado)}
+    ${pubSwitch("pub-cf","Botón «Postular a Close Friends»","Solo se muestra si el módulo Close Friends del evento está activo.",ev.pub_cf)}
+    ${pubSwitch("pub-emb","Botón «Quiero ser embajador»","Las postulaciones llegan a tu sección de embajadores para aprobarlas.",ev.pub_embajadores)}
+    ${CU.role==="superadmin"?pubSwitch("pub-dest","Destacado en la portada","Aparece en el carrusel de arriba (lo decide Guestly).",ev.destacado):""}
+    <div style="border-top:1px solid #f0f0f0;padding-top:12px;margin-top:2px">
+      <label class="form-label" style="margin-top:0">Flyer</label>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div id="pub-fl-prev" style="width:84px;height:84px;border-radius:12px;background:#f2f2ef center/cover no-repeat;${ev.flyer_url?`background-image:url('${escH(ev.flyer_url)}')`:""}"></div>
+        <div><input type="file" id="pub-fl" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="pubElegirFlyer(this)">
+          <button class="btn" type="button" onclick="document.getElementById('pub-fl').click()">${ev.flyer_url?"Cambiar flyer":"Subir flyer"}</button>
+          <div style="font-size:11px;color:#999;margin-top:4px">Cuadrado, JPG o PNG, máximo 5 MB.</div></div>
+      </div>
+      <label class="form-label">Descripción</label>
+      <textarea class="form-textarea" id="pub-desc" maxlength="1500" placeholder="Concepto, line up, código de vestimenta, edad mínima…">${escH(ev.descripcion||"")}</textarea>
+    </div>
+    <div id="pub-err" style="color:#b91c1c;font-size:12px;margin-top:8px"></div>
+    <div class="modal-footer" style="flex-wrap:wrap">
+      ${ev.publicado?`<a class="btn" href="/?evento=${encodeURIComponent(ev.id)}" target="_blank" rel="noopener">Ver en la cartelera</a>`:""}
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="pub-btn" ${sinCols?"disabled":""} onclick="pubGuardar('${ev.id}')">Guardar</button>
+    </div>`);
+}
+function pubElegirFlyer(input){
+  const f=input.files?.[0];if(!f)return;
+  if(f.size>5*1024*1024){$("pub-err").textContent="El flyer pesa más de 5 MB.";input.value="";return;}
+  window._pubFlyer=f;$("pub-err").textContent="";
+  const r=new FileReader();r.onload=()=>{const p=$("pub-fl-prev");if(p)p.style.backgroundImage=`url('${r.result}')`;};r.readAsDataURL(f);
+}
+async function pubGuardar(evId){
+  const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
+  const btn=$("pub-btn"),err=$("pub-err");btn.disabled=true;btn.textContent="Guardando…";err.textContent="";
+  try{
+    const cambios={publicado:!!$("pub-on")?.checked,pub_cf:!!$("pub-cf")?.checked,pub_embajadores:!!$("pub-emb")?.checked,descripcion:($("pub-desc")?.value||"").trim()};
+    if(CU.role==="superadmin"&&$("pub-dest"))cambios.destacado=!!$("pub-dest").checked;
+    if(window._pubFlyer){
+      const f=window._pubFlyer,ext=((f.name.split(".").pop()||"jpg").toLowerCase().replace("jpeg","jpg")).replace(/[^a-z0-9]/g,"")||"jpg";
+      const path=`flyers/${evId}_${Date.now()}.${ext}`;
+      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":f.type||"image/jpeg","x-upsert":"true"},body:f});
+      if(!up.ok)throw new Error("No se pudo subir el flyer");
+      cambios.flyer_url=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+    }
+    await sbPatch("eventos",`id=eq.${evId}`,cambios);
+    Object.assign(ev,cambios);window._pubFlyer=null;
+    try{await log("publicacion_evento","evento",evId,`Cartelera: ${cambios.publicado?"publicado":"no publicado"}`);}catch(e){}
+    closeModal();toast(cambios.publicado?"Evento publicado en la cartelera":"Cambios guardados","success");
+    if(CURRENT_VIEW==="dashboard")VIEWS.dashboard();
+  }catch(e){
+    err.textContent=/publicado|pub_cf|pub_embajadores|descripcion|flyer_url|destacado/.test(e.message||"")?"Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql).":"No se pudo guardar: "+(e.message||e);
+    btn.disabled=false;btn.textContent="Guardar";
+  }
+}
 // ── Dashboard: chip con código + PIN (solo dueño, coordinador o superadmin) ──
 const _valPin={};
 function valChipDashboard(evId){
@@ -14614,6 +14685,297 @@ async function valSalir(){
   location.href="/validar";
 }
 
+// ═══════════════════════════════════
+// CARTELERA PÚBLICA (guestly.cl): eventos publicados de todas las productoras
+// Los datos vienen de la función "cartelera", que solo entrega eventos publicados y campos públicos.
+// ═══════════════════════════════════
+async function cartPost(body){
+  let r;try{r=await fetch(`${SB_URL}/functions/v1/cartelera`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify(body)});}
+  catch(e){throw new Error("No pudimos conectarnos. Revisa tu internet.");}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error(j.error||"No disponible"),{status:r.status,sinFuncion:r.status===404&&!j.error});
+  return j;
+}
+const CART_DIAS=["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+const CART_MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+function cartFecha(f,larga){
+  if(!f||!/^\d{4}-\d{2}-\d{2}/.test(f))return "";
+  const [y,m,d]=f.slice(0,10).split("-").map(Number),dt=new Date(y,m-1,d);
+  return larga?`${CART_DIAS[dt.getDay()]} ${d} de ${CART_MESES[m-1]}`:{d:String(d),m:CART_MESES[m-1].slice(0,3).toUpperCase()};
+}
+const cartHora=h=>h&&/^\d{1,2}:\d{2}/.test(h)?h.slice(0,5)+" hrs":"";
+// Flyer del evento, o un bloque con el nombre si aún no sube flyer
+const CART_FONDOS=[["#2BE07B","#0B0B0C"],["#26262A","#F4F4F2"],["#E9E7E1","#0B0B0C"],["#1D3B2B","#F4F4F2"],["#3A3A40","#F4F4F2"],["#C9F7DC","#0B0B0C"]];
+function cartFlyer(ev,i,cls){
+  if(ev.flyer)return `<img class="${cls}" src="${escH(ev.flyer)}" alt="Flyer de ${escH(ev.nombre)}" loading="lazy">`;
+  const [bg,fg]=CART_FONDOS[(i||0)%CART_FONDOS.length];
+  return `<div class="${cls} cart-sinflyer" style="background:${bg};color:${fg}"><span>${escH(ev.nombre)}</span></div>`;
+}
+const CART_CSS=`
+  *{box-sizing:border-box}
+  body{margin:0;background:#0B0B0C;color:#F4F4F2;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+  a{color:inherit}
+  .cw{max-width:1360px;margin:0 auto;padding:0 20px}
+  .ch{position:sticky;top:0;z-index:20;background:rgba(11,11,12,.94);backdrop-filter:blur(10px);border-bottom:1px solid #1F1F22}
+  .ch .cw{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}
+  .ch-logo{display:flex;align-items:center;text-decoration:none}
+  .ch-bus{flex:1 1 320px;display:flex;align-items:center;background:#17171A;border:1px solid #26262A;border-radius:999px;height:46px;padding:0 16px;min-width:220px}
+  .ch-bus input{flex:1;background:transparent;border:0;outline:none;color:#F4F4F2;font-size:15px;padding:0 10px;font-family:inherit;min-width:0}
+  .ch-nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .ch-nav a,.ch-nav button{color:#D6D6D2;text-decoration:none;font-size:15px;padding:12px 12px;background:none;border:0;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px}
+  .ch-nav a:hover,.ch-nav button:hover{color:#fff}
+  .ch-cta{background:#2BE07B!important;color:#0B0B0C!important;font-weight:700;border-radius:999px;padding:13px 20px!important;margin-left:6px}
+  .ch-dd{position:relative}
+  .ch-menu{position:absolute;top:50px;right:0;width:320px;background:#141416;border:1px solid #26262A;border-radius:14px;padding:8px;box-shadow:0 18px 50px rgba(0,0,0,.55);display:none}
+  .ch-menu.on{display:block}
+  .ch-menu a{display:block!important;padding:13px 14px!important;border-radius:10px;color:#F4F4F2!important}
+  .ch-menu a:hover{background:#1C1C20}
+  .ch-menu b{display:block;font-size:15px;font-weight:600}
+  .ch-menu small{display:block;font-size:13px;color:#9A9AA0;margin-top:3px}
+  .c-sec{padding-top:64px}
+  .c-h2{margin:0;font-family:"Space Grotesk",Inter,sans-serif;font-size:32px;letter-spacing:-.5px}
+  .c-sub{margin:6px 0 0;color:#9A9AA0;font-size:15px}
+  .c-dest{position:relative;margin-top:28px}
+  .c-slide{display:none;flex-wrap:wrap;background:#141416;border:1px solid #1F1F22;border-radius:22px;overflow:hidden;text-decoration:none}
+  .c-slide.on{display:flex}
+  .c-slide .c-fl{flex:1 1 460px;min-height:360px;max-height:520px;width:100%;object-fit:cover;display:block}
+  .c-slide .c-tx{flex:1 1 380px;padding:44px 44px 40px;display:flex;flex-direction:column;justify-content:center;gap:16px}
+  .c-tag{display:inline-block;background:#2BE07B;color:#0B0B0C;font-size:12px;font-weight:700;letter-spacing:1.5px;padding:6px 10px;border-radius:6px}
+  .c-h1{margin:0;font-family:"Space Grotesk",Inter,sans-serif;font-size:52px;line-height:1.02;letter-spacing:-1px}
+  .c-meta{color:#D6D6D2;font-size:17px;line-height:1.6}
+  .c-btn{display:inline-block;background:#2BE07B;color:#0B0B0C;text-decoration:none;font-weight:700;font-size:16px;padding:15px 26px;border-radius:999px;border:0;cursor:pointer;font-family:inherit}
+  .c-btn2{display:inline-block;border:1px solid #3A3A40;color:#F4F4F2;text-decoration:none;font-weight:600;font-size:16px;padding:15px 26px;border-radius:999px;background:none;cursor:pointer;font-family:inherit}
+  .c-dots{display:flex;gap:8px;margin-top:16px}
+  .c-dots button{width:8px;height:8px;border-radius:4px;border:0;background:#3A3A40;cursor:pointer;padding:0}
+  .c-dots button.on{width:28px;background:#2BE07B}
+  .c-chips{display:flex;gap:8px;flex-wrap:wrap}
+  .c-chip{height:42px;padding:0 16px;border-radius:999px;font-size:14px;font-family:inherit;cursor:pointer;font-weight:600;background:transparent;color:#D6D6D2;border:1px solid #3A3A40}
+  .c-chip.on{background:#F4F4F2;color:#0B0B0C;border-color:#F4F4F2}
+  .c-fila{display:flex;gap:20px;overflow-x:auto;padding-bottom:14px;scroll-snap-type:x mandatory}
+  .c-card{flex:0 0 250px;text-decoration:none;color:#F4F4F2;scroll-snap-align:start}
+  .c-card .c-im{width:250px;height:250px;border-radius:16px;object-fit:cover;display:block}
+  .c-card .c-fe{position:absolute;top:12px;left:12px;background:#0B0B0C;color:#F4F4F2;font-size:12px;font-weight:700;padding:6px 9px;border-radius:8px;line-height:1.15;text-align:center}
+  .c-card b{display:block;font-size:16px;margin-top:12px}
+  .c-card small{display:block;color:#9A9AA0;font-size:14px;margin-top:4px}
+  .c-card em{display:block;color:#2BE07B;font-size:13px;margin-top:6px;font-weight:600;font-style:normal}
+  .cart-sinflyer{display:flex;align-items:flex-end;padding:16px;font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;font-size:22px;line-height:1.05}
+  .c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{display:flex;padding:32px;font-size:44px;letter-spacing:-1px}
+  .c-vacio{background:#141416;border:1px solid #1F1F22;border-radius:16px;padding:40px;text-align:center;color:#9A9AA0;font-size:15px}
+  .c-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
+  .c-box{background:#141416;border:1px solid #1F1F22;border-radius:16px;padding:24px 26px}
+  .c-box b{display:block;font-size:18px}
+  .c-box p{color:#B4B4B0;font-size:15px;line-height:1.55;margin:6px 0 0}
+  .c-num{width:44px;height:44px;border-radius:12px;background:#13281D;color:#2BE07B;display:flex;align-items:center;justify-content:center;font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;margin-bottom:14px}
+  .c-contacto{background:#2BE07B;color:#0B0B0C;border-radius:24px;padding:44px;display:flex;flex-wrap:wrap;gap:36px}
+  .c-contacto form{flex:1 1 440px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .c-contacto label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+  .c-contacto input,.c-contacto textarea{height:46px;border-radius:10px;border:0;padding:0 14px;font-size:15px;font-family:inherit;color:#0B0B0C;background:#fff}
+  .c-contacto textarea{height:auto;padding:12px 14px;resize:vertical}
+  .c-contacto .full{grid-column:1/-1}
+  .c-contacto button{height:52px;border-radius:999px;border:0;background:#0B0B0C;color:#F4F4F2;font-weight:700;font-size:16px;font-family:inherit;cursor:pointer}
+  .c-pie{padding:56px 0 44px;display:flex;flex-wrap:wrap;gap:20px;justify-content:space-between;align-items:center;color:#8A8A90;font-size:14px}
+  .c-pie a{color:#B4B4B0;text-decoration:none}
+  .c-ev{display:flex;flex-wrap:wrap;gap:40px;margin-top:12px}
+  .c-ev .c-izq{flex:1 1 480px;min-width:0;display:flex;flex-direction:column;gap:26px}
+  .c-ev .c-der{flex:1 1 400px;min-width:0;display:flex;flex-direction:column;gap:14px}
+  .c-evfl{width:100%;max-width:620px;aspect-ratio:1/1;border-radius:20px;object-fit:cover;display:block}
+  .c-acc{width:100%;min-height:74px;border-radius:16px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;gap:16px;text-decoration:none;background:#141416;color:#F4F4F2;border:1px solid #26262A}
+  .c-acc:hover{border-color:#2BE07B}
+  .c-acc.pri{background:#2BE07B;color:#0B0B0C;border-color:#2BE07B}
+  .c-acc b{display:block;font-size:17px}
+  .c-acc small{display:block;font-size:14px;opacity:.75;margin-top:3px}
+  .c-prod{display:flex;align-items:center;gap:14px;text-decoration:none;background:#141416;border:1px solid #1F1F22;border-radius:16px;padding:16px 18px;max-width:620px}
+  .c-prod img,.c-prod .c-pl{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#26262A;flex:0 0 auto}
+  .c-back{display:inline-flex;align-items:center;gap:8px;color:#B4B4B0;text-decoration:none;font-size:14px;padding:22px 0 6px}
+  .c-err{color:#7f1d1d;font-size:13px;font-weight:600}
+  @media (max-width:640px){.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
+`;
+function cartShell(contenido){
+  document.title="Guestly · Eventos";
+  document.body.innerHTML=`<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><style>${CART_CSS}</style>
+  <header class="ch"><div class="cw">
+    <a class="ch-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",24,"display:block")}</a>
+    <form class="ch-bus" role="search" onsubmit="event.preventDefault();cartBuscar(this.q.value)">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9AA0" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <label for="cq" style="position:absolute;left:-9999px">Buscar eventos</label>
+      <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" oninput="cartBuscar(this.value)">
+    </form>
+    <nav class="ch-nav" aria-label="Principal">
+      <a class="ch-ev" href="/#eventos">Eventos</a>
+      <div class="ch-dd"><button type="button" aria-expanded="false" onclick="const m=this.nextElementSibling;m.classList.toggle('on');this.setAttribute('aria-expanded',m.classList.contains('on'))">¿Eres productor? <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
+        <div class="ch-menu">
+          <a href="/#por-que"><b>¿Por qué vender con Guestly?</b><small>Ventas, puerta y comunidad en un solo lugar</small></a>
+          <a href="/#servicios"><b>Servicios</b><small>Venta, acreditación, validador QR, embajadores y más</small></a>
+          <a href="/#contacto"><b>Contáctanos</b><small>Te mostramos la plataforma</small></a>
+        </div></div>
+      <a href="/app">Ingresar</a>
+      <a class="ch-cta" href="/?registro">Crea tu evento</a>
+    </nav>
+  </div></header>
+  <main class="cw" id="c-main">${contenido}</main>
+  <footer class="cw c-pie">
+    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>Circle Group SpA</span></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/app">Ingresar</a></div>
+  </footer>`;
+  document.addEventListener("click",e=>{if(!e.target.closest(".ch-dd"))document.querySelectorAll(".ch-menu.on").forEach(m=>{m.classList.remove("on");m.previousElementSibling?.setAttribute("aria-expanded","false");});});
+}
+function cartCard(ev,i){
+  const f=cartFecha(ev.fecha);
+  return `<a class="c-card" href="/?evento=${encodeURIComponent(ev.id)}" data-buscar="${escH((ev.nombre+" "+ev.lugar+" "+ev.productora.nombre).toLowerCase())}">
+    <div style="position:relative">${cartFlyer(ev,i,"c-im")}${f?`<span class="c-fe">${f.d}<br>${f.m}</span>`:""}</div>
+    <b>${escH(ev.nombre)}</b><small>${escH(ev.lugar||"Lugar por confirmar")}</small><em>${escH(ev.productora.nombre)}</em></a>`;
+}
+let _cartEventos=[],_cartFiltro="todos",_cartQ="";
+function cartPintarFila(){
+  const el=document.getElementById("c-fila");if(!el)return;
+  const hoy=new Date();hoy.setHours(0,0,0,0);
+  const lim=new Date(hoy);lim.setDate(lim.getDate()+(_cartFiltro==="semana"?7:31));
+  const q=_cartQ.trim().toLowerCase();
+  const lista=_cartEventos.map((e,i)=>({e,i})).filter(({e})=>{
+    if(_cartFiltro!=="todos"&&e.fecha){const [y,m,d]=e.fecha.split("-").map(Number);if(new Date(y,m-1,d)>lim)return false;}
+    return !q||(e.nombre+" "+e.lugar+" "+e.productora.nombre).toLowerCase().includes(q);
+  });
+  el.innerHTML=lista.length?lista.map(({e,i})=>cartCard(e,i)).join(""):`<div class="c-vacio" style="flex:1">${_cartEventos.length?"No hay eventos con ese filtro.":"Pronto verás aquí los próximos eventos."}</div>`;
+  document.querySelectorAll(".c-chip").forEach(b=>b.classList.toggle("on",b.dataset.f===_cartFiltro));
+}
+function cartFiltrar(f){_cartFiltro=f;cartPintarFila();}
+function cartBuscar(q){
+  _cartQ=q||"";
+  if(!document.getElementById("c-fila")){if(_cartQ.trim())location.href="/?buscar="+encodeURIComponent(_cartQ.trim());return;}
+  cartPintarFila();
+  if(_cartQ.trim())document.getElementById("eventos")?.scrollIntoView({behavior:"smooth",block:"start"});
+}
+const CART_SERVICIOS=[
+  ["Venta y listas","Close Friends con aprobación, listas, cumpleaños y mesas VIP, cada uno con su link."],
+  ["Cobros y conciliación","Cobra con tarjeta o transferencia y Guestly cuadra cada pago con su venta."],
+  ["Acreditación digital","Lista con nombre y RUT en la puerta, cruzada con los QR ya validados."],
+  ["Validador QR","Tu equipo entra con el código del evento y un PIN que cambia cada 12 horas. Sin cuentas."],
+  ["Embajadores","Postulaciones por evento, aprobación y links propios para cada embajador."],
+  ["Base de datos y cierre","Tu público con cumpleaños y contacto, y el cierre del evento con sus números."]
+];
+async function mostrarCartelera(){
+  cartShell(`<div style="padding:80px 0;text-align:center;color:#8A8A90">Cargando eventos…</div>`);
+  let evs=[];try{evs=(await cartPost({accion:"listar"})).eventos||[];}catch(e){evs=[];}
+  _cartEventos=evs;
+  const dest=(evs.filter(e=>e.destacado).length?evs.filter(e=>e.destacado):evs).slice(0,5);
+  const slide=(e,i)=>`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
+      ${cartFlyer(e,evs.indexOf(e),"c-fl")}
+      <div class="c-tx"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${e.destacado?`<span class="c-tag">DESTACADO</span>`:""}<span style="color:#9A9AA0;font-size:14px">${escH(e.productora.nombre)}</span></div>
+        <h1 class="c-h1">${escH(e.nombre)}</h1>
+        <div class="c-meta">${escH(cartFecha(e.fecha,true))}${e.hora?` · ${escH(cartHora(e.hora))}`:""}<br>${escH(e.lugar||"Lugar por confirmar")}</div>
+        <div><span class="c-btn">Ver evento</span></div></div></a>`;
+  document.getElementById("c-main").innerHTML=`
+    ${dest.length?`<section class="c-dest" aria-label="Eventos destacados">${dest.map(slide).join("")}
+      ${dest.length>1?`<div class="c-dots">${dest.map((_,i)=>`<button type="button" aria-label="Ver destacado ${i+1}" class="${i===0?"on":""}" onclick="cartIrSlide(${i})"></button>`).join("")}</div>`:""}</section>`:""}
+    <section class="c-sec" id="eventos" aria-label="Próximos eventos">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px">
+        <div><h2 class="c-h2">Próximos eventos</h2><p class="c-sub">De todas las productoras que trabajan con Guestly</p></div>
+        <div class="c-chips"><button type="button" class="c-chip on" data-f="todos" onclick="cartFiltrar('todos')">Todos</button><button type="button" class="c-chip" data-f="semana" onclick="cartFiltrar('semana')">Esta semana</button><button type="button" class="c-chip" data-f="mes" onclick="cartFiltrar('mes')">Este mes</button></div>
+      </div>
+      <div class="c-fila" id="c-fila"></div>
+    </section>
+    <section class="c-sec" id="por-que" aria-label="Por qué vender con Guestly" style="padding-top:96px">
+      <div style="border-top:1px solid #1F1F22;padding-top:60px;display:flex;flex-wrap:wrap;gap:44px">
+        <div style="flex:1 1 360px"><div style="color:#2BE07B;font-size:13px;font-weight:700;letter-spacing:2px">PARA PRODUCTORES</div>
+          <h2 class="c-h2" style="font-size:42px;line-height:1.05;margin-top:12px">¿Por qué vender con Guestly?</h2>
+          <p style="margin:18px 0 0;color:#B4B4B0;font-size:17px;line-height:1.6;max-width:460px">Una sola plataforma para vender, cobrar, acreditar y conocer a tu público. Hecha por productores de fiestas, para productores.</p></div>
+        <div style="flex:1 1 520px;display:flex;flex-direction:column;gap:14px">
+          <div class="c-box"><b>Ventas ordenadas</b><p>Cada pago queda asociado a su venta y a su persona. Sin planillas ni capturas de pantalla perdidas.</p></div>
+          <div class="c-box"><b>La puerta avanza rápido</b><p>Validador QR en el celular de tu equipo, sin cuentas, con código del evento y PIN. Cada QR se valida una sola vez.</p></div>
+          <div class="c-box"><b>Tu comunidad es tuya</b><p>Todas las personas de tus eventos en tu base de datos, listas para tus próximas campañas.</p></div>
+        </div></div>
+    </section>
+    <section class="c-sec" id="servicios" aria-label="Servicios" style="padding-top:96px">
+      <h2 class="c-h2" style="margin-bottom:26px">Servicios</h2>
+      <div class="c-grid">${CART_SERVICIOS.map(([t,d],i)=>`<div class="c-box"><div class="c-num">${String(i+1).padStart(2,"0")}</div><b>${t}</b><p>${d}</p></div>`).join("")}</div>
+    </section>
+    <section class="c-sec" id="contacto" aria-label="Contacto" style="padding-top:96px">
+      <div class="c-contacto">
+        <div style="flex:1 1 340px"><h2 class="c-h2" style="font-size:42px;line-height:1.05">¿Tienes una productora?</h2>
+          <p style="margin:16px 0 0;font-size:17px;line-height:1.6;max-width:420px">Cuéntanos de tus eventos y te mostramos Guestly funcionando.</p></div>
+        <form id="c-form" onsubmit="event.preventDefault();cartContacto(this)">
+          <label>Nombre<input name="nombre" autocomplete="name" required></label>
+          <label>Productora<input name="productora" autocomplete="organization"></label>
+          <label>Correo<input name="correo" type="email" autocomplete="email" required></label>
+          <label>WhatsApp<input name="whatsapp" type="tel" autocomplete="tel" placeholder="+56 9"></label>
+          <label class="full">¿Qué eventos haces?<textarea name="mensaje" rows="3"></textarea></label>
+          <input name="web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+          <div class="full" id="c-form-msg" role="status"></div>
+          <button class="full" type="submit">Enviar</button>
+        </form>
+      </div>
+    </section>`;
+  const qIni=new URLSearchParams(location.search).get("buscar");
+  if(qIni){const i=document.getElementById("cq");if(i)i.value=qIni;_cartQ=qIni;}
+  cartPintarFila();
+  if(qIni)setTimeout(()=>document.getElementById("eventos")?.scrollIntoView({block:"start"}),50);
+  else if(location.hash)setTimeout(()=>document.querySelector(location.hash)?.scrollIntoView({block:"start"}),50);
+  if(dest.length>1){clearInterval(window._cartTimer);window._cartTimer=setInterval(()=>{const n=document.querySelectorAll(".c-slide").length;if(!n){clearInterval(window._cartTimer);return;}cartIrSlide(((window._cartSlide||0)+1)%n,true);},6500);}
+}
+function cartIrSlide(i,auto){
+  window._cartSlide=i;
+  document.querySelectorAll(".c-slide").forEach((s,k)=>s.classList.toggle("on",k===i));
+  document.querySelectorAll(".c-dots button").forEach((b,k)=>b.classList.toggle("on",k===i));
+  if(!auto)clearInterval(window._cartTimer);
+}
+async function cartContacto(f){
+  const msg=document.getElementById("c-form-msg"),btn=f.querySelector("button[type=submit]");
+  const d=Object.fromEntries(new FormData(f).entries());
+  btn.disabled=true;btn.textContent="Enviando…";msg.innerHTML="";
+  try{await cartPost({accion:"contacto",...d});
+    f.innerHTML=`<div class="full" style="background:#0B0B0C;color:#F4F4F2;border-radius:16px;padding:26px"><b style="display:block;font-size:18px">Recibimos tu mensaje</b><span style="display:block;color:#B4B4B0;margin-top:6px;font-size:15px">Te escribiremos pronto.</span></div>`;}
+  catch(e){msg.innerHTML=`<span class="c-err">${escH(e.sinFuncion?"Por ahora escríbenos directo; el formulario se está activando.":e.message)}</span>`;btn.disabled=false;btn.textContent="Enviar";}
+}
+async function mostrarEventoPublico(id){
+  cartShell(`<div style="padding:80px 0;text-align:center;color:#8A8A90">Cargando evento…</div>`);
+  const main=document.getElementById("c-main");
+  let j;try{j=await cartPost({accion:"evento",id});}
+  catch(e){main.innerHTML=`<a class="c-back" href="/">← Todos los eventos</a><div class="c-vacio" style="margin-top:20px">${e.status===404?"Este evento no está disponible.":"No pudimos cargar el evento. Intenta de nuevo."}</div>`;return;}
+  const ev=j.evento,mas=j.mas||[];
+  document.title=`${ev.nombre} · Guestly`;
+  const acc=[];
+  if(!ev.pasado&&ev.cf)acc.push(`<a class="c-acc pri" href="/?cf=${encodeURIComponent(ev.id)}"><span><b>Postular a Close Friends</b><small>Pides tu cupo y la productora te aprueba</small></span><span aria-hidden="true">→</span></a>`);
+  if(!ev.pasado&&ev.embajadores&&ev.productora.id)acc.push(`<a class="c-acc${acc.length?"":" pri"}" href="/?emb=${encodeURIComponent(ev.productora.id)}"><span><b>Quiero ser embajador</b><small>Postula para invitar gente con tu propio link</small></span><span aria-hidden="true">→</span></a>`);
+  main.innerHTML=`<a class="c-back" href="/">← Todos los eventos</a>
+    <div class="c-ev">
+      <div class="c-izq">
+        ${cartFlyer(ev,0,"c-evfl")}
+        ${ev.descripcion?`<div><h2 style="margin:0 0 10px;font-size:20px">Sobre el evento</h2><p style="margin:0;color:#B4B4B0;font-size:16px;line-height:1.65;max-width:620px;white-space:pre-line">${escH(ev.descripcion)}</p></div>`:""}
+        ${ev.productora.id?`<a class="c-prod" href="/?productora=${encodeURIComponent(ev.productora.id)}">${ev.productora.logo?`<img src="${escH(ev.productora.logo)}" alt="">`:`<span class="c-pl"></span>`}<span style="flex:1"><small style="display:block;color:#9A9AA0;font-size:13px">Produce</small><b style="font-size:17px">${escH(ev.productora.nombre)}</b></span><span style="color:#2BE07B;font-size:14px;font-weight:600">Ver sus eventos</span></a>`:""}
+      </div>
+      <aside class="c-der">
+        <div style="color:#2BE07B;font-size:13px;font-weight:700;letter-spacing:2px">${escH(cartFecha(ev.fecha,true).toUpperCase())}</div>
+        <h1 class="c-h1" style="font-size:48px">${escH(ev.nombre)}</h1>
+        <div class="c-meta">${escH(ev.lugar||"Lugar por confirmar")}${ev.hora?`<br>Desde las ${escH(cartHora(ev.hora))}`:""}</div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-top:10px">${ev.pasado?`<div class="c-vacio">Este evento ya pasó.</div>`:acc.length?acc.join(""):`<div class="c-vacio">Pronto más información de este evento.</div>`}</div>
+      </aside>
+    </div>
+    ${mas.length?`<section class="c-sec" aria-label="Más eventos de la productora"><h2 class="c-h2" style="font-size:26px;margin-bottom:20px">Más de ${escH(ev.productora.nombre)}</h2><div class="c-fila">${mas.map((e,i)=>cartCard(e,i+1)).join("")}</div></section>`:""}`;
+}
+async function mostrarProductoraPublica(id){
+  cartShell(`<div style="padding:80px 0;text-align:center;color:#8A8A90">Cargando…</div>`);
+  const main=document.getElementById("c-main");
+  let j;try{j=await cartPost({accion:"productora",id});}
+  catch(e){main.innerHTML=`<a class="c-back" href="/">← Todos los eventos</a><div class="c-vacio" style="margin-top:20px">${e.status===404?"Esta productora no está disponible.":"No pudimos cargar la página. Intenta de nuevo."}</div>`;return;}
+  const p=j.productora,evs=j.eventos||[];
+  document.title=`${p.nombre} · Guestly`;
+  const emb=evs.some(e=>e.embajadores);
+  main.innerHTML=`<a class="c-back" href="/">← Todos los eventos</a>
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;margin-top:18px">
+      ${p.logo?`<img src="${escH(p.logo)}" alt="" style="width:88px;height:88px;border-radius:20px;object-fit:cover;background:#26262A">`:""}
+      <div style="flex:1 1 260px"><h1 class="c-h1" style="font-size:44px">${escH(p.nombre)}</h1><p class="c-sub">${evs.length?`${evs.length} próximo${evs.length>1?"s":""} evento${evs.length>1?"s":""}`:"Sin eventos publicados por ahora"}</p></div>
+      ${emb?`<a class="c-btn2" href="/?emb=${encodeURIComponent(p.id)}">Quiero ser embajador</a>`:""}
+    </div>
+    <section class="c-sec" style="padding-top:36px"><div class="c-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${evs.map((e,i)=>cartCard(e,i)).join("")||`<div class="c-vacio">Pronto verás aquí sus eventos.</div>`}</div></section>`;
+}
+// Portada pública: guestly.cl sin parámetros y sin sesión abierta en este navegador
+function _cartHaySesion(){
+  try{const s=JSON.parse(localStorage.getItem("crew-session")||"null");if(!s||!s.email)return false;
+    const at=+s.at||0,ult=+localStorage.getItem("gl-ult-act")||at;
+    return Date.now()-at<SES_MAX_H*3600e3&&Date.now()-ult<SES_INACT_MIN*60e3;}catch(e){return false;}
+}
+const _esPortadaPublica=/^\/(index\.html)?$/.test(location.pathname)&&(!location.search||/^\?buscar=/.test(location.search))&&!_cartHaySesion();
+
 const _esValidador=/^\/validar\/?$/.test(location.pathname);
 const _cfUrl = new URLSearchParams(window.location.search);
 if(_esValidador){ mostrarValidadorQR(); }
@@ -14625,6 +14987,9 @@ else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
 else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
 else if(_cfUrl.has("wp_test")){ mostrarPruebaWebpay(); }
+else if(_cfUrl.has("evento")){ mostrarEventoPublico(_cfUrl.get("evento")); }
+else if(_cfUrl.has("productora")){ mostrarProductoraPublica(_cfUrl.get("productora")); }
+else if(_esPortadaPublica){ mostrarCartelera(); }
 
 // ═══════════════════════════════════
 // INIT — verificar si hay datos
@@ -14641,8 +15006,8 @@ else if(_cfUrl.has("wp_test")){ mostrarPruebaWebpay(); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test"].some(k=>_pub.has(k));
-  if(!_esLinkPublico&&!_esValidador) await restaurarSesion();
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora"].some(k=>_pub.has(k));
+  if(!_esLinkPublico&&!_esValidador&&!_esPortadaPublica) await restaurarSesion();
 })();
 
 // ── Guardia de navegación en dos niveles (envuelve a todos los parches de goView) ──
