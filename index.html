@@ -14754,11 +14754,12 @@ const CART_CSS=`
   .c-fila{display:flex;gap:20px;overflow-x:auto;padding-bottom:14px;scroll-snap-type:x mandatory}
   .c-card{flex:0 0 250px;text-decoration:none;color:#F4F4F2;scroll-snap-align:start}
   .c-card .c-im{width:250px;height:250px;border-radius:16px;object-fit:cover;display:block}
+  .c-card .cart-sinflyer{padding-top:64px}
   .c-card .c-fe{position:absolute;top:12px;left:12px;background:#0B0B0C;color:#F4F4F2;font-size:12px;font-weight:700;padding:6px 9px;border-radius:8px;line-height:1.15;text-align:center}
   .c-card b{display:block;font-size:16px;margin-top:12px}
   .c-card small{display:block;color:#9A9AA0;font-size:14px;margin-top:4px}
   .c-card em{display:block;color:#2BE07B;font-size:13px;margin-top:6px;font-weight:600;font-style:normal}
-  .cart-sinflyer{display:flex;align-items:flex-end;padding:16px;font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;font-size:22px;line-height:1.05}
+  .cart-sinflyer{display:flex!important;align-items:flex-end;padding:16px;font-family:"Space Grotesk",Inter,sans-serif;font-weight:700;font-size:22px;line-height:1.05}
   .c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{display:flex;padding:32px;font-size:44px;letter-spacing:-1px}
   .c-vacio{background:#141416;border:1px solid #1F1F22;border-radius:16px;padding:40px;text-align:center;color:#9A9AA0;font-size:15px}
   .c-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:16px}
@@ -14788,7 +14789,9 @@ const CART_CSS=`
   .c-prod img,.c-prod .c-pl{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#26262A;flex:0 0 auto}
   .c-back{display:inline-flex;align-items:center;gap:8px;color:#B4B4B0;text-decoration:none;font-size:14px;padding:22px 0 6px}
   .c-err{color:#7f1d1d;font-size:13px;font-weight:600}
-  @media (max-width:640px){.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
+  .c-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+  html,body{overflow-x:hidden}
+  @media (max-width:640px){.ch-menu{left:0;right:auto;width:min(320px,calc(100vw - 24px))}.c-pie{flex-direction:column;align-items:flex-start}.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
 `;
 function cartShell(contenido){
   document.title="Guestly · Eventos";
@@ -14797,7 +14800,7 @@ function cartShell(contenido){
     <a class="ch-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",24,"display:block")}</a>
     <form class="ch-bus" role="search" onsubmit="event.preventDefault();cartBuscar(this.q.value)">
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9AA0" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
-      <label for="cq" style="position:absolute;left:-9999px">Buscar eventos</label>
+      <label for="cq" class="c-sr">Buscar eventos</label>
       <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" oninput="cartBuscar(this.value)">
     </form>
     <nav class="ch-nav" aria-label="Principal">
@@ -14900,7 +14903,7 @@ async function mostrarCartelera(){
           <label>Correo<input name="correo" type="email" autocomplete="email" required></label>
           <label>WhatsApp<input name="whatsapp" type="tel" autocomplete="tel" placeholder="+56 9"></label>
           <label class="full">¿Qué eventos haces?<textarea name="mensaje" rows="3"></textarea></label>
-          <input name="web" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px">
+          <input name="web" tabindex="-1" autocomplete="off" aria-hidden="true" class="c-sr">
           <div class="full" id="c-form-msg" role="status"></div>
           <button class="full" type="submit">Enviar</button>
         </form>
