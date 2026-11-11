@@ -6854,6 +6854,7 @@ function openNuevoEvento(){
     {n:"STAFF",      c:"#EF4444", a:"Solo personal"},
   ];
   window._nevPuls = DEFAULTS.map(d=>({id:uid(),nombre:d.n,color:d.c,acceso:d.a}));
+  window._neFlyer=null;window._neBanner=null;
 
   const renderNev = () => {
     const el = $("nev-pl"); if(!el) return;
@@ -6877,6 +6878,25 @@ function openNuevoEvento(){
     <div class="form-row">
       <div><label class="form-label">Venue</label><input class="form-input" id="ne-v" placeholder="Club Fauna"></div>
       <div><label class="form-label">Aforo máximo</label><input class="form-input" id="ne-cap" type="number" value="500"></div>
+    </div>
+    <div style="border-top:1px solid #f0f0f0;margin-top:14px;padding-top:12px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:2px">Cartelera de guestly.cl</div>
+      <div style="font-size:11px;color:#888;margin-bottom:10px">El evento aparece en la cartelera apenas lo creas. Puedes sacarlo después desde el botón "Cartelera" del dashboard.</div>
+      <label class="form-label" style="margin-top:0">Flyer cuadrado <span style="color:#EF4444">*</span></label>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div id="ne-fl-prev" style="width:84px;height:84px;border-radius:12px;background:#f2f2ef center/cover no-repeat;border:1px dashed #d4d4d0"></div>
+        <div><input type="file" id="ne-fl" accept="image/png,image/jpeg" style="display:none" onchange="pubProcesarImagen(this,{w:800,h:800,max2x:false,prevId:'ne-fl-prev',clave:'_neFlyer',nombre:'flyer'})">
+          <button class="btn" type="button" onclick="document.getElementById('ne-fl').click()">Subir flyer</button>
+          <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.5">Tamaño: 800 x 800 · Peso máx: 4 MB · Formato: JPG, PNG</div></div>
+      </div>
+      <label class="form-label">Banner de portada <span style="color:#999;font-weight:400">(opcional)</span></label>
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <div id="ne-bn-prev" style="width:168px;height:60px;border-radius:8px;background:#f2f2ef center/cover no-repeat;border:1px dashed #d4d4d0"></div>
+        <div><input type="file" id="ne-bn" accept="image/png,image/jpeg" style="display:none" onchange="pubProcesarImagen(this,{w:800,h:286,max2x:true,prevId:'ne-bn-prev',clave:'_neBanner',nombre:'banner'})">
+          <button class="btn" type="button" onclick="document.getElementById('ne-bn').click()">Subir banner</button>
+          <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.5">Tamaño: 800 x 286 · Peso máx: 4 MB · Formato: JPG, PNG</div></div>
+      </div>
+      <div id="pub-err" style="color:#b91c1c;font-size:12px;margin-top:8px"></div>
     </div>
     <div style="border-top:1px solid #f0f0f0;margin-top:14px;padding-top:12px">
       <div style="font-size:13px;font-weight:600;margin-bottom:8px">🎫 Pulseras de acceso</div>
@@ -6904,7 +6924,7 @@ function openNuevoEvento(){
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
-      <button class="btn btn-primary" onclick="saveNuevoEvento()">Crear evento</button>
+      <button class="btn btn-primary" id="ne-btn" onclick="saveNuevoEvento()">Crear evento</button>
     </div>`,true);
 
   setTimeout(()=>{
@@ -6926,6 +6946,7 @@ async function saveNuevoEvento(){
   if(!banco){toast("Falta el banco (obligatorio para que los compradores puedan pagar)","error");return;}
   if(!numero){toast("Falta el número de cuenta","error");return;}
   if(!titular){toast("Falta el titular de la cuenta","error");return;}
+  if(!window._neFlyer){toast("Falta el flyer cuadrado del evento (800 x 800)","error");const e=$("ne-fl-prev");if(e){e.style.borderColor="#dc2626";e.scrollIntoView({block:"center",behavior:"smooth"});}return;}
   const datos_pago={
     banco,
     tipo:$("ne-tipo")?.value||"Cuenta Corriente",
@@ -6943,10 +6964,18 @@ async function saveNuevoEvento(){
   const hoyStr=new Date().toISOString().slice(0,10);
   const statusInicial=(!fechaEv||fechaEv>=hoyStr)?"active":"closed";
   const ev={id,name,date:fechaEv,start_time:$("ne-s")?.value||"23:00",end_time:"06:00",venue:$("ne-v")?.value||"",max_capacity:parseInt($("ne-cap")?.value)||500,status:statusInicial,pulseras:window._nevPuls.map(p=>({...p})),productora_id:prodId,datos_pago};
+  // Cartelera: el evento queda publicado con su flyer (y banner si lo subió)
+  const btnNe=$("ne-btn");if(btnNe){btnNe.disabled=true;btnNe.textContent="Subiendo flyer…";}
+  try{
+    ev.flyer_url=await pubSubirImagen(window._neFlyer,"flyers",id);
+    if(window._neBanner)ev.banner_url=await pubSubirImagen(window._neBanner,"banners",id);
+    Object.assign(ev,{publicado:true,pub_cf:true,pub_embajadores:false});
+  }catch(e){toast(e.message||"No se pudo subir el flyer","error");if(btnNe){btnNe.disabled=false;btnNe.textContent="Crear evento";}return;}
+  if(btnNe)btnNe.textContent="Creando…";
   D.eventos.push(ev);
-  try{await sbPost("eventos",[ev]);await log("add_event","evento",id,`Nuevo evento: ${name} (con datos de transferencia, estado: ${statusInicial})`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPost("eventos",[ev]);await log("add_event","evento",id,`Nuevo evento: ${name} (con datos de transferencia, estado: ${statusInicial}, publicado en la cartelera)`);}catch(e){toast("Error: "+e.message,"error");}
   try{const src=await bdayFuenteBeneficios(prodId,id);if(src)await bdayCopiarBeneficios(src,id,{silencioso:true});}catch(e){console.warn("copiar beneficios",e.message);}
-  window._nevPuls=[];closeModal();toast("✓ Evento creado y activado","success");VIEWS.eventos();
+  window._nevPuls=[];window._neFlyer=null;window._neBanner=null;closeModal();toast("✓ Evento creado y publicado en la cartelera","success");VIEWS.eventos();
 }
 
 // ── Editar evento (datos + estado/cancelar) ──
@@ -7151,6 +7180,9 @@ async function saveReplica(){
   const hoyStr=new Date().toISOString().slice(0,10);
   const statusInicial=(!fechaEv||fechaEv>=hoyStr)?"active":"closed";
   const newEv={...orig,id:newId,name:$("rep-n")?.value||orig.name+" (copia)",date:fechaEv,status:statusInicial,parent_event_id:orig.id};
+  // Cada evento tiene su propio código de validador (único) y su propio flyer: no se copian del original
+  ["codigo_validador","flyer_url","banner_url"].forEach(k=>{if(k in newEv)newEv[k]=null;});
+  ["publicado","destacado"].forEach(k=>{if(k in newEv)newEv[k]=false;});
   D.eventos.push(newEv);
   const lmap={};
   D.acc_lists.filter(l=>l.event_id===srcId).forEach(l=>{const nl=uid();lmap[l.id]=nl;D.acc_lists.push({...l,id:nl,event_id:newId});});
@@ -14516,14 +14548,14 @@ function pubAbrir(evId){
     ${pubSwitch("pub-emb","Botón «Quiero ser embajador»","Las postulaciones llegan a tu sección de embajadores para aprobarlas.",ev.pub_embajadores)}
     ${CU.role==="superadmin"?pubSwitch("pub-dest","Destacado en la portada","Aparece en el carrusel de arriba (lo decide Guestly).",ev.destacado):""}
     <div style="border-top:1px solid #f0f0f0;padding-top:12px;margin-top:2px">
-      <label class="form-label" style="margin-top:0">Flyer</label>
+      <label class="form-label" style="margin-top:0">Flyer cuadrado <span style="color:#EF4444">*</span></label>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <div id="pub-fl-prev" style="width:84px;height:84px;border-radius:12px;background:#f2f2ef center/cover no-repeat;${ev.flyer_url?`background-image:url('${escH(ev.flyer_url)}')`:""}"></div>
         <div><input type="file" id="pub-fl" accept="image/png,image/jpeg" style="display:none" onchange="pubElegirFlyer(this)">
           <button class="btn" type="button" onclick="document.getElementById('pub-fl').click()">${ev.flyer_url?"Cambiar flyer":"Subir flyer"}</button>
           <div style="font-size:11px;color:#999;margin-top:4px;line-height:1.5">Tamaño: 800 x 800 · Peso máx: 4 MB · Formato: JPG, PNG<br>Si no es cuadrado, se recorta al centro.</div></div>
       </div>
-      <label class="form-label">Banner de portada</label>
+      <label class="form-label">Banner de portada <span style="color:#999;font-weight:400">(opcional)</span></label>
       <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <div id="pub-bn-prev" style="width:168px;height:60px;border-radius:8px;background:#f2f2ef center/cover no-repeat;${ev.banner_url?`background-image:url('${escH(ev.banner_url)}')`:""}"></div>
         <div><input type="file" id="pub-bn" accept="image/png,image/jpeg" style="display:none" onchange="pubElegirBanner(this)">
@@ -14564,6 +14596,12 @@ function pubProcesarImagen(input,{w,h,max2x,prevId,clave,nombre}){
   img.onerror=()=>{URL.revokeObjectURL(url);err.textContent="No se pudo leer la imagen.";input.value="";};
   img.src=url;
 }
+async function pubSubirImagen(f,carpeta,evId){
+  const path=`${carpeta}/${evId}_${Date.now()}.jpg`;
+  const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:f});
+  if(!up.ok)throw new Error(`No se pudo subir el ${carpeta==="flyers"?"flyer":"banner"}`);
+  return `${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+}
 function pubElegirFlyer(input){pubProcesarImagen(input,{w:800,h:800,max2x:false,prevId:"pub-fl-prev",clave:"_pubFlyer",nombre:"flyer"});}
 function pubElegirBanner(input){pubProcesarImagen(input,{w:800,h:286,max2x:true,prevId:"pub-bn-prev",clave:"_pubBanner",nombre:"banner"});}
 async function pubGuardar(evId){
@@ -14572,12 +14610,8 @@ async function pubGuardar(evId){
   try{
     const cambios={publicado:!!$("pub-on")?.checked,pub_cf:!!$("pub-cf")?.checked,pub_embajadores:!!$("pub-emb")?.checked,descripcion:($("pub-desc")?.value||"").trim()};
     if(CU.role==="superadmin"&&$("pub-dest"))cambios.destacado=!!$("pub-dest").checked;
-    const subir=async(f,carpeta)=>{
-      const path=`${carpeta}/${evId}_${Date.now()}.jpg`;
-      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":"image/jpeg","x-upsert":"true"},body:f});
-      if(!up.ok)throw new Error(`No se pudo subir el ${carpeta==="flyers"?"flyer":"banner"}`);
-      return `${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
-    };
+    if(cambios.publicado&&!ev.flyer_url&&!window._pubFlyer)throw new Error("Para publicar el evento sube el flyer cuadrado (800 x 800).");
+    const subir=(f,carpeta)=>pubSubirImagen(f,carpeta,evId);
     if(window._pubFlyer)cambios.flyer_url=await subir(window._pubFlyer,"flyers");
     if(window._pubBanner)cambios.banner_url=await subir(window._pubBanner,"banners");
     await sbPatch("eventos",`id=eq.${evId}`,cambios);
@@ -14586,7 +14620,7 @@ async function pubGuardar(evId){
     closeModal();toast(cambios.publicado?"Evento publicado en la cartelera":"Cambios guardados","success");
     if(CURRENT_VIEW==="dashboard")VIEWS.dashboard();
   }catch(e){
-    err.textContent=/banner_url/.test(e.message||"")?"Falta instalar el banner en Supabase (supabase/sql-cartelera-banner.sql).":/publicado|pub_cf|pub_embajadores|descripcion|flyer_url|destacado/.test(e.message||"")?"Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql).":"No se pudo guardar: "+(e.message||e);
+    err.textContent=/flyer cuadrado/.test(e.message||"")?e.message:/banner_url/.test(e.message||"")?"Falta instalar el banner en Supabase (supabase/sql-cartelera-banner.sql).":/publicado|pub_cf|pub_embajadores|descripcion|flyer_url|destacado/.test(e.message||"")?"Falta instalar la cartelera en Supabase (supabase/sql-cartelera.sql).":"No se pudo guardar: "+(e.message||e);
     btn.disabled=false;btn.textContent="Guardar";
   }
 }
