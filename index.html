@@ -15131,7 +15131,7 @@ async function mostrarCartelera(){
       ${dest.length>1?`<div class="c-dots">${dest.map((_,i)=>`<button type="button" aria-label="Ver destacado ${i+1}" class="${i===0?"on":""}" onclick="cartIrSlide(${i})"></button>`).join("")}</div>`:""}</section>`:""}
     <section class="c-sec" id="eventos" aria-label="Próximos eventos">
       <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px">
-        <div><h2 class="c-h2">Nuestros próximos eventos</h2></div>
+        <div><h2 class="c-h2">PRÓXIMOS EVENTOS</h2></div>
         <div class="c-chips"><button type="button" class="c-chip on" data-f="todos" onclick="cartFiltrar('todos')">Todos</button><button type="button" class="c-chip" data-f="semana" onclick="cartFiltrar('semana')">Esta semana</button><button type="button" class="c-chip" data-f="mes" onclick="cartFiltrar('mes')">Este mes</button></div>
       </div>
       <div class="c-fila" id="c-fila"></div>
