@@ -1782,9 +1782,9 @@ function buildSidebar(){
     ]});
     allSections.push({label:"Productora",items:[
       {v:"bloqueo",icon:"ban",label:"Lista bloqueo"},
-      ...(adm?[{v:"datos-productora",icon:"building",label:"Datos de la productora"}]:[]),
       ...(adm?[{v:"pagos-config",icon:"card",label:"Configuración de pagos"}]:[]),
       {v:"usuarios",icon:"user-cog",label:"Usuarios"},
+      ...(adm?[{v:"datos-productora",icon:"building",label:"Datos de la productora"}]:[]),
       // Audit log solo para owner y superadmin (info sensible cross-productora si no se filtra bien)
       ...(["owner","superadmin"].includes(role)?[{v:"audit",icon:"file-text",label:"Audit log"}]:[]),
     ]});
