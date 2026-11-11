@@ -270,13 +270,39 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <script>
 // Si hay una sesión abierta en este navegador, no mostrar el formulario de ingreso mientras se restaura (evita el "parpadeo" del login)
 (function(){try{
-  if(location.search||/^\/validar\/?$/.test(location.pathname))return;
-  var s=JSON.parse(localStorage.getItem("crew-session")||"null");if(!s||!s.email)return;
-  var at=+s.at||0,ult=+localStorage.getItem("gl-ult-act")||0;
-  if(Date.now()-at<12*3600e3&&ult&&Date.now()-ult<15*60e3)document.documentElement.classList.add("gl-restaurando");
+  var h=document.documentElement;
+  // Páginas públicas (cartelera, evento, validador, links de invitados…): mientras carga el código no se muestra el formulario de ingreso
+  var pub=!!location.search||/^\/validar\/?$/.test(location.pathname);
+  var s=null;try{s=JSON.parse(localStorage.getItem("crew-session")||"null");}catch(e){}
+  var at=s?(+s.at||0):0,ult=+localStorage.getItem("gl-ult-act")||0;
+  var viva=!!(s&&s.email&&Date.now()-at<12*3600e3&&ult&&Date.now()-ult<15*60e3);
+  if(!pub&&/^\/(index\.html)?$/.test(location.pathname)&&!viva)pub=true; // portada sin sesión = cartelera
+  if(pub){h.classList.add("gl-publica");setTimeout(function(){h.classList.remove("gl-publica");},10000);return;}
+  if(!viva)return;
+  if(true){
+    h.classList.add("gl-restaurando");
+    try{if(localStorage.getItem("crew-theme")==="dark")h.classList.add("gl-oscuro");}catch(e){}
+    // Resguardo: si algo impide terminar de entrar, a los 20 s se muestra el ingreso en vez de quedar cargando
+    setTimeout(function(){h.classList.remove("gl-restaurando");},20000);
+  }
 }catch(e){}})();
 </script>
-<style>html.gl-restaurando #login-screen .login-box{visibility:hidden}</style>
+<!-- Al recargar con la sesión abierta no se muestra la pantalla de ingreso ni el aviso blanco de "Cargando": solo esta pantalla de carga, del color del panel -->
+<style>
+html.gl-restaurando #login-screen,html.gl-restaurando #loading-overlay{display:none!important}
+html.gl-publica #login-screen{display:none!important}
+html.gl-publica body{background:#0B0B0C}
+#gl-splash{display:none}
+html.gl-restaurando #gl-splash{display:flex;position:fixed;inset:0;z-index:9997;align-items:center;justify-content:center;flex-direction:column;gap:22px;background:#fafafa}
+html.gl-restaurando.gl-oscuro #gl-splash{background:#0a0a0a}
+#gl-splash img{height:28px;width:auto;display:block}
+#gl-splash .gl-sp-neg{display:none}
+html.gl-oscuro #gl-splash .gl-sp-pos{display:none}
+html.gl-oscuro #gl-splash .gl-sp-neg{display:block}
+#gl-splash i{width:26px;height:26px;border-radius:50%;border:3px solid rgba(43,224,123,.25);border-top-color:#2BE07B;animation:glSpl .8s linear infinite}
+@keyframes glSpl{to{transform:rotate(360deg)}}
+</style>
+<div id="gl-splash" role="status" aria-label="Cargando tu panel"><img class="gl-sp-pos" src="/brand/logo-horizontal.svg" alt="GUESTLY"><img class="gl-sp-neg" src="/brand/logo-horizontal-negativo.svg" alt="GUESTLY"><i></i></div>
 
 <div id="login-screen">
   <div class="login-box">
