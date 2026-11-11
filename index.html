@@ -15050,6 +15050,8 @@ const CART_CSS=`
 .gx-chk{width:22px;height:22px;border-radius:7px;background:var(--g-d);display:grid;place-items:center;flex:none}
 .gx-mtag{color:var(--g);font-size:11px;margin-bottom:10px}
 .gx-load{padding:220px 0 160px;text-align:center;color:var(--mut2)}
+.gx-prod-lnk{color:var(--fg);border-bottom:1px solid var(--line2);padding-bottom:1px;transition:border-color .2s,color .2s}
+.gx-prod-lnk:hover,.gx-prod-lnk:focus-visible{border-color:var(--g);color:#fff}
 .gx-home h1,.gx-home h2,.gx-home h3,.gx-home h4{margin:0}
 
 /* ================= EVENTOS ================= */
@@ -15706,7 +15708,7 @@ function cartHero(F){
     ttl.innerHTML=`<span${L>32?' class="gx-ts"':L>22?' class="gx-tm"':""}>${escH(e.nombre)}</span>`;
     meta.innerHTML=(e.fecha?`<li>${IC.cal}<span><b>${escH(cartFecha(e.fecha,true))}</b>${e.hora?" · "+escH(cartHora(e.hora)):""}</span></li>`:"")
       +`<li>${IC.pin}<span><b>${escH(e.lugar||"Lugar por confirmar")}</b></span></li>`
-      +(p.nombre?`<li>${IC.usr}<span>Produce <b>${escH(p.nombre)}</b></span></li>`:"");
+      +(p.nombre?`<li>${IC.usr}<span>Produce ${p.id?`<a class="gx-prod-lnk" href="/?productora=${encodeURIComponent(p.id)}" title="Ver los eventos de ${escH(p.nombre)}"><b>${escH(p.nombre)}</b></a>`:`<b>${escH(p.nombre)}</b>`}</span></li>`:"");
     tagsEl.innerHTML=cartTags(e);
     idx.textContent=n>1?String(active+1).padStart(2,"0")+" / "+String(n).padStart(2,"0"):"";
     buy.href="/?evento="+encodeURIComponent(e.id);
