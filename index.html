@@ -7456,19 +7456,21 @@ VIEWS.usuarios=()=>{
 };
 // ══ JERARQUÍA DE ROLES ══════════════════════════════════════════════
 // superadmin (dueño del software) > owner (dueño de la productora) >
-// coordinator > resto del equipo (jefes, staff, embajadores) > clientes.
-// Reglas: el rol superadmin no se asigna desde la app a nadie; el rol
-// owner solo lo asigna el owner de la productora (o el superadmin);
-// un coordinator no crea ni asigna owner/coordinator; y NADIE puede
-// cambiarse su propio rol. Estas reglas viven en rolAsignable() y se
-// revalidan al guardar, no solo al pintar el formulario.
+// coordinator > equipo (jefes, staff, embajadores) > clientes.
+// Reglas: el rol superadmin no se asigna desde la app a nadie; owner y
+// coordinator solo los da el owner (o el superadmin); el coordinator
+// crea y asigna SOLO los roles de staff; los embajadores no se asignan
+// a mano desde Usuarios: entran por postulación aprobada o los crea su
+// jefe de embajadores desde su panel (flujos con rol fijo); y NADIE
+// puede cambiarse su propio rol. Estas reglas viven en rolAsignable()
+// y se revalidan al guardar, no solo al pintar el formulario.
+const ROLES_STAFF=["door_chief","door_staff","vip_staff","cashier"];
 function rolAsignable(rol){
   if(rol==="superadmin")return false;                                   // jamás desde la app
   if(CU?.role==="superadmin")return true;                               // superadmin asigna el resto
-  if(!["owner","coordinator"].includes(CU?.role))return false;          // nadie más administra usuarios
-  if(rol==="owner")return CU.role==="owner";                            // owner solo lo da el owner
-  if(rol==="coordinator")return CU.role==="owner";                      // coordinator solo lo da el owner
-  return true;                                                          // roles operativos
+  if(CU?.role==="owner")return true;                                    // el dueño puede todo
+  if(CU?.role==="coordinator")return ROLES_STAFF.includes(rol);         // coordinator: solo staff
+  return false;                                                         // nadie más administra usuarios
 }
 function openNuevoUser(){
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
@@ -7487,7 +7489,7 @@ function openNuevoUser(){
     <select class="form-select" id="nu-r">
       ${rolesDisponibles.map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join("")}
     </select>
-    ${!puedeCrearOwners?`<div style="font-size:11px;color:#888;margin-top:6px">Como coordinador no puedes crear owners ni otros coordinadores. Para eso, pídeselo al owner.</div>`:""}
+    ${!puedeCrearOwners?`<div style="font-size:11px;color:#888;margin-top:6px">Como coordinador creas solo el staff del evento. Los embajadores los crea su jefe de embajadores desde su panel, y owners y coordinadores los nombra el owner.</div>`:""}
     <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="saveNuevoUser()">Crear</button></div>`);
 }
 async function saveNuevoUser(){
