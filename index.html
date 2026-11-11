@@ -14886,6 +14886,7 @@ function cartFlyer(ev,i,cls){
   return `<div class="${cls} cart-sinflyer" style="background:${bg};color:${fg}"><span>${escH(ev.nombre)}</span></div>`;
 }
 const CART_CSS=`
+  .gx *{font-family:inherit}
   *{box-sizing:border-box}
   body{margin:0;background:#0B0B0C;color:#F4F4F2;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
   a{color:inherit}
@@ -14985,67 +14986,488 @@ const CART_CSS=`
   .c-sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
   html,body{overflow-x:hidden;overflow-x:clip}
   @media (max-width:640px){.c-slide .c-fl{width:100%}.ch-menu{left:0;right:auto;width:min(320px,calc(100vw - 24px))}.c-pie{flex-direction:column;align-items:flex-start}.ch-nav a.ch-ev{display:none}.ch-nav a,.ch-nav button{padding:10px 8px;font-size:14px}.ch-cta{padding:11px 14px!important;margin-left:0}.c-slide .cart-sinflyer,.c-evfl.cart-sinflyer{font-size:32px;padding:22px}.c-h1{font-size:38px}.c-slide .c-tx{padding:28px 22px}.c-contacto{padding:28px 20px}.c-contacto form{grid-template-columns:1fr}.c-h2{font-size:26px}.ch-nav{width:100%;justify-content:space-between;gap:0}}
+
+/* ================= GUESTLY · diseño nuevo de la cartelera (clases gx-) ================= */
+.gx{--bg:#0B0B0C;--bg2:#111113;--card:#161618;--card2:#1F1F23;--line:#2A2A2E;--line2:#3A3A3F;--fg:#F5F5F2;--mut:#B4B4B8;--mut2:#8A8A90;--g:#2BE07B;--g-d:#13261B;--amber:#F59E0B;--r:18px;
+  --disp:"Space Grotesk",Inter,sans-serif;--body:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  background:var(--bg);color:var(--fg);font-family:var(--body);font-size:16px;line-height:1.5;min-height:100vh;position:relative}
+.gx::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:100;opacity:.05;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.gx-nav a,.gx-foot a,.gx-home a{text-decoration:none}
+.gx-wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+.gx-disp{font-family:var(--disp);letter-spacing:-.03em;line-height:1.02}
+.gx-g{color:var(--g)}
+.gx-mut{color:var(--mut)}
+.gx-mono{font-family:var(--mono);font-size:12px;letter-spacing:.04em;text-transform:uppercase}
+.gx-btn{display:inline-flex;align-items:center;gap:10px;height:52px;padding:0 24px;border-radius:999px;font-weight:600;font-size:15px;transition:transform .2s,box-shadow .3s,background .2s;cursor:pointer;border:0;white-space:nowrap;text-decoration:none}
+.gx-btn-g{background:var(--g);color:#06120B;box-shadow:0 8px 30px -12px rgba(43,224,123,.35)}
+.gx-btn-g:hover{transform:translateY(-2px);box-shadow:0 0 0 5px rgba(43,224,123,.12),0 14px 40px -12px rgba(43,224,123,.4);color:#06120B}
+.gx-btn-o{background:rgba(255,255,255,.03);color:var(--fg);border:1px solid var(--line2)}
+.gx-btn-o:hover{background:rgba(255,255,255,.07);border-color:#55555c}
+.gx-btn svg{transition:transform .2s;flex:none}
+.gx-btn:hover svg{transform:translateX(3px)}
+.gx-btn-sm{height:40px;padding:0 18px;font-size:14px}
+
+/* menú */
+.gx-nav{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:50;width:min(1120px,calc(100% - 24px));display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 8px 8px 18px;border-radius:999px;
+  background:rgba(17,17,19,.6);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);border:1px solid rgba(255,255,255,.07);transition:background .3s}
+.gx-nav.gx-scrolled{background:rgba(11,11,12,.9)}
+.gx-logo{display:flex;align-items:center;flex:none}
+.gx-logo svg{flex:none}
+.gx-seg{position:absolute;left:50%;transform:translateX(-50%);display:flex;padding:4px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid var(--line);font-size:13px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.gx-seg a{padding:8px 18px;border-radius:999px;color:var(--mut);transition:color .2s,background .2s}
+.gx-seg a:hover{color:var(--fg)}
+.gx-seg a.gx-on{background:var(--fg);color:#0B0B0C}
+.gx-navr{display:flex;gap:8px;align-items:center}
+.gx-lnk{font-size:14px;font-weight:500;padding:0 14px;color:var(--fg)}
+.gx-lnk:hover{color:#fff}
+
+/* pie */
+.gx-foot{border-top:1px solid var(--line);padding:28px 0;font-size:13px;color:var(--mut2);position:relative}
+.gx-foot .gx-wrap{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}
+.gx-foot .gx-fl{display:flex;gap:10px 22px;flex-wrap:wrap}
+.gx-foot a{color:var(--mut2)}
+.gx-foot a:hover{color:var(--fg)}
+
+/* piezas comunes */
+.gx-sec{padding:120px 0;position:relative}
+.gx-eyebrow{display:inline-flex;align-items:center;gap:8px;color:var(--g);margin-bottom:18px}
+.gx-eyebrow::before{content:"";width:18px;height:2px;background:var(--g)}
+.gx-h2{font-size:clamp(36px,5.4vw,72px);font-weight:700;margin:0}
+.gx-sub{font-size:18px;color:var(--mut);max-width:560px;margin-top:20px}
+.gx-sec-head{display:flex;justify-content:space-between;align-items:flex-end;gap:40px;margin-bottom:56px;flex-wrap:wrap}
+.gx-hero-cta{display:flex;gap:12px;justify-content:center;margin-top:36px;flex-wrap:wrap}
+.gx-rv{opacity:0;transform:translateY(40px);filter:blur(6px);transition:opacity 1s cubic-bezier(.2,.8,.2,1),transform 1s cubic-bezier(.2,.8,.2,1),filter 1s}
+.gx-rv.gx-in{opacity:1;transform:none;filter:none}
+.gx-d1{transition-delay:.1s}.gx-d2{transition-delay:.2s}.gx-d3{transition-delay:.3s}
+.gx-live{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--g);background:var(--g-d);padding:4px 10px;border-radius:999px;font-weight:600}
+.gx-dot{width:7px;height:7px;border-radius:50%;background:var(--g);box-shadow:0 0 6px rgba(43,224,123,.6);animation:gxpulse 1.6s infinite}
+@keyframes gxpulse{50%{opacity:.35}}
+@keyframes gxmq{to{transform:translateX(-50%)}}
+.gx-hero-grid{position:absolute;inset:0;z-index:-1;
+  background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:64px 64px;mask-image:radial-gradient(ellipse 70% 60% at 50% 30%,#000 30%,transparent 75%);-webkit-mask-image:radial-gradient(ellipse 70% 60% at 50% 30%,#000 30%,transparent 75%)}
+.gx-av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:#0B0B0C;flex:none}
+.gx-chk{width:22px;height:22px;border-radius:7px;background:var(--g-d);display:grid;place-items:center;flex:none}
+.gx-mtag{color:var(--g);font-size:11px;margin-bottom:10px}
+.gx-load{padding:220px 0 160px;text-align:center;color:var(--mut2)}
+.gx-home h1,.gx-home h2,.gx-home h3,.gx-home h4{margin:0}
+
+/* ================= EVENTOS ================= */
+.gx-eh{position:relative;padding:132px 0 0;overflow:hidden;isolation:isolate;min-height:min(100vh,880px);display:flex;flex-direction:column}
+.gx-eh-amb{position:absolute;inset:0;z-index:-3}
+.gx-eh-amb i{position:absolute;inset:0;opacity:0;transition:opacity 1.4s ease}
+.gx-eh-amb i.gx-on{opacity:1}
+.gx-eh::after{content:"";position:absolute;left:0;right:0;bottom:0;height:38%;background:linear-gradient(transparent,var(--bg));z-index:-1;pointer-events:none}
+.gx-eh .gx-hero-grid{z-index:-2}
+.gx-eh-in{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.12fr);gap:24px;align-items:center;flex:1;width:100%}
+.gx-eh-top{display:flex;align-items:center;gap:14px}
+.gx-eh-title{font-size:clamp(40px,5.3vw,78px);font-weight:700;margin-top:22px;min-height:2.06em;display:flex;align-items:flex-end}
+.gx-eh-title span{display:block;text-wrap:balance;animation:gxtin .7s cubic-bezier(.2,.8,.2,1) both}
+.gx-eh-title span.gx-tm{font-size:.72em;line-height:1.05}
+.gx-eh-title span.gx-ts{font-size:.56em;line-height:1.08;letter-spacing:-.02em}
+.gx-eh-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:18px;min-height:25px}
+.gx-eh-tags .gx-ev-tag{animation:gxtin .7s .24s cubic-bezier(.2,.8,.2,1) both}
+.gx-eh-price[hidden]{display:none}
+@keyframes gxtin{from{opacity:0;transform:translateY(24px);filter:blur(10px)}}
+.gx-eh-meta{list-style:none;display:flex;flex-direction:column;gap:10px;margin-top:22px;color:var(--mut);font-size:16px}
+.gx-eh-meta li{display:flex;align-items:center;gap:12px;animation:gxtin .7s .08s cubic-bezier(.2,.8,.2,1) both}
+.gx-eh-meta li:nth-child(2){animation-delay:.14s}
+.gx-eh-meta li:nth-child(3){animation-delay:.2s}
+.gx-eh-meta svg{flex:none;color:var(--mut2)}
+.gx-eh-meta b{color:var(--fg);font-weight:600}
+.gx-cd{display:flex;gap:10px;margin-top:22px}
+.gx-cd div{min-width:74px;padding:12px 10px 10px;border-radius:14px;background:rgba(255,255,255,.035);border:1px solid var(--line);text-align:center}
+.gx-cd b{display:block;font-family:var(--disp);font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.gx-cd small{display:block;margin-top:7px;font-size:11px;color:var(--mut2);letter-spacing:.06em;text-transform:uppercase}
+.gx-cd .gx-s b{color:var(--g)}
+.gx-eh-cta{display:flex;align-items:center;gap:20px;margin-top:30px;flex-wrap:wrap}
+.gx-eh-price{font-size:13px;color:var(--mut2)}
+.gx-eh-price b{display:block;font-family:var(--disp);font-size:22px;color:var(--fg);letter-spacing:-.02em;line-height:1.1}
+
+/* coverflow */
+.gx-cvr{--pw:372px;--gap:204px;position:relative;height:calc(var(--pw) + 112px);perspective:1500px;outline:none;touch-action:pan-y;cursor:grab;user-select:none;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent);mask-image:linear-gradient(90deg,transparent,#000 13%,#000 87%,transparent)}
+.gx-cvr:active{cursor:grabbing}
+.gx-cvr-it{position:absolute;left:50%;top:0;width:var(--pw);aspect-ratio:1;margin-left:calc(var(--pw)*-.5);border:0;padding:0;background:none;cursor:pointer;color:inherit;
+  transition:transform .9s cubic-bezier(.2,.8,.2,1),opacity .6s,filter .6s;will-change:transform;
+  -webkit-box-reflect:below 10px linear-gradient(transparent 62%,rgba(0,0,0,.18))}
+.gx-cvr-it:focus-visible .gx-cvr-in{outline:2px solid var(--g);outline-offset:4px}
+.gx-cvr-in{position:relative;display:block;width:100%;height:100%;border-radius:18px;overflow:hidden;box-shadow:0 40px 80px -30px rgba(0,0,0,.9);transition:transform .25s ease-out}
+.gx-cvr-in::after{content:"";position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);pointer-events:none}
+.gx-cvr-in svg,.gx-cvr-in img{width:100%;height:100%;display:block;object-fit:cover;pointer-events:none}
+.gx-cvr-gl{position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;background:radial-gradient(380px circle at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.34),transparent 55%);mix-blend-mode:soft-light}
+.gx-cvr-it.gx-on:hover .gx-cvr-gl{opacity:1}
+
+.gx-eh-ctl{display:flex;align-items:center;gap:24px;padding-top:4px;padding-bottom:44px;width:100%}
+.gx-eh-bars{flex:1;display:flex;gap:8px;max-width:440px}
+.gx-eh-bars button{flex:1;height:22px;background:none;border:0;padding:0;cursor:pointer;position:relative}
+.gx-eh-bars button::before{content:"";position:absolute;left:0;right:0;top:10px;height:2px;border-radius:2px;background:var(--line2)}
+.gx-eh-bars button i{position:absolute;left:0;top:10px;height:2px;border-radius:2px;background:var(--mut2);width:0}
+.gx-eh-bars button.gx-done i{width:100%}
+.gx-eh-bars button.gx-on i{background:var(--g);animation:gxbar 6.5s linear forwards}
+.gx-eh-bars.gx-paused button.gx-on i{animation-play-state:paused}
+.gx-eh-bars.gx-still button.gx-on i{animation:none;width:100%}
+@keyframes gxbar{to{width:100%}}
+.gx-eh-arrows{display:flex;gap:8px;margin-left:auto}
+.gx-eh-arrows button{width:46px;height:46px;border-radius:50%;border:1px solid var(--line2);background:rgba(255,255,255,.03);color:var(--fg);display:grid;place-items:center;cursor:pointer;transition:background .2s,border-color .2s,transform .2s}
+.gx-eh-arrows button:hover{background:rgba(255,255,255,.08);border-color:#55555c}
+.gx-eh-arrows button:active{transform:scale(.94)}
+
+/* ticker */
+.gx-tk{border-block:1px solid var(--line);background:var(--bg2);overflow:hidden;padding:17px 0;position:relative}
+.gx-tk::before,.gx-tk::after{content:"";position:absolute;top:0;bottom:0;width:120px;z-index:2;pointer-events:none}
+.gx-tk::before{left:0;background:linear-gradient(90deg,var(--bg2),transparent)}
+.gx-tk::after{right:0;background:linear-gradient(-90deg,var(--bg2),transparent)}
+.gx-tk-track{display:flex;width:max-content;animation:gxmq 70s linear infinite}
+.gx-tk-track span{display:flex;align-items:center;gap:14px;padding-right:44px;font-family:var(--mono);font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut2);white-space:nowrap}
+.gx-tk-track span b{color:var(--fg);font-weight:500}
+.gx-tk-track span i{width:6px;height:6px;border-radius:2px;background:var(--g)}
+
+/* toolbar */
+.gx-tb{display:flex;align-items:center;gap:8px;padding:8px;border-radius:18px;border:1px solid var(--line);background:rgba(17,17,19,.8);backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);position:sticky;top:76px;z-index:20;margin-bottom:28px}
+.gx-tb-s{flex:1;display:flex;align-items:center;gap:10px;height:46px;padding:0 14px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid transparent;transition:border-color .2s,background .2s;min-width:0}
+.gx-tb-s:focus-within{border-color:rgba(43,224,123,.5);background:rgba(255,255,255,.06)}
+.gx-tb-s svg{flex:none;color:var(--mut2)}
+.gx-tb-s input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--fg);font:500 15px var(--body)}
+.gx-tb-s input::placeholder{color:var(--mut2)}
+.gx-tb-s input::-webkit-search-cancel-button{filter:invert(1);opacity:.5}
+.gx-tb-s kbd{font-family:var(--mono);font-size:11px;color:var(--mut2);border:1px solid var(--line2);border-radius:6px;padding:2px 7px}
+.gx-chips{display:flex;gap:6px}
+.gx-chip{height:46px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:none;color:var(--mut);font:600 14px var(--body);cursor:pointer;white-space:nowrap;transition:color .2s,background .2s,border-color .2s}
+.gx-chip:hover{color:var(--fg);border-color:var(--line2)}
+.gx-chip.gx-on{background:var(--fg);color:#0B0B0C;border-color:var(--fg)}
+.gx-tb-n{padding:0 12px 0 8px;font-size:13px;color:var(--mut2);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* event cards */
+.gx-evg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}
+.gx-ev{position:relative;display:flex;flex-direction:column;border-radius:20px;background:var(--bg2);border:1px solid var(--line);
+  transition:transform .45s cubic-bezier(.2,.8,.2,1),border-color .3s,box-shadow .45s;animation:gxevin .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i)*55ms)}
+@keyframes gxevin{from{opacity:0;transform:translateY(24px) scale(.97)}}
+.gx-ev:hover{transform:translateY(-6px);border-color:rgba(43,224,123,.45);box-shadow:0 30px 60px -30px rgba(0,0,0,.9)}
+.gx-ev:focus-visible{outline:2px solid var(--g);outline-offset:3px}
+.gx-ev-p{position:relative;margin:8px 8px 0;border-radius:14px;overflow:hidden;aspect-ratio:1}
+.gx-ev-p svg,.gx-ev-p img{width:100%;height:100%;display:block;object-fit:cover;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.gx-ev:hover .gx-ev-p svg,.gx-ev:hover .gx-ev-p img{transform:scale(1.05)}
+.gx-ev-p::after{content:"";position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.2) 50%,transparent 60%);transform:translateX(-100%);transition:transform .9s;pointer-events:none}
+.gx-ev:hover .gx-ev-p::after{transform:translateX(100%)}
+.gx-ev-d{position:absolute;top:10px;left:10px;min-width:50px;padding:7px 8px 6px;border-radius:12px;background:rgba(11,11,12,.8);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);text-align:center;line-height:1}
+.gx-ev-d small{display:block;font-size:10px;letter-spacing:.1em;color:var(--mut);font-weight:600}
+.gx-ev-d b{display:block;font-family:var(--disp);font-size:22px;font-weight:700;margin:3px 0}
+.gx-ev-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.gx-ev-tag{font-size:11px;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--line2);color:var(--mut);white-space:nowrap}
+.gx-ev-tag.gx-g{color:var(--g);border-color:rgba(43,224,123,.4)}
+.gx-ev-tag.gx-a{color:var(--amber);border-color:rgba(245,158,11,.4)}
+.gx-ev-perf{position:relative;height:22px;margin:0 16px;background:repeating-linear-gradient(90deg,var(--line2) 0 6px,transparent 6px 12px) center/100% 1.5px no-repeat}
+.gx-ev-perf::before,.gx-ev-perf::after{content:"";position:absolute;top:50%;width:18px;height:18px;margin-top:-9px;border-radius:50%;background:var(--bg);transition:box-shadow .3s}
+.gx-ev-perf::before{left:-26px;box-shadow:inset -1px 0 0 var(--line2)}
+.gx-ev-perf::after{right:-26px;box-shadow:inset 1px 0 0 var(--line2)}
+.gx-ev:hover .gx-ev-perf::before{box-shadow:inset -1px 0 0 rgba(43,224,123,.6)}
+.gx-ev:hover .gx-ev-perf::after{box-shadow:inset 1px 0 0 rgba(43,224,123,.6)}
+.gx-ev-i{padding:2px 16px 16px;display:flex;flex-direction:column;gap:4px;flex:1}
+.gx-ev-i h3{font-family:var(--disp);font-size:19px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.gx-ev-i .gx-v{font-size:13px;color:var(--mut2)}
+.gx-ev-f{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:auto;padding-top:14px}
+.gx-ev-pr{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);min-width:0;max-width:100%}
+.gx-ev-pr span:last-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gx-ev-pr .gx-av{width:22px;height:22px;font-size:9px}
+img.gx-av{object-fit:cover;border:1px solid var(--line2)}
+.gx-ev-go{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--fg);white-space:nowrap}
+.gx-ev-go svg{transition:transform .2s}
+.gx-ev:hover .gx-ev-go svg{transform:translateX(3px)}
+.gx-ev-c{font-size:11px;color:var(--mut2);text-align:right;white-space:nowrap;line-height:1.2}
+.gx-ev-c b{display:block;font-family:var(--disp);font-size:16px;color:var(--fg)}
+.gx-ev-empty{text-align:center;padding:70px 20px;border:1px dashed var(--line2);border-radius:20px;color:var(--mut)}
+.gx-ev-empty b{display:block;font-family:var(--disp);font-size:24px;color:var(--fg);margin-bottom:8px}
+.gx-ev-empty .gx-btn{margin-top:22px}
+
+/* ticket */
+.gx-tkt-sec{overflow:hidden}
+.gx-tkt-sec .gx-wrap{display:grid;grid-template-columns:1fr 1.1fr;gap:80px;align-items:center}
+.gx-tkt-stage{perspective:1400px;display:grid;place-items:center;min-height:600px;position:relative}
+.gx-tkt-stage::before{content:"";position:absolute;width:460px;height:460px;border-radius:50%;background:radial-gradient(circle,rgba(43,224,123,.09),transparent 65%);filter:blur(20px)}
+.gx-tkt{width:300px;position:relative;transform:rotateX(var(--rx,6deg)) rotateY(var(--ry,-16deg));transition:transform .25s ease-out;animation:gxtfloat 7s ease-in-out infinite;filter:drop-shadow(0 50px 50px rgba(0,0,0,.75))}
+@keyframes gxtfloat{50%{translate:0 -12px}}
+.gx-tkt-a,.gx-tkt-b{position:relative;background:#17171A;border:1px solid var(--line2);overflow:hidden}
+.gx-tkt-a{border-radius:24px 24px 16px 16px;border-bottom:0}
+.gx-tkt-b{border-radius:16px 16px 24px 24px;border-top:1.5px dashed var(--line2);padding:18px;display:flex;gap:16px;align-items:center}
+.gx-tkt-h{height:150px;position:relative}
+.gx-tkt-h svg{width:100%;height:100%;display:block}
+.gx-tkt-body{padding:18px}
+.gx-tkt-body h4{font-family:var(--disp);font-size:24px;font-weight:700;letter-spacing:-.02em;line-height:1.05}
+.gx-tkt-g{display:grid;grid-template-columns:1fr 1fr;gap:14px 12px;margin-top:16px}
+.gx-tkt-g small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut2)}
+.gx-tkt-g b{display:block;font-size:14px;font-weight:600;margin-top:3px}
+.gx-tkt-qr{width:112px;height:112px;border-radius:12px;background:#F5F5F2;padding:9px;position:relative;flex:none;overflow:hidden}
+.gx-tkt-qr svg{width:100%;height:100%;display:block}
+.gx-tkt-qr::after{content:"";position:absolute;left:0;right:0;height:3px;background:var(--g);box-shadow:0 0 14px 3px rgba(43,224,123,.6);top:-6px;animation:gxqbeam 5.5s ease-in-out infinite}
+@keyframes gxqbeam{0%,8%{top:-6px}34%{top:112px}40%,100%{top:118px}}
+.gx-tkt-st{flex:1;min-width:0}
+.gx-tkt-st small{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut2)}
+.gx-tkt-st code{display:block;font-family:var(--mono);font-size:13px;margin-top:3px;color:var(--fg)}
+.gx-tkt-badge{position:relative;height:30px;margin-top:12px}
+.gx-tkt-badge span{position:absolute;left:0;top:0;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 11px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap}
+.gx-tkt-badge .gx-w{background:var(--card2);color:var(--mut);animation:gxbw 5.5s infinite}
+.gx-tkt-badge .gx-k{background:var(--g-d);color:var(--g);border:1px solid rgba(43,224,123,.35);opacity:0;animation:gxbk 5.5s infinite}
+@keyframes gxbw{0%,34%{opacity:1}38%,94%{opacity:0}100%{opacity:1}}
+@keyframes gxbk{0%,34%{opacity:0;transform:scale(.9)}38%,94%{opacity:1;transform:none}100%{opacity:0}}
+.gx-tkt-gl{position:absolute;inset:0;border-radius:24px;pointer-events:none;background:radial-gradient(420px circle at var(--gx,30%) var(--gy,10%),rgba(255,255,255,.16),transparent 55%);mix-blend-mode:soft-light}
+.gx-steps{list-style:none;margin-top:36px;display:flex;flex-direction:column}
+.gx-steps li{display:grid;grid-template-columns:52px 1fr;gap:16px;padding:22px 0;border-top:1px solid var(--line)}
+.gx-steps li:last-child{border-bottom:1px solid var(--line)}
+.gx-steps .gx-n{font-family:var(--mono);font-size:13px;color:var(--g);padding-top:5px}
+.gx-steps h4{font-family:var(--disp);font-size:22px;font-weight:600;letter-spacing:-.02em}
+.gx-steps p{color:var(--mut);margin-top:6px;font-size:15px;max-width:460px}
+
+/* extras */
+.gx-xg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.gx-xc{position:relative;border-radius:var(--r);background:var(--bg2);border:1px solid var(--line);padding:26px;overflow:hidden;min-height:270px;display:flex;flex-direction:column;transition:border-color .3s}
+.gx-xc:hover{border-color:var(--line2)}
+.gx-xc::before{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s;background:radial-gradient(420px circle at var(--mx,50%) var(--my,50%),rgba(255,255,255,.045),transparent 45%)}
+.gx-xc::after{content:"";position:absolute;inset:-1px;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity .4s;padding:1px;
+  background:radial-gradient(260px circle at var(--mx,50%) var(--my,50%),rgba(43,224,123,.5),transparent 50%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.gx-xc:hover::before,.gx-xc:hover::after{opacity:1}
+.gx-xc .gx-ico{width:46px;height:46px;border-radius:13px;background:var(--card);border:1px solid var(--line2);display:grid;place-items:center;color:var(--g)}
+.gx-xc .gx-mtag{margin:auto 0 10px;padding-top:40px}
+.gx-xc h3{font-family:var(--disp);font-size:21px;font-weight:600;letter-spacing:-.02em;line-height:1.15}
+.gx-xc p{color:var(--mut);font-size:14.5px;margin-top:8px}
+
+/* band productoras */
+.gx-pb{position:relative;border-radius:28px;border:1px solid var(--line);background:var(--bg2);overflow:hidden;padding:64px;display:grid;grid-template-columns:1.25fr 1fr;gap:56px;align-items:center;isolation:isolate}
+.gx-pb::before{content:"";position:absolute;inset:0;z-index:-1;background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);background-size:56px 56px;-webkit-mask-image:radial-gradient(ellipse 70% 90% at 85% 10%,#000,transparent 70%);mask-image:radial-gradient(ellipse 70% 90% at 85% 10%,#000,transparent 70%)}
+.gx-pb::after{content:"";position:absolute;right:-120px;top:-160px;width:520px;height:420px;z-index:-1;background:radial-gradient(ellipse,rgba(43,224,123,.10),transparent 65%);filter:blur(30px)}
+.gx-pb h2{font-size:clamp(32px,4vw,54px);font-weight:700}
+.gx-pb p{color:var(--mut);font-size:17px;margin-top:16px;max-width:520px}
+.gx-pb .gx-hero-cta{justify-content:flex-start;margin-top:30px}
+.gx-pb-list{display:flex;flex-direction:column;gap:10px}
+.gx-pb-row{display:flex;align-items:center;gap:12px;padding:15px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line);font-size:15px}
+.gx-pb-row s{flex:1;color:var(--mut2);text-decoration-color:var(--g);text-decoration-thickness:2px}
+.gx-pb-row .gx-chk{flex:none}
+.gx-ev-end{padding-bottom:120px}
+
+
+@media (max-width:1100px){
+  .gx-evg{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .gx-cvr{--pw:320px;--gap:176px}
+}
+@media (max-width:960px){
+  .gx-eh{padding-top:100px;min-height:0}
+  .gx-eh-in{grid-template-columns:minmax(0,1fr);gap:4px}
+  .gx-eh-info{display:contents}
+  .gx-eh-top{order:-2;margin-bottom:16px}
+  .gx-eh-title{margin-top:0}
+  .gx-cvr{order:-1;--pw:240px;--gap:140px;height:calc(var(--pw) + 64px)}
+  .gx-eh-ctl{padding-top:26px;padding-bottom:36px}
+  .gx-tb{position:static;flex-wrap:wrap}
+  .gx-tb-s{flex-basis:100%}
+  .gx-chips{flex:1}
+  .gx-evg{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+  .gx-tkt-sec .gx-wrap{grid-template-columns:minmax(0,1fr);gap:20px}
+  .gx-tkt-stage{min-height:540px;order:2}
+  .gx-xg{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .gx-pb{grid-template-columns:minmax(0,1fr);padding:40px 28px;gap:36px}
+  .gx-ev-end{padding-bottom:80px}
+}
+@media (max-width:560px){
+  .gx-eh-title{font-size:42px}
+  .gx-cd{gap:8px}
+  .gx-cd div{min-width:0;flex:1;padding:11px 4px 9px}
+  .gx-cd b{font-size:26px}
+  .gx-eh-cta{gap:16px}
+  .gx-eh-cta .gx-btn{flex:1;justify-content:center}
+  .gx-eh-bars{max-width:none}
+  .gx-eh-arrows button{width:42px;height:42px}
+  .gx-tb-s kbd,.gx-tb-n{display:none}
+  .gx-chip{height:42px;padding:0 10px;flex:1;font-size:13px}
+  .gx-ev{border-radius:16px}
+  .gx-ev-p{margin:6px 6px 0;border-radius:11px}
+  .gx-ev-perf{margin:0 12px;height:18px}
+  .gx-ev-perf::before{left:-21px}
+  .gx-ev-perf::after{right:-21px}
+  .gx-ev-i{padding:2px 12px 12px}
+  .gx-ev-i h3{font-size:15.5px}
+  .gx-ev-i .gx-v{font-size:12px}
+  .gx-ev-tag{font-size:10px;padding:3px 8px}
+  .gx-ev-d{min-width:0;display:flex;align-items:baseline;gap:4px;padding:5px 8px;top:8px;left:8px;border-radius:9px}
+  .gx-ev-d small:first-child{display:none}
+  .gx-ev-d b{font-size:15px;margin:0}
+  .gx-ev-f{flex-direction:column;align-items:flex-start;gap:8px;padding-top:10px}
+  .gx-ev-c{text-align:left}
+  .gx-ev-c b{display:inline;margin-left:4px}
+  .gx-xg{grid-template-columns:minmax(0,1fr)}
+  .gx-xc{min-height:0}
+  .gx-xc .gx-mtag{padding-top:28px}
+  .gx-pb{padding:32px 20px;border-radius:22px}
+  .gx-pb .gx-hero-cta .gx-btn{width:100%;justify-content:center}
+}
+
+footer .gx-fl{flex-wrap:wrap;gap:10px 22px}
+
+/* ---- ajustes de producción sobre el diseño ---- */
+.gx-eh-amb i{background-size:cover;background-position:center;filter:blur(70px) saturate(1.25);inset:-10% -10% 20% 38%}
+.gx-eh-amb i.gx-on{opacity:.3}
+.gx-cvr-in img,.gx-cvr-in .cart-sinflyer{width:100%;height:100%;display:block;object-fit:cover;pointer-events:none}
+.gx-cvr-in .cart-sinflyer{display:flex!important;text-align:left;font-size:34px;padding:22px}
+.gx-ev-p img,.gx-ev-p .cart-sinflyer{width:100%;height:100%;display:block;object-fit:cover;transition:transform .8s cubic-bezier(.2,.8,.2,1)}
+.gx-ev:hover .gx-ev-p img{transform:scale(1.05)}
+.gx-ev{color:var(--fg);text-decoration:none}
+.gx-ev-i h3{margin:0;color:var(--fg)}
+.gx-ev-pr .gx-av{background:var(--card2);color:var(--fg);border:1px solid var(--line2)}
+.gx-eh-arrows[hidden],.gx-eh-bars[hidden],.gx-cd[hidden]{display:none}
+.gx-tkt-h img{width:100%;height:100%;object-fit:cover;display:block}
+.gx-tkt-h{background:linear-gradient(135deg,#1F1F23,#0E0E10)}
+
+/* buscador (el mismo de siempre) dentro de la barra de la cartelera y sobre las páginas interiores */
+.gx-tb .ch-buswrap{flex:1 1 260px;min-width:0}
+.gx-tb .ch-bus,.gx-inner-top .ch-bus{height:46px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid transparent;padding:0 14px;min-width:0;transition:border-color .2s,background .2s}
+.gx-tb .ch-bus:focus-within,.gx-inner-top .ch-bus:focus-within{border-color:rgba(43,224,123,.5);background:rgba(255,255,255,.06)}
+.gx .ch-bus input{font-weight:500}
+.gx .ch-bus input::placeholder{color:var(--mut2)}
+.gx .ch-bus input::-webkit-search-cancel-button{filter:invert(1);opacity:.5}
+.gx .c-sug{top:54px;z-index:40}
+.gx-inner-top{padding-top:92px}
+.gx-inner-top .ch-buswrap{max-width:560px}
+.gx-inner-top .ch-bus{border:1px solid var(--line);background:rgba(17,17,19,.8)}
+.gx-inner{padding-bottom:80px;min-height:60vh}
+
+/* pocas fechas: tarjetas grandes en horizontal */
+.gx-evg[data-n="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+.gx-evg[data-n="2"]{grid-template-columns:repeat(2,minmax(0,1fr))}
+.gx-evg[data-n="1"]{grid-template-columns:minmax(0,1fr)}
+.gx-ev-empty{grid-column:1/-1}
+@media (min-width:961px){
+  .gx-evg.gx-few .gx-ev{flex-direction:row}
+  .gx-evg.gx-few .gx-ev-p{flex:0 0 46%;margin:8px 0 8px 8px;align-self:flex-start}
+  .gx-evg[data-n="1"].gx-few .gx-ev-p{flex-basis:34%}
+  .gx-evg.gx-few .gx-ev-perf{width:22px;height:auto;margin:16px 0;flex:none;background:repeating-linear-gradient(180deg,var(--line2) 0 6px,transparent 6px 12px) center/1.5px 100% no-repeat}
+  .gx-evg.gx-few .gx-ev-perf::before{left:50%;top:-26px;margin:0 0 0 -9px;box-shadow:inset 0 -1px 0 var(--line2)}
+  .gx-evg.gx-few .gx-ev-perf::after{right:auto;left:50%;top:auto;bottom:-26px;margin:0 0 0 -9px;box-shadow:inset 0 1px 0 var(--line2)}
+  .gx-evg.gx-few .gx-ev:hover .gx-ev-perf::before{box-shadow:inset 0 -1px 0 rgba(43,224,123,.6)}
+  .gx-evg.gx-few .gx-ev:hover .gx-ev-perf::after{box-shadow:inset 0 1px 0 rgba(43,224,123,.6)}
+  .gx-evg.gx-few .gx-ev-i{padding:24px 24px 22px 8px;justify-content:center;gap:8px;min-width:0}
+  .gx-evg.gx-few .gx-ev-i h3{font-size:30px;line-height:1.08}
+  .gx-evg.gx-few .gx-ev-i .gx-v{font-size:15px}
+  .gx-evg.gx-few .gx-ev-tags{margin-top:12px}
+  .gx-evg.gx-few .gx-ev-tag{font-size:12px;padding:5px 11px}
+  .gx-evg.gx-few .gx-ev-f{margin-top:26px;padding-top:18px;border-top:1px solid var(--line)}
+  .gx-evg.gx-few .gx-ev-pr{font-size:14px}
+  .gx-evg.gx-few .gx-ev-pr .gx-av{width:28px;height:28px}
+  .gx-evg.gx-few .gx-ev-go{font-size:15px}
+}
+
+/* la misma tarjeta en las páginas de evento, productora y búsqueda */
+.c-fila .gx-ev{flex:0 0 270px;scroll-snap-align:start}
+.c-fila{padding-top:8px}
+.c-grid .gx-ev{min-width:0}
+
+/* contacto: mismo formulario, ahora en negro con el verde de acento */
+.gx .c-contacto{background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:28px;padding:56px}
+.gx .c-contacto .c-h2{font-size:clamp(30px,3.6vw,46px)!important;font-family:var(--disp);letter-spacing:-.03em}
+.gx .c-contacto p{color:var(--mut)}
+.gx .c-contacto label{color:var(--mut)}
+.gx .c-contacto input,.gx .c-contacto textarea{background:var(--card);color:var(--fg);border:1px solid var(--line2);outline:0;transition:border-color .2s}
+.gx .c-contacto input:focus,.gx .c-contacto textarea:focus{border-color:rgba(43,224,123,.6)}
+.gx .c-contacto button{background:var(--g);color:#06120B}
+.gx .c-contacto .c-err{color:#FCA5A5}
+.gx-contact{padding:0 0 110px}
+@media (max-width:960px){
+  .gx-seg{position:static;transform:none;font-size:11px}
+  .gx-seg a{padding:7px 12px}
+  .gx-sec{padding:88px 0}
+  .gx .c-contacto{padding:32px 22px;border-radius:22px}
+}
+@media (max-width:720px){.gx-cta-nav{display:none}}
+@media (max-width:560px){
+  .gx-nav{padding-left:14px}
+  .gx-nav .gx-logo{width:23px;overflow:hidden}
+  .gx-navr .gx-lnk{padding:0 12px 0 6px}
+  .gx-sec-head{margin-bottom:36px}
+  .gx-inner-top{padding-top:84px}
+}
+@media (prefers-reduced-motion:reduce){.gx *{animation:none!important;transition:none!important}.gx-rv{opacity:1;transform:none;filter:none}}
+
+@media (max-width:960px){.gx-tb .ch-buswrap{flex:1 1 100%}}
 `;
-function cartShell(contenido){
-  document.title="Guestly · Eventos";
-  document.body.innerHTML=`<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><style>${CART_CSS}</style>
-  <header class="ch"><div class="cw">
-    <a class="ch-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",24,"display:block")}</a>
-    <div class="ch-buswrap">
+// Buscador de la cartelera: mismo campo y mismas sugerencias en la portada (dentro de la barra de filtros) y en las páginas interiores
+function cartBuscadorHTML(){
+  return `<div class="ch-buswrap">
     <form class="ch-bus" role="search" autocomplete="off" onsubmit="event.preventDefault();cartIrSugerencia()">
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9AA0" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       <label for="cq" class="c-sr">Buscar eventos</label>
-      <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" role="combobox" aria-expanded="false" aria-controls="c-sug" aria-autocomplete="list" oninput="cartSugerir(this.value)" onfocus="if(this.value.trim())cartSugerir(this.value)" onkeydown="cartTeclaSug(event)">
+      <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" role="combobox" aria-expanded="false" aria-controls="c-sug" aria-autocomplete="list" oninput="cartSugerir(this.value);cartFiltroTexto(this.value)" onfocus="if(this.value.trim())cartSugerir(this.value)" onkeydown="cartTeclaSug(event)">
     </form>
     <div id="c-sug" class="c-sug" role="listbox" hidden></div>
-    </div>
-    <nav class="ch-nav" aria-label="Principal">
-      <a class="ch-ev" href="/#eventos">Eventos</a>
-      <div class="ch-dd"><button type="button" aria-expanded="false" onclick="const m=this.nextElementSibling;m.classList.toggle('on');this.setAttribute('aria-expanded',m.classList.contains('on'))">¿Eres Productora? <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
-        <div class="ch-menu">
-          <a href="/#por-que"><b>¿Por qué vender con Guestly?</b><small>Ventas, puerta y comunidad en un solo lugar</small></a>
-          <a href="/#servicios"><b>Servicios</b><small>Venta, acreditación, validador QR, embajadores y más</small></a>
-          <a href="/#contacto"><b>Contáctanos</b><small>Te mostramos la plataforma</small></a>
-          <a href="/validar" style="border-top:1px solid #26262A;border-radius:0 0 10px 10px;margin-top:4px"><b style="display:flex;align-items:center;gap:8px"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2BE07B" stroke-width="2.2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/></svg>Validador QR</b><small>Para tu equipo en la puerta: entra con el código del evento y el PIN</small></a>
-        </div></div>
-      <a href="/app">Ingresar</a>
-      <a class="ch-cta" href="/?registro">Crea tu evento</a>
-    </nav>
-  </div></header>
-  <main class="cw" id="c-main">${contenido}</main>
-  <footer class="cw c-pie">
-    <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>© ${new Date().getFullYear()} Guestly</span></div>
-    <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/validar">Validador QR</a><a href="/app">Ingresar</a></div>
-  </footer>`;
+  </div>`;
+}
+// En la portada, lo que se escribe también filtra la grilla al tiro
+function cartFiltroTexto(v){_cartQ=String(v||"");cartPintarFila();}
+// Marco común de las páginas públicas: menú con el selector EVENTOS | PRODUCTORAS, contenido y pie.
+// home=true es la portada (secciones de lado a lado); el resto (evento, productora, búsqueda) va en columna con el buscador arriba.
+function cartShell(contenido,home){
+  document.title="Guestly · Eventos";
+  document.body.innerHTML=`<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"><style>${CART_CSS}</style>
+  <div class="gx">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+    <symbol id="gx-arr" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="gx-ck" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="#2BE07B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  </defs></svg>
+  <header class="gx-nav" id="gx-nav">
+    <a class="gx-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",24,"display:block")}</a>
+    <nav class="gx-seg" aria-label="Secciones de Guestly"><a class="gx-on" href="/" aria-current="page">Eventos</a><a href="/productoras">Productoras</a></nav>
+    <div class="gx-navr"><a class="gx-lnk" href="/app">Ingresar</a><a class="gx-btn gx-btn-g gx-btn-sm gx-cta-nav" href="/?registro">Crea tu evento</a></div>
+  </header>
+  ${home?"":`<div class="cw gx-inner-top">${cartBuscadorHTML()}</div>`}
+  <main id="c-main" class="${home?"gx-home":"cw gx-inner"}">${contenido}</main>
+  <footer class="gx-foot"><div class="gx-wrap">
+    <a class="gx-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",18,"display:block")}</a>
+    <span>© ${new Date().getFullYear()} Guestly · Hecho por un productor, para productores.</span>
+    <div class="gx-fl"><a href="/#eventos">Eventos</a><a href="/productoras">Productoras</a><a href="/#contacto">Contacto</a><a href="/validar">Validador QR</a><a href="/app">Ingresar</a></div>
+  </div></footer>
+  </div>`;
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-buswrap")){const b=document.getElementById("c-sug");if(b)b.hidden=true;}});
+  if(!window._gxNavScroll){window._gxNavScroll=true;addEventListener("scroll",()=>{document.getElementById("gx-nav")?.classList.toggle("gx-scrolled",scrollY>40);},{passive:true});}
   // Con sesión abierta, "/" abre el panel: los enlaces a la portada van a "/?inicio" para seguir en la cartelera
   if(_cartHaySesion()&&!window._cartLinksSesion){window._cartLinksSesion=true;
     let _ua=0;const _act=()=>{const n=Date.now();if(n-_ua>20000){_ua=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}renovarSesion();}};
     ["mousemove","mousedown","keydown","touchstart","scroll","click"].forEach(ev=>document.addEventListener(ev,_act,{passive:true}));_act();
     document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a[href]");if(!a)return;const h=a.getAttribute("href");
-      if(h==="/"||/^\/#/.test(h))a.setAttribute("href","/?inicio"+(h.length>1?h.slice(1):""));},true);
-    document.querySelectorAll('.ch-nav a[href="/app"],.c-pie a[href="/app"]').forEach(a=>a.textContent="Mi panel");}
-  document.addEventListener("click",e=>{if(!e.target.closest(".ch-dd"))document.querySelectorAll(".ch-menu.on").forEach(m=>{m.classList.remove("on");m.previousElementSibling?.setAttribute("aria-expanded","false");});});
+      if(h==="/"||/^\/#/.test(h))a.setAttribute("href","/?inicio"+(h.length>1?h.slice(1):""));},true);}
+  if(_cartHaySesion())document.querySelectorAll('.gx-nav a[href="/app"],.gx-foot a[href="/app"]').forEach(a=>a.textContent="Mi panel");
 }
-function cartCard(ev,i){
-  const f=cartFecha(ev.fecha);
-  return `<a class="c-card" href="/?evento=${encodeURIComponent(ev.id)}" data-buscar="${escH((ev.nombre+" "+ev.lugar+" "+ev.productora.nombre).toLowerCase())}">
-    <div style="position:relative">${cartFlyer(ev,i,"c-im")}${f?`<span class="c-fe">${f.d}<br>${f.m}</span>`:""}</div>
-    <b>${escH(ev.nombre)}</b><small>${escH(ev.lugar||"Lugar por confirmar")}</small><em>${escH(ev.productora.nombre)}</em></a>`;
+const CART_DOW=["DOM","LUN","MAR","MIÉ","JUE","VIE","SÁB"];
+// Lo que el evento tiene abierto para el público
+function cartTags(ev){
+  return (ev.cf?`<span class="gx-ev-tag gx-g">Close Friends abierto</span>`:"")+(ev.embajadores?`<span class="gx-ev-tag">Embajadores</span>`:"");
+}
+// Tarjeta de evento con forma de entrada. i = posición original (color del bloque sin flyer), k = orden en pantalla (entrada escalonada)
+function cartCard(ev,i,k){
+  const f=cartFecha(ev.fecha),tags=cartTags(ev),p=ev.productora||{};
+  let dow="";if(f){const [y,m,d]=ev.fecha.slice(0,10).split("-").map(Number);dow=CART_DOW[new Date(y,m-1,d).getDay()];}
+  return `<a class="gx-ev" href="/?evento=${encodeURIComponent(ev.id)}" style="--i:${k??i??0}" data-buscar="${escH((ev.nombre+" "+ev.lugar+" "+(p.nombre||"")).toLowerCase())}">
+    <div class="gx-ev-p">${cartFlyer(ev,i,"gx-ev-im")}${f?`<span class="gx-ev-d"><small>${dow}</small><b>${f.d}</b><small>${f.m}</small></span>`:""}</div>
+    <div class="gx-ev-perf"></div>
+    <div class="gx-ev-i"><h3>${escH(ev.nombre)}</h3><span class="gx-v">${escH(ev.lugar||"Lugar por confirmar")}</span>${tags?`<div class="gx-ev-tags">${tags}</div>`:""}
+      <div class="gx-ev-f"><span class="gx-ev-pr">${p.logo?`<img class="gx-av" src="${escH(p.logo)}" alt="">`:`<span class="gx-av">${escH((p.nombre||"?").charAt(0).toUpperCase())}</span>`}<span>${escH(p.nombre||"")}</span></span><span class="gx-ev-go">Ver evento<svg width="14" height="14" aria-hidden="true"><use href="#gx-arr"/></svg></span></div>
+    </div></a>`;
 }
 let _cartEventos=[],_cartFiltro="todos",_cartQ="";
 function cartPintarFila(){
   const el=document.getElementById("c-fila");if(!el)return;
   const hoy=new Date();hoy.setHours(0,0,0,0);
   const lim=new Date(hoy);lim.setDate(lim.getDate()+(_cartFiltro==="semana"?7:31));
-  const q=_cartQ.trim().toLowerCase();
+  const q=_cartQ.trim();
   const lista=_cartEventos.map((e,i)=>({e,i})).filter(({e})=>{
     if(_cartFiltro!=="todos"&&e.fecha){const [y,m,d]=e.fecha.split("-").map(Number);if(new Date(y,m-1,d)>lim)return false;}
-    return !q||(e.nombre+" "+e.lugar+" "+e.productora.nombre).toLowerCase().includes(q);
+    return !q||cartCoincide(e.nombre+" "+e.lugar+" "+e.productora.nombre,q);
   });
-  el.innerHTML=lista.length?lista.map(({e,i})=>cartCard(e,i)).join(""):`<div class="c-vacio" style="flex:1">${_cartEventos.length?"No hay eventos con ese filtro.":"Pronto verás aquí los próximos eventos."}</div>`;
-  document.querySelectorAll(".c-chip").forEach(b=>b.classList.toggle("on",b.dataset.f===_cartFiltro));
+  // Con 1 o 2 fechas publicadas las tarjetas van grandes y en horizontal; con más, grilla de hasta 4 columnas
+  el.dataset.n=String(Math.min(_cartEventos.length,4));
+  el.classList.toggle("gx-few",_cartEventos.length>0&&_cartEventos.length<=2);
+  el.innerHTML=lista.length?lista.map(({e,i},k)=>cartCard(e,i,k)).join(""):`<div class="gx-ev-empty"><b>${_cartEventos.length?"No encontramos eventos con esa búsqueda.":"Pronto verás aquí los próximos eventos."}</b>${_cartEventos.length?`Prueba con otro nombre, productora o lugar.<div><button type="button" class="gx-btn gx-btn-o" onclick="cartLimpiarFiltros()">Ver todos los eventos</button></div>`:""}</div>`;
+  document.querySelectorAll(".gx-chip").forEach(b=>b.classList.toggle("gx-on",b.dataset.f===_cartFiltro));
+  const n=document.getElementById("gx-ev-n");if(n)n.textContent=lista.length+(lista.length===1?" evento":" eventos");
 }
+function cartLimpiarFiltros(){_cartFiltro="todos";_cartQ="";const i=document.getElementById("cq");if(i)i.value="";cartPintarFila();}
 function cartFiltrar(f){_cartFiltro=f;cartPintarFila();}
 // Buscador: muestra sugerencias (eventos y productoras) bajo la barra; al elegir una, va directo a su página
 const cartNorm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
@@ -15107,75 +15529,251 @@ async function mostrarBusqueda(q){
       <div class="c-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${evs.map((e,i)=>cartCard(e,i)).join("")||`<div class="c-vacio">No encontramos eventos con “${escH(q)}”. Prueba con otra palabra.</div>`}</div>
     </section>`;
 }
-const CART_SERVICIOS=[
-  ["Venta y listas","Close Friends con aprobación, listas, cumpleaños y mesas VIP, cada uno con su link."],
-  ["Cobros y conciliación","Cobra con tarjeta o transferencia y Guestly cuadra cada pago con su venta."],
-  ["Acreditación digital","Lista con nombre y RUT en la puerta, cruzada con los QR ya validados."],
-  ["Validador QR","Tu equipo entra con el código del evento y un PIN que cambia cada 12 horas. Sin cuentas."],
-  ["Embajadores","Postulaciones por evento, aprobación y links propios para cada embajador."],
-  ["Base de datos y cierre","Tu público con cumpleaños y contacto, y el cierre del evento con sus números."]
-];
 async function mostrarCartelera(){
-  cartShell(`<div style="padding:80px 0;text-align:center;color:#8A8A90">Cargando eventos…</div>`);
+  cartShell(`<div class="gx-load">Cargando eventos…</div>`,true);
   let evs=[];try{evs=(await cartPost({accion:"listar"})).eventos||[];}catch(e){evs=[];}
   _cartEventos=evs;
-  const dest=(evs.filter(e=>e.destacado).length?evs.filter(e=>e.destacado):evs).slice(0,5);
-  const slide=(e,i)=>e.banner?`<a class="c-slide c-ban${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}" aria-label="${escH(e.nombre)}"><img class="c-banfondo" src="${escH(e.banner)}" alt="" aria-hidden="true"><img class="c-banimg" src="${escH(e.banner)}" alt="${escH(e.nombre)}"></a>`:`<a class="c-slide${i===0?" on":""}" href="/?evento=${encodeURIComponent(e.id)}">
-      ${cartFlyer(e,evs.indexOf(e),"c-fl")}
-      <div class="c-tx"><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">${e.destacado?`<span class="c-tag">DESTACADO</span>`:""}<span style="color:#9A9AA0;font-size:14px">${escH(e.productora.nombre)}</span></div>
-        <h1 class="c-h1">${escH(e.nombre)}</h1>
-        <div class="c-meta">${escH(cartFecha(e.fecha,true))}${e.hora?` · ${escH(cartHora(e.hora))}`:""}<br>${escH(e.lugar||"Lugar por confirmar")}</div>
-        <div><span class="c-btn">Ver evento</span></div></div></a>`;
+  const destF=evs.filter(e=>e.destacado),dest=(destF.length?destF:evs).slice(0,6);
+  const arr=`<svg width="18" height="18" aria-hidden="true"><use href="#gx-arr"/></svg>`,ck=`<svg width="14" height="14" aria-hidden="true"><use href="#gx-ck"/></svg>`;
+  const ico=d=>`<span class="gx-ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg></span>`;
   document.getElementById("c-main").innerHTML=`
-    ${dest.length?`<section class="c-dest${dest[0].banner?" c-full":""}" aria-label="Eventos destacados" style="${dest[0].banner?"margin-top:0":""}">${dest.map(slide).join("")}
-      ${dest.length>1?`<div class="c-dots">${dest.map((_,i)=>`<button type="button" aria-label="Ver destacado ${i+1}" class="${i===0?"on":""}" onclick="cartIrSlide(${i})"></button>`).join("")}</div>`:""}</section>`:""}
-    <section class="c-sec" id="eventos" aria-label="Próximos eventos">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px">
-        <div><h2 class="c-h2">PRÓXIMOS EVENTOS</h2></div>
-        <div class="c-chips"><button type="button" class="c-chip on" data-f="todos" onclick="cartFiltrar('todos')">Todos</button><button type="button" class="c-chip" data-f="semana" onclick="cartFiltrar('semana')">Esta semana</button><button type="button" class="c-chip" data-f="mes" onclick="cartFiltrar('mes')">Este mes</button></div>
+    ${dest.length?`<section class="gx-eh" id="gx-eh" aria-label="Eventos destacados">
+      <div class="gx-eh-amb" id="gx-amb"><i></i><i></i></div>
+      <div class="gx-hero-grid"></div>
+      <div class="gx-wrap gx-eh-in" id="gx-eh-in">
+        <div class="gx-eh-info">
+          <div class="gx-eh-top"><span class="gx-live"><i class="gx-dot"></i>Destacado</span><span class="gx-mono gx-mut" id="gx-idx"></span></div>
+          <h1 class="gx-disp gx-eh-title" id="gx-title"></h1>
+          <ul class="gx-eh-meta" id="gx-meta"></ul>
+          <div class="gx-eh-tags" id="gx-ehtags"></div>
+          <div class="gx-cd" id="gx-cd" role="timer" aria-label="Cuenta regresiva para el evento">
+            <div><b data-u="d">00</b><small>días</small></div><div><b data-u="h">00</b><small>horas</small></div><div><b data-u="m">00</b><small>minutos</small></div><div class="gx-s"><b data-u="s">00</b><small>segundos</small></div>
+          </div>
+          <div class="gx-eh-cta"><a class="gx-btn gx-btn-g" id="gx-buy" href="/#eventos">Ver evento ${arr}</a></div>
+        </div>
+        <div class="gx-cvr" id="gx-cvr" tabindex="0" role="region" aria-roledescription="carrusel" aria-label="Eventos destacados"></div>
       </div>
-      <div class="c-fila" id="c-fila"></div>
+      <div class="gx-wrap gx-eh-ctl">
+        <div class="gx-eh-bars" id="gx-bars"></div>
+        <div class="gx-eh-arrows" id="gx-arrows">
+          <button type="button" id="gx-prev" aria-label="Evento anterior"><svg width="18" height="18" style="transform:scaleX(-1)" aria-hidden="true"><use href="#gx-arr"/></svg></button>
+          <button type="button" id="gx-next" aria-label="Evento siguiente">${arr}</button>
+        </div>
+      </div>
+    </section>`:""}
+    ${evs.length>1?`<div class="gx-tk" aria-hidden="true"><div class="gx-tk-track">${(()=>{const t=evs.map(e=>{const f=cartFecha(e.fecha);return `<span><i></i>${f?`<b>${f.d} ${f.m}</b>`:""}${escH(e.nombre)}${e.lugar?" · "+escH(e.lugar):""}</span>`;}).join("");return (t+t).repeat(evs.length<4?3:1);})()}</div></div>`:""}
+    <section class="gx-sec" id="eventos" aria-label="Próximos eventos" style="padding-top:${dest.length?104:170}px">
+      <div class="gx-wrap">
+        <div class="gx-sec-head">
+          <div class="gx-rv"><div class="gx-eyebrow gx-mono">Cartelera</div><h2 class="gx-h2 gx-disp">Lo que se viene.</h2></div>
+          <p class="gx-sub gx-rv gx-d1">Todas las fechas de las productoras que trabajan con Guestly, en un solo lugar.</p>
+        </div>
+        <div class="gx-tb">
+          ${cartBuscadorHTML()}
+          <div class="gx-chips" role="group" aria-label="Filtrar por fecha"><button type="button" class="gx-chip gx-on" data-f="todos" onclick="cartFiltrar('todos')">Todos</button><button type="button" class="gx-chip" data-f="semana" onclick="cartFiltrar('semana')">Esta semana</button><button type="button" class="gx-chip" data-f="mes" onclick="cartFiltrar('mes')">Este mes</button></div>
+          <span class="gx-tb-n" id="gx-ev-n" aria-live="polite"></span>
+        </div>
+        <div class="gx-evg" id="c-fila"></div>
+      </div>
     </section>
-    <section class="c-sec" id="por-que" aria-label="Por qué vender con Guestly" style="padding-top:96px">
-      <div style="border-top:1px solid #1F1F22;padding-top:60px;display:flex;flex-wrap:wrap;gap:44px">
-        <div style="flex:1 1 360px"><div style="color:#2BE07B;font-size:13px;font-weight:700;letter-spacing:2px">PARA PRODUCTORES</div>
-          <h2 class="c-h2" style="font-size:42px;line-height:1.05;margin-top:12px">¿Por qué vender con Guestly?</h2>
-          <p style="margin:18px 0 0;color:#B4B4B0;font-size:17px;line-height:1.6;max-width:460px">Una sola plataforma para vender, cobrar, acreditar y conocer a tu público. Hecha por productores, para productores.</p></div>
-        <div style="flex:1 1 520px;display:flex;flex-direction:column;gap:14px">
-          <div class="c-box"><b>Ventas ordenadas</b><p>Cada pago queda asociado a su venta y a su persona. Sin planillas ni capturas de pantalla perdidas.</p></div>
-          <div class="c-box"><b>La puerta avanza rápido</b><p>Validador QR en el celular de tu equipo, sin cuentas, con código del evento y PIN. Cada QR se valida una sola vez.</p></div>
-          <div class="c-box"><b>Tu comunidad es tuya</b><p>Todas las personas de tus eventos en tu base de datos, listas para tus próximas campañas.</p></div>
-        </div></div>
+    <section class="gx-sec gx-tkt-sec" style="padding-top:20px" aria-label="Cómo funciona">
+      <div class="gx-wrap">
+        <div class="gx-tkt-stage gx-rv" id="gx-tkt-stage" aria-hidden="true">
+          <div class="gx-tkt" id="gx-tkt">
+            <div class="gx-tkt-a">
+              <div class="gx-tkt-h" id="gx-tkt-h"></div>
+              <div class="gx-tkt-body">
+                <h4 id="gx-tkt-t">Tu próximo evento</h4>
+                <div class="gx-tkt-g">
+                  <div><small>Fecha</small><b id="gx-tkt-f">Por confirmar</b></div>
+                  <div><small>Hora</small><b id="gx-tkt-hr">Por confirmar</b></div>
+                  <div style="grid-column:1/-1"><small>Lugar</small><b id="gx-tkt-l">Por confirmar</b></div>
+                  <div style="grid-column:1/-1"><small>Titular</small><b>Tu nombre</b></div>
+                </div>
+              </div>
+            </div>
+            <div class="gx-tkt-b">
+              <div class="gx-tkt-qr" id="gx-tkt-qr"></div>
+              <div class="gx-tkt-st"><small>Acceso</small><code>QR personal</code>
+                <div class="gx-tkt-badge"><span class="gx-w">Listo para entrar</span><span class="gx-k">${ck}Validado</span></div>
+              </div>
+            </div>
+            <i class="gx-tkt-gl"></i>
+          </div>
+        </div>
+        <div class="gx-rv gx-d1">
+          <div class="gx-eyebrow gx-mono">Cómo funciona</div>
+          <h2 class="gx-h2 gx-disp">Tu entrada vive<br>en tu celular.</h2>
+          <p class="gx-sub">Tu acceso es un QR personal. Sin imprimir nada y sin buscar tu nombre en un papel.</p>
+          <ol class="gx-steps">
+            <li><span class="gx-n">01</span><div><h4>Elige tu evento</h4><p>Busca por fiesta, productora o lugar y revisa todos los detalles de cada fecha.</p></div></li>
+            <li><span class="gx-n">02</span><div><h4>Pide tu cupo</h4><p>Cada evento muestra lo que tiene abierto. Postulas y la productora te aprueba.</p></div></li>
+            <li><span class="gx-n">03</span><div><h4>Entra con tu QR</h4><p>En la puerta lo escanean y entras. Cada QR se valida una sola vez.</p></div></li>
+          </ol>
+        </div>
+      </div>
     </section>
-    <section class="c-sec" id="servicios" aria-label="Servicios" style="padding-top:96px">
-      <h2 class="c-h2" style="margin-bottom:26px">Servicios</h2>
-      <div class="c-grid">${CART_SERVICIOS.map(([t,d],i)=>`<div class="c-box"><div class="c-num">${String(i+1).padStart(2,"0")}</div><b>${t}</b><p>${d}</p></div>`).join("")}</div>
+    <section class="gx-sec" style="padding-top:20px" aria-label="Más que una entrada">
+      <div class="gx-wrap">
+        <div class="gx-sec-head">
+          <div class="gx-rv"><div class="gx-eyebrow gx-mono">Más que una entrada</div><h2 class="gx-h2 gx-disp">Cada fiesta abre<br>sus propias puertas.</h2></div>
+          <p class="gx-sub gx-rv gx-d1">Cada evento puede abrir Close Friends, embajadores, cumpleaños y mesas. Lo ves en la página de cada fecha.</p>
+        </div>
+        <div class="gx-xg">
+          <div class="gx-xc gx-rv">${ico("M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.5 6.7 19.4l1.2-6L3.4 9.3l6-.7z")}<span class="gx-mtag gx-mono">Close Friends</span><h3>Postula al círculo de cada fecha.</h3><p>Pides tu cupo en el evento que quieras y la productora te aprueba.</p></div>
+          <div class="gx-xc gx-rv gx-d1">${ico("M4 11v2a2 2 0 002 2h1l4 4V5L7 9H6a2 2 0 00-2 2zM15.5 8.5a5 5 0 010 7M18.5 5.5a9 9 0 010 13")}<span class="gx-mtag gx-mono">Embajadores</span><h3>Mueve la fiesta con tu propio link.</h3><p>Postula como embajador e invita a tu gente con un link que es solo tuyo.</p></div>
+          <div class="gx-xc gx-rv gx-d2">${ico("M4 21h16M5 21v-7a2 2 0 012-2h10a2 2 0 012 2v7M5 16c1.2 1 2.3 1 3.5 0s2.3-1 3.5 0 2.3 1 3.5 0 2.3-1 3.5 0M12 12V8M12 5.5v.01")}<span class="gx-mtag gx-mono">Cumpleaños</span><h3>Celebra con tu propia lista.</h3><p>Si celebras tu cumpleaños en una fecha, armas tu lista de invitados con tu link.</p></div>
+          <div class="gx-xc gx-rv gx-d3">${ico("M3 10h18M6 10v9M18 10v9M8 10V6a4 4 0 018 0v4")}<span class="gx-mtag gx-mono">Mesas VIP</span><h3>Tu mesa, con tu gente.</h3><p>El titular arma su mesa y edita los nombres de sus invitados cuando lo necesita.</p></div>
+        </div>
+      </div>
     </section>
-    <section class="c-sec" id="contacto" aria-label="Contacto" style="padding-top:96px">
-      <div class="c-contacto">
-        <div style="flex:1 1 340px"><h2 class="c-h2" style="font-size:42px;line-height:1.05">¿Tienes una productora?</h2>
-          <p style="margin:16px 0 0;font-size:17px;line-height:1.6;max-width:420px">Cuéntanos de tus eventos y te mostramos Guestly funcionando.</p></div>
-        <form id="c-form" onsubmit="event.preventDefault();cartContacto(this)">
-          <label>Nombre<input name="nombre" autocomplete="name" required></label>
-          <label>Productora<input name="productora" autocomplete="organization"></label>
-          <label>Correo<input name="correo" type="email" autocomplete="email" required></label>
-          <label>WhatsApp<input name="whatsapp" type="tel" autocomplete="tel" placeholder="+56 9"></label>
-          <label class="full">¿Qué eventos haces?<textarea name="mensaje" rows="3"></textarea></label>
-          <input name="web" tabindex="-1" autocomplete="off" aria-hidden="true" class="c-sr">
-          <div class="full" id="c-form-msg" role="status"></div>
-          <button class="full" type="submit">Enviar</button>
-        </form>
+    <section class="gx-ev-end" aria-label="Para productoras">
+      <div class="gx-wrap">
+        <div class="gx-pb gx-rv">
+          <div>
+            <div class="gx-eyebrow gx-mono">¿Produces eventos?</div>
+            <h2 class="gx-disp">Todo productor tiene cachos. <span class="gx-g">GUESTLY</span> los resuelve.</h2>
+            <p>Puerta, listas, RRPP, embajadores, cumpleaños, mesas y cobros en una sola plataforma. De un productor, para productores.</p>
+            <div class="gx-hero-cta"><a class="gx-btn gx-btn-g" href="/productoras">Conocer Guestly para productoras ${arr}</a><a class="gx-btn gx-btn-o" href="/?registro">Crea tu evento</a></div>
+          </div>
+          <div class="gx-pb-list" aria-hidden="true">
+            ${["Un “¿estoy en la lista?”","Un RRPP que jura haber vendido 200 entradas","Una mesa que cambió los nombres 15 veces","Pulseras que no cuadran con las entradas"].map(t=>`<div class="gx-pb-row"><s>${t}</s><span class="gx-chk">${ck}</span></div>`).join("")}
+          </div>
+        </div>
+      </div>
+    </section>
+    <section class="gx-contact" id="contacto" aria-label="Contacto">
+      <div class="gx-wrap">
+        <div class="c-contacto gx-rv">
+          <div style="flex:1 1 340px"><h2 class="c-h2" style="line-height:1.05">¿Tienes una productora?</h2>
+            <p style="margin:16px 0 0;font-size:17px;line-height:1.6;max-width:420px">Cuéntanos de tus eventos y te mostramos Guestly funcionando.</p></div>
+          <form id="c-form" onsubmit="event.preventDefault();cartContacto(this)">
+            <label>Nombre<input name="nombre" autocomplete="name" required></label>
+            <label>Productora<input name="productora" autocomplete="organization"></label>
+            <label>Correo<input name="correo" type="email" autocomplete="email" required></label>
+            <label>WhatsApp<input name="whatsapp" type="tel" autocomplete="tel" placeholder="+56 9"></label>
+            <label class="full">¿Qué eventos haces?<textarea name="mensaje" rows="3"></textarea></label>
+            <input name="web" tabindex="-1" autocomplete="off" aria-hidden="true" class="c-sr">
+            <div class="full" id="c-form-msg" role="status"></div>
+            <button class="full" type="submit">Enviar</button>
+          </form>
+        </div>
       </div>
     </section>`;
   cartPintarFila();
-  if(location.hash)setTimeout(()=>document.querySelector(location.hash)?.scrollIntoView({block:"start"}),50);
-  if(dest.length>1){clearInterval(window._cartTimer);window._cartTimer=setInterval(()=>{const n=document.querySelectorAll(".c-slide").length;if(!n){clearInterval(window._cartTimer);return;}cartIrSlide(((window._cartSlide||0)+1)%n,true);},6500);}
+  if(dest.length)cartHero(dest);
+  cartTicket(evs[0]);
+  cartFx();
+  if(location.hash)setTimeout(()=>{try{document.querySelector(location.hash)?.scrollIntoView({block:"start"});}catch(e){}},60);
 }
-function cartIrSlide(i,auto){
-  window._cartSlide=i;
-  document.querySelectorAll(".c-slide").forEach((s,k)=>s.classList.toggle("on",k===i));
-  document.querySelectorAll(".c-dots button").forEach((b,k)=>b.classList.toggle("on",k===i));
-  if(!auto)clearInterval(window._cartTimer);
+// Fecha y hora de inicio del evento (hora local), o null si aún no tiene fecha
+function cartCuando(e){
+  if(!e||!e.fecha||!/^\d{4}-\d{2}-\d{2}/.test(e.fecha))return null;
+  const [y,m,d]=e.fecha.slice(0,10).split("-").map(Number),hm=/^(\d{1,2}):(\d{2})/.exec(e.hora||"");
+  return new Date(y,m-1,d,hm?+hm[1]:0,hm?+hm[2]:0,0);
+}
+// Portada: carrusel 3D de destacados con sus datos, cuenta regresiva y avance automático
+function cartHero(F){
+  const n=F.length,RM=matchMedia("(prefers-reduced-motion: reduce)").matches,$=id=>document.getElementById(id);
+  const cf=$("gx-cvr"),bars=$("gx-bars"),ttl=$("gx-title"),meta=$("gx-meta"),idx=$("gx-idx"),tagsEl=$("gx-ehtags"),buy=$("gx-buy"),cd=$("gx-cd"),ehIn=$("gx-eh-in");
+  if(!cf||!n)return;
+  const amb=[...$("gx-amb").children];
+  const IC={cal:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>',pin:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 21s7-6.2 7-11.5a7 7 0 10-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',usr:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/></svg>'};
+  const items=F.map((e,i)=>{const b=document.createElement("button");b.type="button";b.className="gx-cvr-it";b.setAttribute("aria-label",e.nombre);b.innerHTML=`<span class="gx-cvr-in">${cartFlyer(e,i,"gx-cvr-im")}<i class="gx-cvr-gl"></i></span>`;cf.appendChild(b);return b;});
+  const barEls=n>1?F.map((e,i)=>{const b=document.createElement("button");b.type="button";b.setAttribute("aria-label","Ver destacado "+(i+1)+": "+e.nombre);b.innerHTML="<i></i>";b.addEventListener("click",()=>go(i));bars.appendChild(b);return b;}):[];
+  if(n<2){bars.hidden=true;$("gx-arrows").hidden=true;}
+  if(RM)bars.classList.add("gx-still");
+  let active=0,ambI=0,dragged=false,sx=null;
+  function layout(){
+    const gap=parseFloat(getComputedStyle(cf).getPropertyValue("--gap"))||170;
+    items.forEach((el,i)=>{
+      let d=i-active;if(d>n/2)d-=n;if(d<-n/2)d+=n;
+      const a=Math.abs(d),x=a===0?0:Math.sign(d)*(gap+(a-1)*gap*.56);
+      el.style.transform=`translateX(${x}px) translateZ(${-a*150}px) rotateY(${d===0?0:(d>0?-40:40)}deg) scale(${d===0?1:.9})`;
+      el.style.opacity=a>2?0:1;el.style.filter=a===0?"none":`brightness(${a===1?.5:.28}) saturate(.8)`;
+      el.style.zIndex=10-a;el.style.pointerEvents=a>2?"none":"auto";
+      el.classList.toggle("gx-on",d===0);el.tabIndex=d===0?0:-1;el.setAttribute("aria-hidden",a>2?"true":"false");
+      if(d!==0)el.firstElementChild.style.transform="";
+    });
+  }
+  function tick(){
+    const w=cartCuando(F[active]);if(!w){cd.hidden=true;return;}cd.hidden=false;
+    const s=Math.max(0,Math.floor((w-Date.now())/1000)),v={d:Math.floor(s/86400),h:Math.floor(s%86400/3600),m:Math.floor(s%3600/60),s:s%60};
+    for(const k in v){const b=cd.querySelector('[data-u="'+k+'"]');if(b)b.textContent=String(v[k]).padStart(2,"0");}
+  }
+  function info(){
+    const e=F[active],p=e.productora||{},L=(e.nombre||"").length;
+    ttl.innerHTML=`<span${L>32?' class="gx-ts"':L>22?' class="gx-tm"':""}>${escH(e.nombre)}</span>`;
+    meta.innerHTML=(e.fecha?`<li>${IC.cal}<span><b>${escH(cartFecha(e.fecha,true))}</b>${e.hora?" · "+escH(cartHora(e.hora)):""}</span></li>`:"")
+      +`<li>${IC.pin}<span><b>${escH(e.lugar||"Lugar por confirmar")}</b></span></li>`
+      +(p.nombre?`<li>${IC.usr}<span>Produce <b>${escH(p.nombre)}</b></span></li>`:"");
+    tagsEl.innerHTML=cartTags(e);
+    idx.textContent=n>1?String(active+1).padStart(2,"0")+" / "+String(n).padStart(2,"0"):"";
+    buy.href="/?evento="+encodeURIComponent(e.id);
+    ambI^=1;amb[ambI].style.backgroundImage=e.flyer?'url("'+String(e.flyer).replace(/["\\\n]/g,"")+'")':"none";
+    amb[ambI].classList.add("gx-on");amb[ambI^1].classList.remove("gx-on");
+    barEls.forEach((b,i)=>{b.classList.remove("gx-on");b.classList.toggle("gx-done",i<active);});
+    if(barEls.length){void bars.offsetWidth;barEls[active].classList.add("gx-on");}
+    tick();
+  }
+  function go(i){active=(i%n+n)%n;layout();info();}
+  bars.addEventListener("animationend",e=>{if(e.animationName==="gxbar"&&document.body.contains(cf))go(active+1);});
+  $("gx-prev").addEventListener("click",()=>go(active-1));
+  $("gx-next").addEventListener("click",()=>go(active+1));
+  items.forEach((el,i)=>el.addEventListener("click",()=>{if(dragged)return;if(i!==active)go(i);else location.href=buy.getAttribute("href");}));
+  cf.addEventListener("keydown",e=>{if(e.key==="ArrowRight"){go(active+1);e.preventDefault();}if(e.key==="ArrowLeft"){go(active-1);e.preventDefault();}});
+  cf.addEventListener("pointerdown",e=>{sx=e.clientX;dragged=false;});
+  addEventListener("pointerup",e=>{if(sx===null)return;const dx=e.clientX-sx;sx=null;if(Math.abs(dx)>40&&n>1){dragged=true;go(active+(dx<0?1:-1));setTimeout(()=>dragged=false,60);}});
+  addEventListener("pointercancel",()=>{sx=null;});
+  cf.addEventListener("pointermove",e=>{
+    if(e.pointerType!=="mouse"||RM)return;const it=e.target.closest(".gx-cvr-it.gx-on");
+    if(!it){items[active].firstElementChild.style.transform="";return;}
+    const r=it.getBoundingClientRect(),px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height,inn=it.firstElementChild;
+    inn.style.transform=`rotateX(${((.5-py)*10).toFixed(2)}deg) rotateY(${((px-.5)*12).toFixed(2)}deg)`;
+    inn.style.setProperty("--gx",(px*100).toFixed(1)+"%");inn.style.setProperty("--gy",(py*100).toFixed(1)+"%");
+  });
+  cf.addEventListener("pointerleave",()=>{items[active].firstElementChild.style.transform="";});
+  ehIn.addEventListener("pointerenter",e=>{if(e.pointerType==="mouse")bars.classList.add("gx-paused");});
+  ehIn.addEventListener("pointerleave",()=>bars.classList.remove("gx-paused"));
+  addEventListener("resize",()=>{if(document.body.contains(cf))layout();});
+  clearInterval(window._gxCdT);window._gxCdT=setInterval(()=>{if(document.body.contains(cd))tick();else clearInterval(window._gxCdT);},1000);
+  go(0);
+}
+// Entrada de muestra de la sección "Cómo funciona": toma los datos de la próxima fecha publicada
+function cartTicket(ev){
+  const $=id=>document.getElementById(id);if(!$("gx-tkt"))return;
+  if(ev){
+    if(ev.flyer)$("gx-tkt-h").innerHTML=`<img src="${escH(ev.flyer)}" alt="" loading="lazy">`;
+    $("gx-tkt-t").textContent=ev.nombre||"Tu próximo evento";
+    if(ev.fecha)$("gx-tkt-f").textContent=cartFecha(ev.fecha,true);
+    if(ev.hora)$("gx-tkt-hr").textContent=cartHora(ev.hora);
+    if(ev.lugar)$("gx-tkt-l").textContent=ev.lugar;
+  }
+  // QR de adorno (no es un código real)
+  let s=21;const r=()=>(s=(s*1664525+1013904223)%4294967296)/4294967296,N=25,m=[];
+  for(let y=0;y<N;y++){m[y]=[];for(let x=0;x<N;x++)m[y][x]=r()>.52;}
+  const fnd=(ox,oy)=>{for(let y=-1;y<8;y++)for(let x=-1;x<8;x++){const X=ox+x,Y=oy+y;if(X<0||Y<0||X>=N||Y>=N)continue;const fuera=x<0||y<0||x>6||y>6,aro=x===0||y===0||x===6||y===6,centro=x>1&&x<5&&y>1&&y<5;m[Y][X]=!fuera&&(aro||centro);}};
+  fnd(0,0);fnd(N-7,0);fnd(0,N-7);
+  let d="";for(let y=0;y<N;y++)for(let x=0;x<N;x++)if(m[y][x])d+=`M${x} ${y}h1v1h-1z`;
+  $("gx-tkt-qr").innerHTML=`<svg viewBox="0 0 ${N} ${N}" shape-rendering="crispEdges" aria-hidden="true"><path d="${d}" fill="#0B0B0C"/></svg>`;
+}
+// Efectos de la portada: aparición al bajar, brillo que sigue el cursor y la entrada que se inclina
+function cartFx(){
+  const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Aparición al bajar: se revisa con el scroll (no depende de IntersectionObserver, así nada queda invisible)
+  const rv=[...document.querySelectorAll(".gx-rv")];
+  const ver=()=>{const h=innerHeight;for(const e of rv){if(!e.classList.contains("gx-in")&&e.getBoundingClientRect().top<h*.94)e.classList.add("gx-in");}};
+  if(RM)rv.forEach(e=>e.classList.add("gx-in"));
+  else{if(window._gxVer){removeEventListener("scroll",window._gxVer);removeEventListener("resize",window._gxVer);}window._gxVer=ver;addEventListener("scroll",ver,{passive:true});addEventListener("resize",ver);ver();setTimeout(ver,400);}
+  document.querySelectorAll(".gx-xc").forEach(c=>c.addEventListener("pointermove",e=>{const r=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-r.left)+"px");c.style.setProperty("--my",(e.clientY-r.top)+"px");}));
+  const stage=document.getElementById("gx-tkt-stage"),tkt=document.getElementById("gx-tkt");
+  if(stage&&tkt&&!RM){
+    stage.addEventListener("pointermove",e=>{if(e.pointerType!=="mouse")return;const r=stage.getBoundingClientRect(),px=(e.clientX-r.left)/r.width,py=(e.clientY-r.top)/r.height;
+      tkt.style.setProperty("--ry",((px-.5)*34).toFixed(1)+"deg");tkt.style.setProperty("--rx",((.5-py)*20).toFixed(1)+"deg");
+      tkt.style.setProperty("--gx",(px*100).toFixed(0)+"%");tkt.style.setProperty("--gy",(py*100).toFixed(0)+"%");});
+    stage.addEventListener("pointerleave",()=>{tkt.style.removeProperty("--ry");tkt.style.removeProperty("--rx");});
+  }
+  if(!window._gxSlash){window._gxSlash=true;addEventListener("keydown",e=>{const q=document.getElementById("cq");if(e.key==="/"&&q&&!/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName||"")){e.preventDefault();q.focus();}});}
 }
 async function cartContacto(f){
   const msg=document.getElementById("c-form-msg"),btn=f.querySelector("button[type=submit]");
