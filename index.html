@@ -1782,6 +1782,7 @@ function buildSidebar(){
     ]});
     allSections.push({label:"Productora",items:[
       {v:"bloqueo",icon:"ban",label:"Lista bloqueo"},
+      ...(adm?[{v:"datos-productora",icon:"building",label:"Datos de la productora"}]:[]),
       ...(adm?[{v:"pagos-config",icon:"card",label:"Configuración de pagos"}]:[]),
       {v:"usuarios",icon:"user-cog",label:"Usuarios"},
       // Audit log solo para owner y superadmin (info sensible cross-productora si no se filtra bien)
@@ -2066,7 +2067,7 @@ function getNotificaciones(){
           titulo:`${e.name} — Faltan datos de pago`,
           detalle:`Configura banco, cuenta y titular para que los compradores puedan transferir`,
           contexto:e.date||"",
-          accion:()=>{cerrarNotifs();goView("eventos");setTimeout(()=>openDatosPago(e.id),100);},
+          accion:()=>{cerrarNotifs();goView("datos-productora");},
           fecha:e.created_at,
         });
       }
@@ -6712,7 +6713,6 @@ VIEWS.eventos=()=>{
             ${pasado
               ? `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="restaurarEvento('${ev.id}')">Restaurar</button>${["superadmin","owner"].includes(CU.role)?`<button class="btn btn-danger" style="font-size:11px;padding:4px 10px" onclick="openEliminarEvento('${ev.id}')">🗑 Eliminar</button>`:""}`
               : `<button class="btn" style="font-size:11px;padding:4px 10px" onclick="openEditarEvento('${ev.id}')">Editar</button>
-                 <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openDatosPago('${ev.id}')">Datos de pago</button>
                  <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openLayoutEvento('${ev.id}')">Layout</button>
                  <button class="btn" style="font-size:11px;padding:4px 10px" onclick="openGestionUsuariosEvento('${ev.id}')">👥 Equipo</button>`}
           </div>
@@ -6844,8 +6844,18 @@ async function desasignarUsuario(uid,evId){
   toast("✓ "+u.name+" removido","success");closeModal();VIEWS.eventos();
 }
 
-function openNuevoEvento(){
+async function openNuevoEvento(){
   if(!["owner","superadmin"].includes(CU?.role)){toast("Solo el owner puede crear eventos","error");return;}
+  // Antes del primer evento: datos bancarios y de facturación de la productora (obligatorios)
+  const prodIdNe=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const pd=await pdDatosPublicos(prodIdNe,true);
+  if(!pd){
+    openModal("Completa los datos de tu productora",`
+      <div style="font-size:14px;color:#444;line-height:1.6">Antes de crear un evento necesitas ingresar los <strong>datos bancarios</strong> (donde recibes las transferencias de las mesas) y los <strong>datos de facturación</strong> de la productora.</div>
+      <div style="font-size:12px;color:#888;margin-top:10px;line-height:1.5">Por seguridad, una vez ingresados quedan bloqueados y solo Guestly puede cambiarlos.</div>
+      <div class="modal-footer"><button class="btn" onclick="closeModal()">Ahora no</button><button class="btn btn-primary" onclick="closeModal();goView('datos-productora')">Completar datos</button></div>`);
+    return;
+  }
   const DEFAULTS=[
     {n:"General",    c:"#6B7280", a:"Piso general"},
     {n:"VIP Friends",c:"#3B82F6", a:"Zona VIP + piso"},
@@ -6904,23 +6914,8 @@ function openNuevoEvento(){
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px" id="nev-btns"></div>
     </div>
     <div style="border-top:1px solid #f0f0f0;margin-top:14px;padding-top:12px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">💳 Datos de transferencia</div>
-      <div style="font-size:11px;color:#888;margin-bottom:10px">Lo verán los compradores al pagar mesas y pulseras extra. Se puede editar después.</div>
-      <label class="form-label" style="margin-top:0">Banco <span style="color:#EF4444">*</span></label>
-      <input class="form-input" id="ne-banco" placeholder="Ej: Banco de Chile">
-      <div class="form-row">
-        <div><label class="form-label">Tipo de cuenta</label>
-          <select class="form-select" id="ne-tipo">
-            ${["Cuenta Corriente","Cuenta Vista","Cuenta RUT","Cuenta de Ahorro"].map(t=>`<option value="${t}">${t}</option>`).join("")}
-          </select></div>
-        <div><label class="form-label">N° de cuenta <span style="color:#EF4444">*</span></label><input class="form-input" id="ne-num" placeholder="00012345678"></div>
-      </div>
-      <div class="form-row">
-        <div><label class="form-label">Titular <span style="color:#EF4444">*</span></label><input class="form-input" id="ne-titular" placeholder="Nombre del titular"></div>
-        <div><label class="form-label">RUT titular</label><input class="form-input" id="ne-rut" placeholder="12.345.678-9"></div>
-      </div>
-      <label class="form-label">Email para enviar comprobante</label><input class="form-input" id="ne-email" placeholder="pagos@productora.cl">
-      <label class="form-label">Instrucciones adicionales</label><textarea class="form-textarea" id="ne-notas" placeholder="Ej: Enviar comprobante por WhatsApp al +569..."></textarea>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">💳 Datos para transferir</div>
+      <div style="font-size:12px;color:#666;line-height:1.5">Las mesas usan la cuenta registrada en <a href="javascript:void(0)" onclick="closeModal();goView('datos-productora')">Datos de la productora</a>. Por seguridad no se cambian desde el evento.</div>
     </div>
     <div class="modal-footer">
       <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -6939,23 +6934,11 @@ function openNuevoEvento(){
 async function saveNuevoEvento(){
   const name=($("ne-n")?.value||"").trim();if(!name){toast("Falta el nombre del evento","error");return;}
   if(!window._nevPuls?.length){toast("Agrega al menos una pulsera","error");return;}
-  // Validar datos de transferencia
-  const banco=($("ne-banco")?.value||"").trim();
-  const numero=($("ne-num")?.value||"").trim();
-  const titular=($("ne-titular")?.value||"").trim();
-  if(!banco){toast("Falta el banco (obligatorio para que los compradores puedan pagar)","error");return;}
-  if(!numero){toast("Falta el número de cuenta","error");return;}
-  if(!titular){toast("Falta el titular de la cuenta","error");return;}
   if(!window._neFlyer){toast("Falta el flyer cuadrado del evento (800 x 800)","error");const e=$("ne-fl-prev");if(e){e.style.borderColor="#dc2626";e.scrollIntoView({block:"center",behavior:"smooth"});}return;}
-  const datos_pago={
-    banco,
-    tipo:$("ne-tipo")?.value||"Cuenta Corriente",
-    numero,
-    titular,
-    rut:($("ne-rut")?.value||"").trim(),
-    email:($("ne-email")?.value||"").trim(),
-    notas:($("ne-notas")?.value||"").trim(),
-  };
+  // Los datos para transferir salen de los datos (bloqueados) de la productora
+  const prodIdDp=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  const datos_pago=await pdDatosPublicos(prodIdDp,true);
+  if(!datos_pago){toast("Primero completa los datos de la productora","error");closeModal();goView("datos-productora");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const id=uid();
   const fechaEv=$("ne-d")?.value||"";
@@ -6997,23 +6980,8 @@ function openEditarEvento(evId){
     <input class="form-input" id="ee-v" value="${(ev.venue||"").replace(/"/g,'&quot;')}" placeholder="Club Fauna">
 
     <div style="border-top:1px solid #f0f0f0;margin-top:14px;padding-top:12px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">💳 Datos de transferencia</div>
-      <div style="font-size:11px;color:#888;margin-bottom:10px">Los compradores verán estos datos al pagar mesas o pulseras extra.</div>
-      <label class="form-label" style="margin-top:0">Banco <span style="color:#EF4444">*</span></label>
-      <input class="form-input" id="ee-banco" value="${(d.banco||"").replace(/"/g,'&quot;')}" placeholder="Ej: Banco de Chile">
-      <div class="form-row">
-        <div><label class="form-label">Tipo de cuenta</label>
-          <select class="form-select" id="ee-tipo">
-            ${["Cuenta Corriente","Cuenta Vista","Cuenta RUT","Cuenta de Ahorro"].map(t=>`<option value="${t}" ${d.tipo===t?"selected":""}>${t}</option>`).join("")}
-          </select></div>
-        <div><label class="form-label">N° de cuenta <span style="color:#EF4444">*</span></label><input class="form-input" id="ee-num" value="${(d.numero||"").replace(/"/g,'&quot;')}" placeholder="00012345678"></div>
-      </div>
-      <div class="form-row">
-        <div><label class="form-label">Titular <span style="color:#EF4444">*</span></label><input class="form-input" id="ee-titular" value="${(d.titular||"").replace(/"/g,'&quot;')}" placeholder="Nombre del titular"></div>
-        <div><label class="form-label">RUT titular</label><input class="form-input" id="ee-rut-t" value="${(d.rut||"").replace(/"/g,'&quot;')}" placeholder="12.345.678-9"></div>
-      </div>
-      <label class="form-label">Email para enviar comprobante</label><input class="form-input" id="ee-email" value="${(d.email||"").replace(/"/g,'&quot;')}" placeholder="pagos@productora.cl">
-      <label class="form-label">Instrucciones adicionales</label><textarea class="form-textarea" id="ee-notas" placeholder="Ej: Enviar comprobante por WhatsApp al +569...">${d.notas||""}</textarea>
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">💳 Datos para transferir</div>
+      <div style="font-size:12px;color:#666;line-height:1.5">Las mesas usan la cuenta registrada en <a href="javascript:void(0)" onclick="closeModal();goView('datos-productora')">Datos de la productora</a>. Por seguridad no se cambian desde el evento.</div>
     </div>
 
     <label class="form-label">Estado del evento</label>
@@ -7033,13 +7001,6 @@ function openEditarEvento(evId){
 async function saveEditarEvento(evId){
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
   const name=($("ee-n")?.value||"").trim();if(!name){toast("El nombre no puede quedar vacío","error");return;}
-  // Validar datos de transferencia
-  const banco=($("ee-banco")?.value||"").trim();
-  const numero=($("ee-num")?.value||"").trim();
-  const titular=($("ee-titular")?.value||"").trim();
-  if(!banco){toast("Falta el banco","error");return;}
-  if(!numero){toast("Falta el número de cuenta","error");return;}
-  if(!titular){toast("Falta el titular de la cuenta","error");return;}
   ev.name=name;
   ev.date=$("ee-d")?.value||ev.date;
   ev.start_time=$("ee-s")?.value||ev.start_time;
@@ -7047,16 +7008,7 @@ async function saveEditarEvento(evId){
   ev.venue=($("ee-v")?.value||"").trim();
   ev.max_capacity=parseInt($("ee-cap")?.value)||ev.max_capacity;
   ev.status=$("ee-status")?.value||ev.status;
-  ev.datos_pago={
-    banco,
-    tipo:$("ee-tipo")?.value||"Cuenta Corriente",
-    numero,
-    titular,
-    rut:($("ee-rut-t")?.value||"").trim(),
-    email:($("ee-email")?.value||"").trim(),
-    notas:($("ee-notas")?.value||"").trim(),
-  };
-  try{await sbPatch("eventos",`id=eq.${evId}`,{name:ev.name,date:ev.date,start_time:ev.start_time,end_time:ev.end_time,venue:ev.venue,max_capacity:ev.max_capacity,status:ev.status,datos_pago:ev.datos_pago});await log("edit_event","evento",evId,`Evento editado: ${name} (${ev.status})`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPatch("eventos",`id=eq.${evId}`,{name:ev.name,date:ev.date,start_time:ev.start_time,end_time:ev.end_time,venue:ev.venue,max_capacity:ev.max_capacity,status:ev.status});await log("edit_event","evento",evId,`Evento editado: ${name} (${ev.status})`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast("✓ Evento actualizado","success");VIEWS.eventos();
 }
 async function moverAPasados(evId){
@@ -7069,6 +7021,7 @@ async function moverAPasados(evId){
 
 // ── Datos de transferencia por evento ──
 function openDatosPago(evId){
+  goView("datos-productora");return; // los datos para transferir ahora viven en la productora (bloqueados)
   const ev=D.eventos.find(e=>e.id===evId);if(!ev)return;
   const d=ev.datos_pago||{};
   openModal(`💳 Datos de pago — ${ev.name}`,`
@@ -14790,6 +14743,85 @@ async function valSalir(){
   qrDetenerScanner();
   if(tok)valPost({accion:"salir",token:tok}).catch(()=>{});
   location.href="/validar";
+}
+
+// ═══════════════════════════════════
+// DATOS DE LA PRODUCTORA (bancarios + facturación). Se ingresan una vez (dueño) y quedan bloqueados;
+// solo Guestly (superadmin) los cambia. Viven en el servidor (función productora-datos), no en el evento.
+// ═══════════════════════════════════
+function pdAuth(){let tok=window._loginTok;if(!tok){try{tok=JSON.parse(localStorage.getItem("crew-session")||"{}").tok;}catch(e){}}return {email:CU?.email||"",tok:tok||""};}
+async function pdPost(body){
+  let r;try{r=await fetch(`${SB_URL}/functions/v1/productora-datos`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify(body)});}
+  catch(e){throw new Error("No pudimos conectarnos. Revisa tu internet.");}
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw Object.assign(new Error(j.error||(r.status===404?"Falta instalar los datos de la productora en Supabase":"Error")),{status:r.status,sinFuncion:r.status===404&&!j.error});
+  return j;
+}
+window._pdCache={};
+async function pdDatosPublicos(prodId,forzar){
+  if(!prodId)return null;
+  if(!forzar&&prodId in window._pdCache)return window._pdCache[prodId];
+  try{const j=await pdPost({accion:"ver",productora_id:prodId});window._pdCache[prodId]=j.datos_pago||null;}
+  catch(e){if(e.sinFuncion)return window._pdCache[prodId]=pdLegacy(prodId);throw e;}
+  return window._pdCache[prodId];
+}
+// Mientras la función no esté instalada: usar los datos que tenían los eventos
+function pdLegacy(prodId){const ev=(D.eventos||[]).find(e=>e.productora_id===prodId&&e.datos_pago&&(e.datos_pago.banco||e.datos_pago.numero));return ev?ev.datos_pago:null;}
+// Las mesas y pagos muestran SIEMPRE la cuenta de la productora (no la del evento, que cualquiera del equipo podía editar)
+async function pdAplicarAEventos(){
+  const ids=[...new Set((D.eventos||[]).map(e=>e.productora_id).filter(Boolean))];if(!ids.length)return;
+  try{const j=await pdPost({accion:"ver_varias",ids});Object.assign(window._pdCache,j.productoras||{});
+    (D.eventos||[]).forEach(e=>{const dp=j.productoras?.[e.productora_id];if(dp)e.datos_pago={...dp,notas:e.datos_pago?.notas||""};});
+  }catch(e){/* función aún no instalada: se usan los datos del evento */}
+}
+if(typeof loadAll==="function"){const _loadAllPd=loadAll;loadAll=async function(...a){const r=await _loadAllPd.apply(this,a);try{await pdAplicarAEventos();}catch(e){}return r;};}
+
+const PD_CAMPOS_BANCO=[["banco","Banco",1],["tipo_cuenta","Tipo de cuenta",1,["Cuenta Corriente","Cuenta Vista","Cuenta RUT","Cuenta de Ahorro"]],["numero_cuenta","N° de cuenta",1],["titular","Titular de la cuenta",1],["rut_titular","RUT del titular",1],["email_pagos","Correo para recibir comprobantes",0]];
+const PD_CAMPOS_FACT=[["razon_social","Razón social",1],["rut_empresa","RUT de la empresa",1],["giro","Giro",1],["direccion","Dirección",1],["comuna","Comuna",1],["email_facturacion","Correo de facturación",1],["representante_nombre","Nombre del representante legal",1],["representante_rut","RUT del representante legal",1],["telefono","Teléfono",1]];
+VIEWS["datos-productora"]=async()=>{
+  const mc=$("main-content");
+  const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
+  mc.innerHTML=`<div class="page-title">Datos de la productora</div><div style="color:#888;font-size:13px">Cargando…</div>`;
+  let r;
+  try{r=await pdPost({accion:"mis",productora_id:prodId,auth:pdAuth()});}
+  catch(e){mc.innerHTML=`<div class="page-title">Datos de la productora</div><div class="alert alert-info">${escH(e.message)}</div>`;return;}
+  let d=r.datos;const precarga=!d;
+  if(!d){const l=pdLegacy(prodId)||{};d={banco:l.banco||"",tipo_cuenta:l.tipo||"",numero_cuenta:l.numero||"",titular:l.titular||"",rut_titular:l.rut||"",email_pagos:l.email||""};}
+  const editable=r.puede_editar;
+  const campo=([k,label,oblig,opts])=>{
+    const v=escH(d[k]||"");
+    if(!editable)return `<div style="padding:9px 0;border-bottom:1px solid var(--line-2);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><span style="color:var(--ink-4);font-size:13px">${label}</span><strong style="font-size:13px;text-align:right">${v||"—"}</strong></div>`;
+    return `<div><label class="form-label">${label}${oblig?' <span style="color:#EF4444">*</span>':""}</label>${opts?`<select class="form-select" id="pd-${k}"><option value="">Elegir…</option>${opts.map(o=>`<option ${d[k]===o?"selected":""}>${o}</option>`).join("")}</select>`:`<input class="form-input" id="pd-${k}" value="${v}">`}</div>`;
+  };
+  const grilla=cs=>editable?`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 14px">${cs.map(campo).join("")}</div>`:cs.map(campo).join("");
+  mc.innerHTML=`
+    <div class="sec-header"><div><div class="page-title" style="margin-bottom:2px">Datos de la productora</div>
+      <div style="font-size:12px;color:#888">Cuenta donde recibes las transferencias de las mesas y datos para la facturación.</div></div></div>
+    ${r.datos&&!editable?`<div class="alert alert-info" style="display:flex;gap:10px;align-items:flex-start"><span>🔒</span><span>Estos datos están <strong>bloqueados por seguridad</strong>. Si necesitas cambiarlos, escribe a Guestly.</span></div>`:""}
+    ${!r.datos&&editable?`<div class="alert alert-info">Completa estos datos para poder crear eventos. <strong>Revísalos bien:</strong> una vez guardados quedan bloqueados y solo Guestly puede cambiarlos.${precarga&&d.banco?" Te dejamos precargada la cuenta que tenían tus eventos.":""}</div>`:""}
+    ${!r.datos&&!editable?`<div class="alert alert-info">Aún no se ingresan. Solo el dueño de la productora puede completarlos.</div>`:""}
+    ${r.es_superadmin&&r.datos?`<div class="alert alert-info">Como administrador de Guestly puedes corregir estos datos.</div>`:""}
+    <div class="card"><div class="sec-title" style="margin-bottom:6px">Datos bancarios</div><div style="font-size:12px;color:#888;margin-bottom:6px">Los compradores de mesas los ven al pagar por transferencia.</div>${grilla(PD_CAMPOS_BANCO)}</div>
+    <div class="card"><div class="sec-title" style="margin-bottom:6px">Datos de facturación</div>${grilla(PD_CAMPOS_FACT)}</div>
+    ${editable?`<div id="pd-err" style="color:#b91c1c;font-size:13px;margin:4px 0 10px"></div>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-bottom:12px;cursor:pointer"><input type="checkbox" id="pd-ok" style="margin-top:2px">${r.es_superadmin&&r.datos?"Confirmo el cambio de estos datos.":"Revisé los datos y entiendo que después no podré cambiarlos sin pedírselo a Guestly."}</label>
+      <button class="btn btn-primary" id="pd-btn" onclick="pdGuardar('${prodId}')">${r.datos?"Guardar cambios":"Guardar datos"}</button>`:""}
+    ${r.datos?`<div style="font-size:11px;color:var(--ink-4);margin-top:10px">Ingresados por ${escH(r.datos.creado_por||"—")}${r.datos.updated_at?` · última actualización ${new Date(r.datos.updated_at).toLocaleString("es-CL",{hour12:false})}`:""}</div>`:""}`;
+};
+async function pdGuardar(prodId){
+  const err=$("pd-err"),btn=$("pd-btn");err.textContent="";
+  const datos={};[...PD_CAMPOS_BANCO,...PD_CAMPOS_FACT].forEach(([k])=>datos[k]=($("pd-"+k)?.value||"").trim());
+  const falta=[...PD_CAMPOS_BANCO,...PD_CAMPOS_FACT].filter(([k,,o])=>o&&!datos[k]).map(([,l])=>l);
+  if(falta.length){err.textContent="Falta: "+falta.join(", ");return;}
+  if(!$("pd-ok")?.checked){err.textContent="Marca la casilla de confirmación para guardar.";return;}
+  btn.disabled=true;btn.textContent="Guardando…";
+  try{
+    const j=await pdPost({accion:"guardar",productora_id:prodId,auth:pdAuth(),datos});
+    window._pdCache[prodId]=j.datos_pago;
+    (D.eventos||[]).forEach(e=>{if(e.productora_id===prodId)e.datos_pago={...j.datos_pago,notas:e.datos_pago?.notas||""};});
+    try{await log("datos_productora","productora",prodId,"Datos bancarios y de facturación guardados");}catch(e){}
+    toast("Datos guardados","success");VIEWS["datos-productora"]();
+  }catch(e){err.textContent=e.message;btn.disabled=false;btn.textContent="Guardar datos";}
 }
 
 // ═══════════════════════════════════
