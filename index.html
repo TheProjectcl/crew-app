@@ -1668,11 +1668,20 @@ async function restaurarSesion(){
 
 // ── Auto-logout por inactividad (15 min) ──
 let _inactTimer=null;
+// Mientras se usa la app, la sesión se renueva (en el navegador y en el servidor), así una pestaña nueva entra directo
+let _renovadaSrv=Date.now();
+function renovarSesion(){
+  try{const ses=JSON.parse(localStorage.getItem("crew-session")||"null");if(!ses||!ses.tok)return;
+    ses.at=Date.now();localStorage.setItem("crew-session",JSON.stringify(ses));
+    if(Date.now()-_renovadaSrv>20*60e3){_renovadaSrv=Date.now();
+      fetch(`${SB_URL}/functions/v1/login-codigo`,{method:"POST",headers:{"Content-Type":"application/json",apikey:SB_KEY,Authorization:"Bearer "+SB_KEY},body:JSON.stringify({accion:"sesion",token:ses.tok})}).catch(()=>{});}
+  }catch(e){}
+}
 function iniciarInactividad(){
   const MINS=15;
   let _ultGuardado=0;
   const resetTimer=()=>{
-    const n=Date.now();if(n-_ultGuardado>20000){_ultGuardado=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}}
+    const n=Date.now();if(n-_ultGuardado>20000){_ultGuardado=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}renovarSesion();}
     clearTimeout(_inactTimer);
     _inactTimer=setTimeout(function alVencer(){
       if(!CU)return;
@@ -15011,7 +15020,7 @@ function cartShell(contenido){
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-buswrap")){const b=document.getElementById("c-sug");if(b)b.hidden=true;}});
   // Con sesión abierta, "/" abre el panel: los enlaces a la portada van a "/?inicio" para seguir en la cartelera
   if(_cartHaySesion()&&!window._cartLinksSesion){window._cartLinksSesion=true;
-    let _ua=0;const _act=()=>{const n=Date.now();if(n-_ua>20000){_ua=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}}};
+    let _ua=0;const _act=()=>{const n=Date.now();if(n-_ua>20000){_ua=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}renovarSesion();}};
     ["mousemove","mousedown","keydown","touchstart","scroll","click"].forEach(ev=>document.addEventListener(ev,_act,{passive:true}));_act();
     document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a[href]");if(!a)return;const h=a.getAttribute("href");
       if(h==="/"||/^\/#/.test(h))a.setAttribute("href","/?inicio"+(h.length>1?h.slice(1):""));},true);

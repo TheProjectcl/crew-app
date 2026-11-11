@@ -21,7 +21,7 @@ const VENCE_MIN = 10;          // minutos que dura un código
 const MAX_INTENTOS = 5;        // intentos fallidos por código
 const ESPERA_SEG = 45;         // tiempo mínimo entre envíos al mismo correo
 const MAX_POR_HORA = 6;        // envíos por correo por hora
-const SESION_HORAS = 12;      // duración máxima de la sesión (una jornada); además la app la cierra tras 15 min sin uso
+const SESION_HORAS = 12;      // la sesión vence 12 h después del último uso (se renueva al usarla); además la app la cierra tras 15 min sin uso
 const MAX_FALLOS_CLAVE = 10;   // contraseñas incorrectas por correo cada 15 minutos
 
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS" };
@@ -168,7 +168,8 @@ async function sesion(body: any) {
   const h = await sha(token);
   const s = (await dbGet("login_sesiones", `token_hash=eq.${h}&expira_at=gt.${new Date().toISOString()}`))[0];
   if (!s) return json({ error: "Sesión vencida" }, 401);
-  dbPatch("login_sesiones", `token_hash=eq.${h}`, { ultimo_uso_at: new Date().toISOString() }).catch(() => {});
+  // Sesión deslizante: mientras se use, se renueva por otras SESION_HORAS (la app igual la cierra tras 15 min sin uso)
+  dbPatch("login_sesiones", `token_hash=eq.${h}`, { ultimo_uso_at: new Date().toISOString(), expira_at: new Date(Date.now() + SESION_HORAS * 3600e3).toISOString() }).catch(() => {});
   const cuentas = await cuentasDe(s.email);
   if (!cuentas.length) return json({ error: "Cuenta no encontrada" }, 401);
   return json({ ok: true, email: s.email, cuentas });
