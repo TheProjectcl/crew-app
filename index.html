@@ -15376,10 +15376,10 @@ footer .gx-fl{flex-wrap:wrap;gap:10px 22px}
   .gx-sec{padding:88px 0}
   .gx .c-contacto{padding:32px 22px;border-radius:22px}
 }
+@media (max-width:720px){.gx-cta-nav{display:none}}
 @media (max-width:560px){
   .gx-nav{padding-left:14px}
   .gx-nav .gx-logo{width:23px;overflow:hidden}
-  .gx-cta-nav{display:none}
   .gx-navr .gx-lnk{padding:0 12px 0 6px}
   .gx-sec-head{margin-bottom:36px}
   .gx-inner-top{padding-top:84px}
@@ -15760,9 +15760,11 @@ function cartTicket(ev){
 // Efectos de la portada: aparición al bajar, brillo que sigue el cursor y la entrada que se inclina
 function cartFx(){
   const RM=matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Aparición al bajar: se revisa con el scroll (no depende de IntersectionObserver, así nada queda invisible)
   const rv=[...document.querySelectorAll(".gx-rv")];
-  if(!("IntersectionObserver" in window)||RM)rv.forEach(e=>e.classList.add("gx-in"));
-  else{const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("gx-in");io.unobserve(e.target);}}),{threshold:.14});rv.forEach(e=>io.observe(e));}
+  const ver=()=>{const h=innerHeight;for(const e of rv){if(!e.classList.contains("gx-in")&&e.getBoundingClientRect().top<h*.94)e.classList.add("gx-in");}};
+  if(RM)rv.forEach(e=>e.classList.add("gx-in"));
+  else{if(window._gxVer){removeEventListener("scroll",window._gxVer);removeEventListener("resize",window._gxVer);}window._gxVer=ver;addEventListener("scroll",ver,{passive:true});addEventListener("resize",ver);ver();setTimeout(ver,400);}
   document.querySelectorAll(".gx-xc").forEach(c=>c.addEventListener("pointermove",e=>{const r=c.getBoundingClientRect();c.style.setProperty("--mx",(e.clientX-r.left)+"px");c.style.setProperty("--my",(e.clientY-r.top)+"px");}));
   const stage=document.getElementById("gx-tkt-stage"),tkt=document.getElementById("gx-tkt");
   if(stage&&tkt&&!RM){
