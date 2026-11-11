@@ -74,7 +74,7 @@ input,select,textarea,button{font-family:inherit}
 #app{display:flex;min-height:100vh}
 .sidebar{width:220px;background:var(--surface);border-right:1px solid var(--line);position:fixed;top:0;left:0;height:100vh;display:flex;flex-direction:column;z-index:100;overflow-y:auto}
 .sb-top{padding:18px 16px;border-bottom:1px solid var(--line-2)}
-.sb-gl{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line-2)}
+.sb-gl{display:flex;align-items:center;padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line-2)}
 .sb-gl-logo{display:block;line-height:0;text-decoration:none}
 .sb-gl-logo .gl-neg{display:none!important}
 body.dark-mode .sb-gl-logo .gl-pos{display:none!important}
@@ -296,7 +296,6 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
     <div class="sb-top">
       <div class="sb-gl">
         <a id="sb-gl-logo" class="sb-gl-logo" href="/?inicio" target="_blank" rel="noopener" title="Ir a la página principal de Guestly" aria-label="Guestly, página principal"></a>
-        <a class="sb-gl-btn" href="/?inicio" target="_blank" rel="noopener" title="Abrir guestly.cl (la página principal con todos los eventos) en otra pestaña">Ir al sitio <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
       </div>
       <div id="sb-prod-color" style="height:4px;border-radius:4px;margin-bottom:10px;background:#534AB7"></div>
       <div style="display:flex;align-items:center;gap:6px;justify-content:space-between">
@@ -421,7 +420,7 @@ function glLogo(v,h,extra){
   return `<svg class="gl-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${GL_VB_W} ${GL_VB_H}" width="${w}" height="${h}" style="display:block;${extra||""}" role="img" aria-label="GUESTLY">${v==="neg"?GL_NEG:GL_POS}</svg>`;
 }
 // Logo en la cabecera del menú lateral (versión clara y oscura; el CSS muestra la que corresponde al tema)
-(function(){const el=document.getElementById("sb-gl-logo");if(el)el.innerHTML=glLogo("pos",17).replace('class="gl-logo"','class="gl-logo gl-pos"')+glLogo("neg",17).replace('class="gl-logo"','class="gl-logo gl-neg"');})();
+(function(){const el=document.getElementById("sb-gl-logo");if(el)el.innerHTML=glLogo("pos",24).replace('class="gl-logo"','class="gl-logo gl-pos"')+glLogo("neg",24).replace('class="gl-logo"','class="gl-logo gl-neg"');})();
 // En emails va como PNG: Gmail/Outlook no muestran SVG
 const GL_EMAIL_LOGO='<img src="https://guestly.cl/brand/logo-email.png" alt="GUESTLY" width="230" height="40" style="height:40px;width:230px;display:inline-block;border:0">';
 // ═══════════════════════════════════
