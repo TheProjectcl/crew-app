@@ -267,6 +267,16 @@ body.dark-mode .crew-bell-badge{border-color:var(--surface)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+<script>
+// Si hay una sesión abierta en este navegador, no mostrar el formulario de ingreso mientras se restaura (evita el "parpadeo" del login)
+(function(){try{
+  if(location.search||/^\/validar\/?$/.test(location.pathname))return;
+  var s=JSON.parse(localStorage.getItem("crew-session")||"null");if(!s||!s.email)return;
+  var at=+s.at||0,ult=+localStorage.getItem("gl-ult-act")||0;
+  if(Date.now()-at<12*3600e3&&ult&&Date.now()-ult<15*60e3)document.documentElement.classList.add("gl-restaurando");
+}catch(e){}})();
+</script>
+<style>html.gl-restaurando #login-screen .login-box{visibility:hidden}</style>
 
 <div id="login-screen">
   <div class="login-box">
@@ -1653,6 +1663,7 @@ async function restaurarSesion(){
     if(!email||!pass)return;
     await intentarLogin(email,pass,true);
   }catch(e){console.warn("No se pudo restaurar sesión:",e);}
+  finally{document.documentElement.classList.remove("gl-restaurando");}
 }
 
 // ── Auto-logout por inactividad (15 min) ──
@@ -1663,8 +1674,11 @@ function iniciarInactividad(){
   const resetTimer=()=>{
     const n=Date.now();if(n-_ultGuardado>20000){_ultGuardado=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}}
     clearTimeout(_inactTimer);
-    _inactTimer=setTimeout(()=>{
+    _inactTimer=setTimeout(function alVencer(){
       if(!CU)return;
+      // Si hubo actividad en otra pestaña (panel o cartelera con la sesión abierta), no cerrar todavía
+      const otra=Number(localStorage.getItem("gl-ult-act")||0);
+      if(otra&&Date.now()-otra<MINS*60*1000){clearTimeout(_inactTimer);_inactTimer=setTimeout(alVencer,MINS*60*1000-(Date.now()-otra)+1000);return;}
       toast("Sesión cerrada por inactividad","warn");
       setTimeout(()=>doLogout(),1500);
     },MINS*60*1000);
@@ -14997,6 +15011,8 @@ function cartShell(contenido){
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-buswrap")){const b=document.getElementById("c-sug");if(b)b.hidden=true;}});
   // Con sesión abierta, "/" abre el panel: los enlaces a la portada van a "/?inicio" para seguir en la cartelera
   if(_cartHaySesion()&&!window._cartLinksSesion){window._cartLinksSesion=true;
+    let _ua=0;const _act=()=>{const n=Date.now();if(n-_ua>20000){_ua=n;try{localStorage.setItem("gl-ult-act",String(n));}catch(e){}}};
+    ["mousemove","mousedown","keydown","touchstart","scroll","click"].forEach(ev=>document.addEventListener(ev,_act,{passive:true}));_act();
     document.addEventListener("click",e=>{const a=e.target.closest&&e.target.closest("a[href]");if(!a)return;const h=a.getAttribute("href");
       if(h==="/"||/^\/#/.test(h))a.setAttribute("href","/?inicio"+(h.length>1?h.slice(1):""));},true);
     document.querySelectorAll('.ch-nav a[href="/app"],.c-pie a[href="/app"]').forEach(a=>a.textContent="Mi panel");}
