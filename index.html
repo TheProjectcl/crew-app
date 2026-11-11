@@ -708,7 +708,7 @@ const closeModal=()=>{if(window._modalBloqueado)return;$("modal").classList.add(
 let _modalDownFuera=false;
 $("modal").addEventListener("mousedown",e=>{_modalDownFuera=(e.target===$("modal"));});
 $("modal").addEventListener("mouseup",e=>{if(_modalDownFuera&&e.target===$("modal"))closeModal();_modalDownFuera=false;});
-document.addEventListener("keydown",e=>{if(e.key==="Escape"&&!$("modal").classList.contains("hidden")&&!window._modalBloqueado)closeModal();});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("modal")&&!$("modal").classList.contains("hidden")&&!window._modalBloqueado)closeModal();});
 
 // ═══════════════════════════════════
 // LOAD DATA
@@ -9181,6 +9181,9 @@ function mostrarRegistroCF(eventoId){
     label{display:block;font-size:10px;color:#666;margin-bottom:4px;margin-top:12px;letter-spacing:1px;text-transform:uppercase}
     input{width:100%;padding:10px 12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;outline:none}
     input:focus{border-color:#fff}
+    select{width:100%;padding:10px 30px 10px 12px;background:#1a1a1a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 10px center;border:1px solid #2a2a2a;border-radius:8px;color:#fff;font-size:13px;outline:none;-webkit-appearance:none;appearance:none}
+    select:focus{border-color:#fff}
+    select option{background:#1a1a1a;color:#fff}
     .cf-btn{width:100%;padding:13px;background:#fff;color:#000;border:none;border-radius:8px;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;margin-top:20px}
     .cf-btn:hover{background:#e5e5e5}
     .cf-btn:disabled{background:#333;color:#666;cursor:not-allowed}
@@ -9290,10 +9293,10 @@ function mostrarRegistroCF(eventoId){
           <label>WhatsApp *</label>
           <input id="cf-wa" type="tel" placeholder="+56912345678">
           <label>Fecha de nacimiento *</label>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1.5fr;gap:8px">
-            <input id="cf-dob-d" type="number" placeholder="Día" min="1" max="31" style="text-align:center">
-            <input id="cf-dob-m" type="number" placeholder="Mes" min="1" max="12" style="text-align:center">
-            <input id="cf-dob-y" type="number" placeholder="Año" min="1900" max="2010" style="text-align:center">
+          <div style="display:grid;grid-template-columns:1fr 1.6fr 1.2fr;gap:8px">
+            <select id="cf-dob-d" aria-label="Día de nacimiento"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>
+            <select id="cf-dob-m" aria-label="Mes de nacimiento"><option value="">Mes</option>${["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m,i)=>`<option value="${String(i+1).padStart(2,"0")}">${m}</option>`).join("")}</select>
+            <select id="cf-dob-y" aria-label="Año de nacimiento"><option value="">Año</option>${Array.from({length:71},(_,i)=>`<option value="${2020-i}">${2020-i}</option>`).join("")}</select>
           </div>
           <label>Email (para recibir tu link) *</label>
           <input id="cf-email" type="email" placeholder="tu@email.com">
@@ -9324,7 +9327,8 @@ async function enviarPostulacionCF(eventoId, productora_id){
   const dobD = (document.getElementById("cf-dob-d")?.value||"").trim().padStart(2,"0");
   const dobM = (document.getElementById("cf-dob-m")?.value||"").trim().padStart(2,"0");
   const dobY = (document.getElementById("cf-dob-y")?.value||"").trim();
-  const dob  = dobD&&dobM&&dobY ? `${dobY}-${dobM}-${dobD}` : "";
+  let dob  = dobD&&dobM&&dobY&&dobD!=="00"&&dobM!=="00" ? `${dobY}-${dobM}-${dobD}` : "";
+  if(dob){const t=new Date(+dobY,+dobM-1,+dobD);if(t.getMonth()!==+dobM-1)dob="__invalida__";} // ej: 31 de febrero
   const email    = (document.getElementById("cf-email")?.value||"").trim();
   const consent  = document.getElementById("cf-consent")?.checked;
 
@@ -9336,6 +9340,7 @@ async function enviarPostulacionCF(eventoId, productora_id){
   if(!ig) return show("Ingresa tu usuario de Instagram.");
   if(!wa.match(/^\+?569\d{8}$/)) return show("WhatsApp inválido. Usa formato +56912345678.");
   if(!dob) return show("Ingresa tu fecha de nacimiento.");
+  if(dob==="__invalida__") return show("Esa fecha no existe. Revisa el día y el mes.");
   const edad = (Date.now()-new Date(dob))/1000/3600/24/365.25;
   if(edad < 18) return show("Debes ser mayor de 18 años para participar.");
   if(!email.includes("@")) return show("Email inválido.");
@@ -14787,9 +14792,19 @@ const CART_CSS=`
   .ch{position:sticky;top:0;z-index:20;background:rgba(11,11,12,.94);backdrop-filter:blur(10px);border-bottom:1px solid #1F1F22}
   .ch .cw{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}
   .ch-logo{display:flex;align-items:center;text-decoration:none}
-  .ch-bus{flex:1 1 320px;display:flex;align-items:center;background:#17171A;border:1px solid #26262A;border-radius:999px;height:46px;padding:0 16px;min-width:220px}
+  .ch-buswrap{flex:1 1 320px;position:relative;min-width:220px}
+  .ch-bus{width:100%;display:flex;align-items:center;background:#17171A;border:1px solid #26262A;border-radius:999px;height:46px;padding:0 16px;min-width:220px}
   .ch-bus input{flex:1;background:transparent;border:0;outline:none;color:#F4F4F2;font-size:15px;padding:0 10px;font-family:inherit;min-width:0}
   .ch-nav{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .c-sug{position:absolute;top:54px;left:0;right:0;background:#141416;border:1px solid #26262A;border-radius:16px;padding:8px;box-shadow:0 18px 50px rgba(0,0,0,.6);max-height:min(70vh,520px);overflow-y:auto;z-index:30}
+  .c-sug-t{font-size:11px;font-weight:700;letter-spacing:1.5px;color:#8A8A90;padding:10px 10px 6px}
+  .c-sug a{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:10px;text-decoration:none;color:#F4F4F2}
+  .c-sug a.on,.c-sug a:hover{background:#1F1F23}
+  .c-sug img,.c-sug .c-sug-ph{width:44px;height:44px;border-radius:8px;object-fit:cover;flex:0 0 auto;background:#26262A;display:flex;align-items:center;justify-content:center;font-weight:700;color:#9A9AA0;font-size:15px}
+  .c-sug b{display:block;font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-sug small{display:block;font-size:12px;color:#9A9AA0;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .c-sug .c-sug-vacio{padding:16px 10px;color:#9A9AA0;font-size:14px}
+  .c-sug mark{background:none;color:#2BE07B}
   .ch-nav a,.ch-nav button{color:#D6D6D2;text-decoration:none;font-size:15px;padding:12px 12px;background:none;border:0;font-family:inherit;cursor:pointer;display:flex;align-items:center;gap:6px}
   .ch-nav a:hover,.ch-nav button:hover{color:#fff}
   .ch-cta{background:#2BE07B!important;color:#0B0B0C!important;font-weight:700;border-radius:999px;padding:13px 20px!important;margin-left:6px}
@@ -14875,11 +14890,14 @@ function cartShell(contenido){
   document.body.innerHTML=`<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><style>${CART_CSS}</style>
   <header class="ch"><div class="cw">
     <a class="ch-logo" href="/" aria-label="Guestly, inicio">${glLogo("neg",24,"display:block")}</a>
-    <form class="ch-bus" role="search" onsubmit="event.preventDefault();cartBuscar(this.q.value)">
+    <div class="ch-buswrap">
+    <form class="ch-bus" role="search" autocomplete="off" onsubmit="event.preventDefault();cartIrSugerencia()">
       <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9A9AA0" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
       <label for="cq" class="c-sr">Buscar eventos</label>
-      <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" oninput="cartBuscar(this.value)">
+      <input id="cq" name="q" type="search" placeholder="Busca eventos, productoras o lugares" role="combobox" aria-expanded="false" aria-controls="c-sug" aria-autocomplete="list" oninput="cartSugerir(this.value)" onfocus="if(this.value.trim())cartSugerir(this.value)" onkeydown="cartTeclaSug(event)">
     </form>
+    <div id="c-sug" class="c-sug" role="listbox" hidden></div>
+    </div>
     <nav class="ch-nav" aria-label="Principal">
       <a class="ch-ev" href="/#eventos">Eventos</a>
       <div class="ch-dd"><button type="button" aria-expanded="false" onclick="const m=this.nextElementSibling;m.classList.toggle('on');this.setAttribute('aria-expanded',m.classList.contains('on'))">¿Eres productor? <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></button>
@@ -14898,6 +14916,7 @@ function cartShell(contenido){
     <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">${glLogo("neg",18,"display:block")}<span>© ${new Date().getFullYear()} Guestly</span></div>
     <div style="display:flex;gap:20px;flex-wrap:wrap"><a href="/#eventos">Eventos</a><a href="/#servicios">Servicios</a><a href="/#contacto">Contacto</a><a href="/validar">Validador QR</a><a href="/app">Ingresar</a></div>
   </footer>`;
+  document.addEventListener("click",e=>{if(!e.target.closest(".ch-buswrap")){const b=document.getElementById("c-sug");if(b)b.hidden=true;}});
   document.addEventListener("click",e=>{if(!e.target.closest(".ch-dd"))document.querySelectorAll(".ch-menu.on").forEach(m=>{m.classList.remove("on");m.previousElementSibling?.setAttribute("aria-expanded","false");});});
 }
 function cartCard(ev,i){
@@ -14920,11 +14939,65 @@ function cartPintarFila(){
   document.querySelectorAll(".c-chip").forEach(b=>b.classList.toggle("on",b.dataset.f===_cartFiltro));
 }
 function cartFiltrar(f){_cartFiltro=f;cartPintarFila();}
-function cartBuscar(q){
-  _cartQ=q||"";
-  if(!document.getElementById("c-fila")){if(_cartQ.trim())location.href="/?buscar="+encodeURIComponent(_cartQ.trim());return;}
-  cartPintarFila();
-  if(_cartQ.trim())document.getElementById("eventos")?.scrollIntoView({behavior:"smooth",block:"start"});
+// Buscador: muestra sugerencias (eventos y productoras) bajo la barra; al elegir una, va directo a su página
+const cartNorm=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
+let _cartSug=[],_cartSugIdx=-1,_cartCargandoSug=null;
+const cartCoincide=(texto,q)=>{const h=cartNorm(texto);return cartNorm(q).split(/\s+/).filter(Boolean).every(t=>h.includes(t));};
+function cartBuscarEn(q){
+  const evs=_cartEventos.filter(e=>cartCoincide(e.nombre+" "+e.lugar+" "+e.productora.nombre,q));
+  const prods={};_cartEventos.forEach(e=>{const p=e.productora;if(p.id&&cartCoincide(p.nombre,q)){(prods[p.id]=prods[p.id]||{...p,n:0}).n++;}});
+  return {evs,ps:Object.values(prods)};
+}
+async function cartAsegurarEventos(){
+  if(_cartEventos.length)return;
+  if(!_cartCargandoSug)_cartCargandoSug=cartPost({accion:"listar"}).then(j=>{_cartEventos=j.eventos||[];}).catch(()=>{});
+  await _cartCargandoSug;
+}
+function cartResaltar(txt,q){
+  const t=String(txt||""),i=cartNorm(t).indexOf(cartNorm(q));
+  return i<0||!q?escH(t):escH(t.slice(0,i))+"<mark>"+escH(t.slice(i,i+q.length))+"</mark>"+escH(t.slice(i+q.length));
+}
+async function cartSugerir(valor){
+  const box=document.getElementById("c-sug"),inp=document.getElementById("cq");if(!box)return;
+  const q=String(valor||"").trim();
+  if(!q){box.hidden=true;inp?.setAttribute("aria-expanded","false");_cartSug=[];return;}
+  await cartAsegurarEventos();
+  if((inp?.value||"").trim()!==q)return; // ya escribió otra cosa
+  const r=cartBuscarEn(q),evs=r.evs.slice(0,6),ps=r.ps.slice(0,4),total=r.evs.length+r.ps.length;
+  _cartSug=[...ps.map(p=>({url:"/?productora="+encodeURIComponent(p.id)})),...evs.map(e=>({url:"/?evento="+encodeURIComponent(e.id)}))];
+  _cartSugIdx=-1;
+  let k=0;
+  box.innerHTML=(ps.length?`<div class="c-sug-t">PRODUCTORAS</div>`+ps.map(p=>`<a href="${_cartSug[k].url}" role="option" data-i="${k++}">${p.logo?`<img src="${escH(p.logo)}" alt="">`:`<span class="c-sug-ph">${escH((p.nombre||"?").charAt(0).toUpperCase())}</span>`}<span style="min-width:0"><b>${cartResaltar(p.nombre,q)}</b><small>${p.n} próximo${p.n>1?"s":""} evento${p.n>1?"s":""}</small></span></a>`).join(""):"")
+    +(evs.length?`<div class="c-sug-t">EVENTOS</div>`+evs.map(e=>`<a href="${_cartSug[k].url}" role="option" data-i="${k++}">${e.flyer?`<img src="${escH(e.flyer)}" alt="">`:`<span class="c-sug-ph">${escH(cartFecha(e.fecha).d||"")}</span>`}<span style="min-width:0"><b>${cartResaltar(e.nombre,q)}</b><small>${escH(cartFecha(e.fecha,true))}${e.lugar?" · "+escH(e.lugar):""} · ${escH(e.productora.nombre)}</small></span></a>`).join(""):"")
+    +(!_cartSug.length?`<div class="c-sug-vacio">No encontramos eventos ni productoras con “${escH(q)}”.</div>`:`<a href="/?buscar=${encodeURIComponent(q)}" style="justify-content:center;color:#2BE07B;font-weight:600;font-size:14px;margin-top:4px;border-top:1px solid #26262A;border-radius:0 0 10px 10px">Ver todos los resultados (${total}) · Enter</a>`);
+  box.hidden=false;inp?.setAttribute("aria-expanded","true");cartMarcarSug();
+}
+function cartMarcarSug(){document.querySelectorAll("#c-sug a").forEach(a=>a.classList.toggle("on",+a.dataset.i===_cartSugIdx));}
+function cartTeclaSug(ev){
+  const box=document.getElementById("c-sug");if(!box||box.hidden)return;
+  if(ev.key==="ArrowDown"&&_cartSug.length){ev.preventDefault();_cartSugIdx=(_cartSugIdx+1)%_cartSug.length;cartMarcarSug();}
+  else if(ev.key==="ArrowUp"&&_cartSug.length){ev.preventDefault();_cartSugIdx=(_cartSugIdx-1+_cartSug.length)%_cartSug.length;cartMarcarSug();}
+  else if(ev.key==="Escape"){box.hidden=true;}
+}
+function cartIrSugerencia(){
+  const q=(document.getElementById("cq")?.value||"").trim();
+  if(_cartSugIdx>=0&&_cartSug[_cartSugIdx]){location.href=_cartSug[_cartSugIdx].url;return;}
+  if(q)location.href="/?buscar="+encodeURIComponent(q);
+}
+// Página de resultados: guestly.cl/?buscar=año nuevo
+async function mostrarBusqueda(q){
+  cartShell(`<div style="padding:80px 0;text-align:center;color:#8A8A90">Buscando…</div>`);
+  const inp=document.getElementById("cq");if(inp)inp.value=q;
+  await cartAsegurarEventos();
+  const {evs,ps}=cartBuscarEn(q);
+  document.title=`${q} · Guestly`;
+  document.getElementById("c-main").innerHTML=`<a class="c-back" href="/">← Todos los eventos</a>
+    <h1 class="c-h2" style="margin-top:14px">Resultados para “${escH(q)}”</h1>
+    <p class="c-sub">${evs.length} evento${evs.length===1?"":"s"}${ps.length?` · ${ps.length} productora${ps.length===1?"":"s"}`:""}</p>
+    ${ps.length?`<section class="c-sec" style="padding-top:28px"><h2 style="margin:0 0 14px;font-size:18px">Productoras</h2><div style="display:flex;gap:12px;flex-wrap:wrap">${ps.map(p=>`<a class="c-prod" style="flex:1 1 260px;max-width:360px" href="/?productora=${encodeURIComponent(p.id)}">${p.logo?`<img src="${escH(p.logo)}" alt="">`:`<span class="c-pl"></span>`}<span style="flex:1;min-width:0"><b style="font-size:16px">${escH(p.nombre)}</b><small style="display:block;color:#9A9AA0;font-size:13px">${p.n} próximo${p.n>1?"s":""} evento${p.n>1?"s":""}</small></span></a>`).join("")}</div></section>`:""}
+    <section class="c-sec" style="padding-top:28px">${ps.length?`<h2 style="margin:0 0 14px;font-size:18px">Eventos</h2>`:""}
+      <div class="c-grid" style="grid-template-columns:repeat(auto-fill,minmax(250px,1fr))">${evs.map((e,i)=>cartCard(e,i)).join("")||`<div class="c-vacio">No encontramos eventos con “${escH(q)}”. Prueba con otra palabra.</div>`}</div>
+    </section>`;
 }
 const CART_SERVICIOS=[
   ["Venta y listas","Close Friends con aprobación, listas, cumpleaños y mesas VIP, cada uno con su link."],
@@ -14986,11 +15059,8 @@ async function mostrarCartelera(){
         </form>
       </div>
     </section>`;
-  const qIni=new URLSearchParams(location.search).get("buscar");
-  if(qIni){const i=document.getElementById("cq");if(i)i.value=qIni;_cartQ=qIni;}
   cartPintarFila();
-  if(qIni)setTimeout(()=>document.getElementById("eventos")?.scrollIntoView({block:"start"}),50);
-  else if(location.hash)setTimeout(()=>document.querySelector(location.hash)?.scrollIntoView({block:"start"}),50);
+  if(location.hash)setTimeout(()=>document.querySelector(location.hash)?.scrollIntoView({block:"start"}),50);
   if(dest.length>1){clearInterval(window._cartTimer);window._cartTimer=setInterval(()=>{const n=document.querySelectorAll(".c-slide").length;if(!n){clearInterval(window._cartTimer);return;}cartIrSlide(((window._cartSlide||0)+1)%n,true);},6500);}
 }
 function cartIrSlide(i,auto){
@@ -15055,7 +15125,7 @@ function _cartHaySesion(){
     const at=+s.at||0,ult=+localStorage.getItem("gl-ult-act")||at;
     return Date.now()-at<SES_MAX_H*3600e3&&Date.now()-ult<SES_INACT_MIN*60e3;}catch(e){return false;}
 }
-const _esPortadaPublica=/^\/(index\.html)?$/.test(location.pathname)&&(!location.search||/^\?buscar=/.test(location.search))&&!_cartHaySesion();
+const _esPortadaPublica=/^\/(index\.html)?$/.test(location.pathname)&&!location.search&&!_cartHaySesion();
 
 const _esValidador=/^\/validar\/?$/.test(location.pathname);
 const _cfUrl = new URLSearchParams(window.location.search);
@@ -15070,6 +15140,7 @@ else if(_cfUrl.has("pago")){ mostrarResultadoPago(_cfUrl.get("pago")); }
 else if(_cfUrl.has("wp_test")){ mostrarPruebaWebpay(); }
 else if(_cfUrl.has("evento")){ mostrarEventoPublico(_cfUrl.get("evento")); }
 else if(_cfUrl.has("productora")){ mostrarProductoraPublica(_cfUrl.get("productora")); }
+else if(_cfUrl.has("buscar")&&/^\/(index\.html)?$/.test(location.pathname)){ mostrarBusqueda((_cfUrl.get("buscar")||"").trim()); }
 else if(_esPortadaPublica){ mostrarCartelera(); }
 
 // ═══════════════════════════════════
@@ -15087,7 +15158,7 @@ else if(_esPortadaPublica){ mostrarCartelera(); }
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora","buscar"].some(k=>_pub.has(k));
   if(!_esLinkPublico&&!_esValidador&&!_esPortadaPublica) await restaurarSesion();
 })();
 
