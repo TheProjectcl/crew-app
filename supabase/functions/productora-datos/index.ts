@@ -40,7 +40,7 @@ async function cuentasDe(auth: any) {
   if (!email || !/^[0-9a-f]{64}$/.test(tok)) return [];
   const s = (await dbGet("login_sesiones", `token_hash=eq.${await sha(tok)}&expira_at=gt.${new Date().toISOString()}&select=email`))[0];
   if (!s || String(s.email).toLowerCase() !== email) return [];
-  return (await dbGet("users", `email=ilike.${encodeURIComponent(email)}&select=id,role,productora_id,email,activo,active`)).filter((u: any) => u.activo !== false && u.active !== false);
+  return (await dbGet("users", `email=ilike.${encodeURIComponent(email)}`)).filter((u: any) => u.activo !== false && u.active !== false);
 }
 const esSuper = (us: any[]) => us.some((u) => u.role === "superadmin");
 const rolEn = (us: any[], prodId: string) => us.filter((u) => u.productora_id === prodId).map((u) => u.role);
