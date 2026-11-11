@@ -2485,6 +2485,10 @@ let CURRENT_VIEW=null;
 function goView(v){
   // GUARD: superadmin sin productora seleccionada solo puede ver vistas globales
   const vistasGlobales=["crew-global","productoras","usuarios-global"];
+  if(CU?.role!=="superadmin"&&vistasGlobales.includes(v)){
+    toast("Esa sección es solo del administrador de Guestly","error");
+    v="dashboard";
+  }
   if(CU?.role==="superadmin"&&!CP&&!vistasGlobales.includes(v)){
     toast("Selecciona una productora primero","warn");
     v="crew-global";
@@ -2864,6 +2868,7 @@ async function salirDeProductora(){
 
 // ── USUARIOS GLOBAL (superadmin) ──
 VIEWS["usuarios-global"]=()=>{
+  if(CU?.role!=="superadmin"){$("main-content").innerHTML=`<div class="page-title">Sin permisos</div><div class="card" style="color:#999">Esta sección es solo del administrador de Guestly.</div>`;return;}
   const q=(window._uGlobalQ||"").toLowerCase().trim();
   const filtroRol=window._uGlobalRol||"all";
   const filtra=arr=>arr.filter(u=>{
@@ -7449,17 +7454,31 @@ VIEWS.usuarios=()=>{
         ||`<tr><td colspan="${cols}" style="text-align:center;color:#999;padding:24px">${q?"Nadie coincide con la búsqueda.":_usrTab==="equipo"?"Aún no hay equipo. Agrégalo con + Nuevo.":"Aún no hay clientes con cuenta."}</td></tr>`}</tbody>
     </table></div></div>`;
 };
+// ══ JERARQUÍA DE ROLES ══════════════════════════════════════════════
+// superadmin (dueño del software) > owner (dueño de la productora) >
+// coordinator > resto del equipo (jefes, staff, embajadores) > clientes.
+// Reglas: el rol superadmin no se asigna desde la app a nadie; el rol
+// owner solo lo asigna el owner de la productora (o el superadmin);
+// un coordinator no crea ni asigna owner/coordinator; y NADIE puede
+// cambiarse su propio rol. Estas reglas viven en rolAsignable() y se
+// revalidan al guardar, no solo al pintar el formulario.
+function rolAsignable(rol){
+  if(rol==="superadmin")return false;                                   // jamás desde la app
+  if(CU?.role==="superadmin")return true;                               // superadmin asigna el resto
+  if(!["owner","coordinator"].includes(CU?.role))return false;          // nadie más administra usuarios
+  if(rol==="owner")return CU.role==="owner";                            // owner solo lo da el owner
+  if(rol==="coordinator")return CU.role==="owner";                      // coordinator solo lo da el owner
+  return true;                                                          // roles operativos
+}
 function openNuevoUser(){
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   // Coordinator NO puede crear otros owners ni coordinators (solo owner/superadmin pueden).
   // Esto evita escalada de privilegios desde una cuenta de coordinator comprometida.
-  const puedeCrearOwners=["owner","superadmin"].includes(CU.role);
   const rolesDisponibles=Object.entries(ROLE_META).filter(([k])=>{
-    if(k==="superadmin")return false;
     if(k==="comprador"||k==="cumpleanero")return false; // clientes: se crean solos, no desde aquí
-    if(!puedeCrearOwners&&(k==="owner"||k==="coordinator"))return false;
-    return true;
+    return rolAsignable(k);
   });
+  const puedeCrearOwners=["owner","superadmin"].includes(CU.role);
   openModal("Nuevo usuario",`
     <label class="form-label">Nombre completo</label><input class="form-input" id="nu-n" placeholder="Nombre Apellido">
     <label class="form-label">Email</label><input class="form-input" id="nu-e" type="email" placeholder="email@productora.cl">
@@ -7474,11 +7493,9 @@ function openNuevoUser(){
 async function saveNuevoUser(){
   const name=($("nu-n")?.value||"").trim(),email=($("nu-e")?.value||"").trim().toLowerCase();if(!name||!email)return;
   const nuevoRol=$("nu-r")?.value||"door_staff";
-  // GUARD adicional por si alguien fuerza el rol vía DevTools: coordinator no puede crear owner/coordinator
-  if(CU.role==="coordinator"&&["owner","coordinator","superadmin"].includes(nuevoRol)){
-    toast("No puedes crear usuarios con ese rol","error");return;
-  }
+  // GUARD por si alguien fuerza el rol vía DevTools: la jerarquía se revalida al guardar
   if(nuevoRol==="superadmin"){toast("Solo el dueño del software puede crear superadmins","error");return;}
+  if(!rolAsignable(nuevoRol)){toast("No puedes crear usuarios con ese rol","error");return;}
   // Email duplicado
   if(D.users.some(x=>x.email.toLowerCase()===email.toLowerCase())){toast("Ese email ya existe","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
@@ -7497,8 +7514,8 @@ async function delUser(id){
   if(CU.role==="coordinator"&&["owner","coordinator"].includes(u.role)){
     toast(`Como coordinador no puedes eliminar a un ${u.role==="owner"?"owner":"otro coordinator"}`,"error");return;
   }
-  // Owner solo puede eliminar usuarios de su propia productora (no de otras)
-  if(CU.role==="owner"&&u.productora_id!==CU.productora_id){
+  // Owner y coordinator solo pueden eliminar usuarios de su propia productora (no de otras)
+  if(["owner","coordinator"].includes(CU.role)&&u.productora_id!==CU.productora_id){
     toast("Solo puedes eliminar usuarios de tu productora","error");return;
   }
   // Si es el owner de esta productora, exigir doble confirmación
@@ -7528,14 +7545,14 @@ function openEditUser(uid,callbackView){
     if(u.productora_id!==CU.productora_id){toast("Solo puedes editar usuarios de tu productora","error");return;}
     if(u.role==="superadmin"){toast("No puedes editar al superadmin","error");return;}
     if(u.role==="owner"&&CU.role!=="owner"){toast("Solo el owner puede editar a otro owner","error");return;}
+    if(CU.role==="coordinator"&&u.role==="coordinator"&&u.id!==CU.id){toast("Como coordinador no puedes editar a otro coordinador","error");return;}
   }
   // Lista de productoras (solo superadmin puede mover usuarios entre productoras)
   const prods=D.productoras||[];
   const prodActual=prods.find(p=>p.id===u.productora_id);
   // Roles disponibles según quién edita
-  const rolesDisp=esSuper
-    ? Object.entries(ROLE_META).filter(([k])=>(k!=="superadmin"||u.role==="superadmin")&&(!["comprador","cumpleanero"].includes(k)||u.role===k))
-    : Object.entries(ROLE_META).filter(([k])=>k!=="superadmin"&&(CU.role==="owner"||k!=="owner")&&(!["comprador","cumpleanero"].includes(k)||u.role===k));
+  // El select de rol muestra solo lo que la jerarquía permite asignar (más el rol actual del usuario, para verlo)
+  const rolesDisp=Object.entries(ROLE_META).filter(([k])=>(!["superadmin","comprador","cumpleanero"].includes(k)||u.role===k)&&(rolAsignable(k)||u.role===k));
 
   openModal(`✏️ Editar usuario`,`
     <div style="font-size:11px;color:#888;margin-bottom:10px">Los campos con <span style="color:#EF4444">*</span> son obligatorios</div>
@@ -7549,12 +7566,14 @@ function openEditUser(uid,callbackView){
       <button class="btn" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('eu-pass').value='guestly123'">Sugerir: guestly123</button>
       <button class="btn" style="padding:4px 10px;font-size:11px" onclick="document.getElementById('eu-pass').value=generarPassAleatoria()">Aleatoria</button>
     </div>
-    ${u.role!=="superadmin"?`
+    ${u.role!=="superadmin"&&u.id===CU.id?`<label class="form-label">Rol</label><div class="alert alert-info" style="margin-top:4px">Tu rol es <strong>${ROLE_META[u.role]?.label||u.role}</strong> — nadie puede cambiarse su propio rol.</div>`:""}
+    ${u.role!=="superadmin"&&u.id!==CU.id?`
       <label class="form-label">Rol</label>
       <select class="form-select" id="eu-role">
         ${rolesDisp.map(([k,v])=>`<option value="${k}" ${u.role===k?"selected":""}>${v.icon} ${v.label}</option>`).join("")}
       </select>
-    `:`<div class="alert alert-info" style="margin-top:14px"><strong>Cuenta superadmin</strong> — el rol no puede modificarse.</div>`}
+    `:""}
+    ${u.role==="superadmin"?`<div class="alert alert-info" style="margin-top:14px"><strong>Cuenta superadmin</strong> — el rol no puede modificarse.</div>`:""}
     ${esSuper&&prods.length?`
       <label class="form-label">Productora</label>
       <select class="form-select" id="eu-prod">
@@ -7581,6 +7600,12 @@ async function saveEditUser(uid,callbackView){
   const esSuper=CU.role==="superadmin";
   const esOwner=["owner","coordinator"].includes(CU.role);
   if(!esSuper&&!esOwner){toast("No tienes permisos","error");return;}
+  if(!esSuper){
+    if(u.productora_id!==CU.productora_id){toast("Solo puedes editar usuarios de tu productora","error");return;}
+    if(u.role==="superadmin"){toast("No puedes editar al superadmin","error");return;}
+    if(u.role==="owner"&&CU.role!=="owner"){toast("Solo el owner puede editar a otro owner","error");return;}
+    if(CU.role==="coordinator"&&u.role==="coordinator"&&u.id!==CU.id){toast("Como coordinador no puedes editar a otro coordinador","error");return;}
+  }
 
   const name=($("eu-name")?.value||"").trim();
   const email=($("eu-email")?.value||"").trim().toLowerCase();
@@ -7601,10 +7626,10 @@ async function saveEditUser(uid,callbackView){
   if(u.role!=="superadmin"){
     const nuevoRol=$("eu-role")?.value;
     if(nuevoRol&&nuevoRol!==u.role){
-      // Owner no puede degradarse a sí mismo si es el único owner
-      if(u.id===CU.id&&u.role==="owner"&&nuevoRol!=="owner"){
-        toast("No puedes cambiar tu propio rol de owner","error");return;
-      }
+      // NADIE puede cambiarse su propio rol (evita auto-escalada y quedarse sin owner)
+      if(u.id===CU.id){toast("No puedes cambiar tu propio rol","error");return;}
+      // La jerarquía se revalida al guardar, por si alguien fuerza el select vía DevTools
+      if(!rolAsignable(nuevoRol)){toast("No puedes asignar ese rol","error");return;}
       cambios.role=nuevoRol;
     }
   }
