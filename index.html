@@ -14313,7 +14313,10 @@ function qrDescribir(r){
   else if(r.tipo==="inv"){const i=r.obj;const c=(D.bday_cumpleaneros||[]).find(x=>x.id===i.cumpleanero_id);const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);nombre=`${i.nombre||""} ${i.apellido||""}`.trim();origen=`Cumpleaños de ${c?.nombre||""} ${c?.apellido||""}`.trim();pulsera=ben?.pulsera||"";color="#854d0e";icono="🎂";}
   else if(r.tipo==="mesa"||r.tipo==="mesa_extra"){const p=r.obj,m=r.m;nombre=`${p.nombre||p.name||""} ${p.apellido||""}`.trim();origen=`Mesa ${m.table_num}${m.section?" · "+m.section:""}${r.tipo==="mesa_extra"?" · pulsera extra":""}`;pulsera=pulseraDeMesa(m)||"";color="#0e7490";icono="🍾";}
   const n=qrCantidad(r.tipo,r.obj);
-  return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev};
+  let rut="";
+  if(r.tipo==="cf")rut=((D.cf_postulantes||[]).find(x=>x.id===r.obj.postulante_id)||{}).rut||"";
+  else rut=r.obj.rut||"";
+  return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev,rut};
 }
 // ¿Hasta cuándo es válido este ticket? Devuelve {hasta:Date, txt, caducado} o null si no tiene límite
 function qrVencimiento(r){
@@ -14461,6 +14464,12 @@ async function qrRefrescar(r){
   }catch(e){}
   return false;
 }
+// Ficha que ve el validador al validar: Nombre / RUT / Tipo de entrada, en grande
+function qrFicha(d){
+  const f=(l,v)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px dashed rgba(0,0,0,.12);padding:5px 0"><span style="font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;opacity:.6;white-space:nowrap">${l}</span><span style="font-size:17px;font-weight:800;text-align:right;line-height:1.15">${v}</span></div>`;
+  return `<div style="background:rgba(255,255,255,.6);border-radius:10px;padding:4px 12px 6px;margin:8px 0 6px">${f("Nombre",d.nombre)}${f("RUT",d.rut?fmtRut(d.rut):"—")}${f("Tipo de entrada",d.pulsera||"—")}</div>`;
+}
+
 function qrMostrarResultado(tipo,titulo,detalle,acciones){
   if(window._valModo&&typeof valRegistrarResultado==="function")valRegistrarResultado(tipo,titulo,detalle);
   const el=$("qr-result");if(!el)return;
@@ -14495,7 +14504,7 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       const e=r.obj;
       if(e.status==="blocked")return qrMostrarResultado("err",`${d.nombre} — BLOQUEADO`,sub);
       const res=await runCheckin(e.id,1);
-      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
       if(res.code==="ALREADY_CHECKED_IN")return qrMostrarResultado("usado","ESTE TICKET YA FUE VALIDADO",`<strong>${d.nombre}</strong> · ${sub}<br><span style="font-size:15px;font-weight:800">Hora validación ${e.checked_in_at?fmtT(e.checked_in_at):"—"}</span>`);
       if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
       if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario). No puede entrar con este ticket.`);
@@ -14512,10 +14521,10 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends${fueraH?" FUERA DE HORARIO":""} (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok",fueraH?"VALIDADA FUERA DE HORARIO":"ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub+aviso+(fueraH?`<br>Quedó registrado como ingreso fuera de horario (límite ${venc.txt}).`:""));
+      return qrMostrarResultado("ok",fueraH?"VALIDADA FUERA DE HORARIO":"ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`+aviso+(fueraH?`<br>Quedó registrado como ingreso fuera de horario (límite ${venc.txt}).`:""));
     }
-    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
-    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
+    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
     if(r.tipo==="mesa"||r.tipo==="mesa_extra"){
       const p=r.obj,m=r.m;
       if(p.estado==="bloqueado"||p.estado==="rechazado")return qrMostrarResultado("err",`${d.nombre} — ${p.estado.toUpperCase()}`,sub);
@@ -14526,7 +14535,7 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("mesa_invitado","vip_table",m.id,`Mesa ${m.table_num} — ${d.nombre} ingresó (QR)`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);
+      return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);
     }
   }catch(e){qrMostrarResultado("err","Error",e.message||String(e));}
   finally{_qrProcesando=false;}
