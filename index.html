@@ -1000,7 +1000,7 @@ async function cerrarPendientesEvento(ev){
   // Resumen de cierre (snapshot) — las mesas/órdenes con comprobante sin revisar NO se tocan: quedan listadas para que las revises
   const mesas=(D.vip_tables||[]).filter(m=>m.event_id===ev.id);const ords=(D.cf_ordenes||[]).filter(o=>o.evento_id===ev.id);
   const entries=(D.acc_entries||[]).filter(e=>e.event_id===ev.id);
-  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===ev.id);const invs=(D.bday_invitados||[]).filter(i=>cumps.some(c=>c.id===i.cumpleanero_id));
+  const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===ev.id&&c.estado!=="pendiente"&&c.estado!=="rechazado");const invs=(D.bday_invitados||[]).filter(i=>cumps.some(c=>c.id===i.cumpleanero_id));
   const resumen={at,
     mesas_total:mesas.length,mesas_vendidas:mesas.filter(m=>m.estado_reserva==="cerrada").length,mesas_no_vendidas:mesas.filter(m=>m.estado_reserva==="no_vendida").length,mesas_comprobante_sin_revisar:pend.mesasComp.length,
     cf_pagadas:ords.filter(o=>o.estado==="conciliado").length,cf_comprobante_sin_conciliar:pend.cfComp.length,cf_vencidas:ords.filter(o=>o.estado==="vencido").length,cf_vencidas_por_cierre:pend.cfPend.length,
@@ -11897,6 +11897,7 @@ VIEWS["base-datos"]=async()=>{
         <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('cf')">Postulación Close Friends</button>
         <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('evento')">Página del evento</button>
         <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('emb')">Postulación Embajadores</button>
+        <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('cumple')">Postulación Cumpleaños</button>
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -11911,6 +11912,7 @@ VIEWS["base-datos"]=async()=>{
     if(tipo==="cf"){ if(!evId)return toast("Elige el evento primero","warn"); url=`${CF_APP_URL}/?cf=${evId}`; def="Postular a Close Friends"; }
     else if(tipo==="evento"){ if(!evId)return toast("Elige el evento primero","warn"); url=`${CF_APP_URL}/?evento=${evId}`; def="Ver el evento y comprar"; }
     else if(tipo==="emb"){ if(!pid)return toast("No encuentro tu productora","warn"); url=`${CF_APP_URL}/?emb=${pid}`; def="Postular como embajadora"; }
+    else if(tipo==="cumple"){ if(!evId)return toast("Elige el evento primero","warn"); url=`${CF_APP_URL}/?cumple=${evId}`; def="Inscribir mi cumpleaños"; }
     const texto=($("bd-link-txt")?.value||"").trim()||def;
     closeModal();
     const pos=window._bdLinkPos;
@@ -12382,7 +12384,25 @@ VIEWS["bday-cumpleaneros"] = async()=>{
       filtrados=filtrados.filter(c=>((c.nombre||"")+" "+(c.apellido||"")).toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q));
     }
     const grid=$("bday-grid");if(!grid)return;
-    grid.innerHTML=(!filtrados.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:"")
+    const posts=filtrados.filter(c=>c.estado==="pendiente");
+    filtrados=filtrados.filter(c=>c.estado!=="pendiente"&&c.estado!=="rechazado");
+    const postHTML=posts.length?`<div class="card" style="padding:16px 18px;border-left:4px solid #F59E0B">
+      <div style="font-weight:700;margin-bottom:4px">Postulaciones pendientes (${posts.length})</div>
+      <div style="font-size:12px;color:var(--ink-4);margin-bottom:6px">Llegaron por el link público de cumpleaños. Al aprobar eliges el beneficio y les llega el correo de bienvenida con su panel.</div>
+      ${posts.map(pp=>{const ev=(D.eventos||[]).find(e=>e.id===pp.evento_id);return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)">
+        <div style="flex:1;min-width:220px">
+          <div style="font-weight:700">🎂 ${pp.nombre} ${pp.apellido}</div>
+          <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${ev?.name||"—"} · ${pp.email||""}</div>
+          <div style="font-size:12px;color:var(--ink-3)">${pp.rut?fmtRut(pp.rut):""}${pp.whatsapp?" · "+pp.whatsapp:""}${pp.instagram?" · @"+String(pp.instagram).replace("@",""):""}${pp.fecha_nacimiento?" · Cumple: "+pp.fecha_nacimiento.slice(5,10).split("-").reverse().join("/"):""}</div>
+          <div style="font-size:11px;color:var(--ink-4);margin-top:2px">Postuló ${fmtDT(pp.created_at)}</div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-primary" style="font-size:12px;padding:6px 12px" onclick="bdayAprobarPost('${pp.id}')">Aprobar</button>
+          <button class="btn" style="font-size:12px;padding:6px 12px" onclick="bdayRechazarPost('${pp.id}')">Rechazar</button>
+        </div>
+      </div>`;}).join("")}
+    </div>`:"";
+    grid.innerHTML=postHTML+(!filtrados.length&&!posts.length?`<div class="card" style="text-align:center;color:var(--ink-4);padding:32px">Sin cumpleañeros registrados.</div>`:"")
       +filtrados.map(c=>{
         const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
         const ben=(D.bday_beneficios||[]).find(b=>b.id===c.beneficio_id);
@@ -12647,6 +12667,81 @@ VIEWS["bday-cumpleaneros"] = async()=>{
     D.bday_invitados=D.bday_invitados.filter(i=>i.id!==invId);
     toast("Eliminado","warn");closeModal();bdayVerInvitados(cid);
   };
+};
+
+
+// ── Postulaciones públicas de cumpleaños: aprobar / rechazar ──
+window.bdayAprobarPost=(id)=>{
+  const c=(D.bday_cumpleaneros||[]).find(x=>x.id===id);
+  if(!c)return;
+  const bens=(D.bday_beneficios||[]).filter(b=>b.evento_id===c.evento_id);
+  const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+  openModal("Aprobar cumpleaños",`
+    <div style="font-size:14px;margin-bottom:4px"><strong>${c.nombre} ${c.apellido}</strong> · ${ev?.name||"—"}</div>
+    <div style="font-size:12px;color:var(--ink-3);margin-bottom:12px">${c.email||""}${c.rut?" · "+fmtRut(c.rut):""}</div>
+    <label class="form-label">Beneficio</label>
+    <select class="form-select" id="bap-ben">
+      <option value="">— Sin beneficio (asignar después) —</option>
+      ${bens.map(b=>`<option value="${b.id}">${b.nombre}</option>`).join("")}
+    </select>
+    <div style="font-size:11px;color:var(--ink-4);margin-top:6px">Al aprobar le llega el correo de bienvenida con el link de su panel para armar su lista de invitados.</div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" id="bap-btn" onclick="window._bdayAprobarPostOk('${id}')">Aprobar y enviar bienvenida</button>
+    </div>`);
+};
+window._bdayAprobarPostOk=async(id)=>{
+  const btn=$("bap-btn");if(btn){if(btn.disabled)return;btn.disabled=true;btn.textContent="Aprobando…";}
+  const c=(D.bday_cumpleaneros||[]).find(x=>x.id===id);
+  if(!c){closeModal();return;}
+  const beneficio_id=$("bap-ben")?.value||null;
+  const bloq=chequearBloqueo(`${c.nombre} ${c.apellido}`,c.rut||"",c.productora_id);
+  if(bloq){if(btn){btn.disabled=false;btn.textContent="Aprobar y enviar bienvenida";}return toast(`⚠️ ${c.nombre} ${c.apellido} está en lista de bloqueo`,"error");}
+  const ev=(D.eventos||[]).find(e=>e.id===c.evento_id);
+  const prod=(D.productoras||[]).find(p=>p.id===c.productora_id);
+  const passInicial=bdayPassInicial(c.nombre,c.apellido,c.fecha_nacimiento);
+  const token=c.token_invitacion||uid();
+  try{
+    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,{estado:"aprobado",beneficio_id,pass_hash:passInicial,token_invitacion:token});
+    Object.assign(c,{estado:"aprobado",beneficio_id,pass_hash:passInicial,token_invitacion:token});
+    // Usuario con rol cumpleanero (no bloqueante)
+    (async()=>{
+      try{
+        const existing=await sbGet("users",`email=eq.${encodeURIComponent(c.email)}`);
+        if(existing&&existing.length>0){
+          const ex=existing[0];
+          if(!ex.bday_id){await sbPatch("users",`id=eq.${ex.id}`,{bday_id:id,role:"cumpleanero"});}
+        }else{
+          const userBday={id:uid(),name:`${c.nombre} ${c.apellido}`,email:c.email,pass:passInicial,role:"cumpleanero",productora_id:c.productora_id||null,puntos:0,equipo_id:null,bday_id:id,must_change_pass:true};
+          await sbPost("users",[userBday]);
+          D.users.push(userBday);
+        }
+      }catch(e){console.error("User bday error:",e.message);}
+    })();
+    const linkPanel=`${APP_URL}?bday_panel=${token}`;
+    const linkInv=bdayTokenLink(token);
+    sendEmail(c.email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
+      emailBdayBienvenida(c.nombre,c.apellido,c.email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+    log("bday_aprobar","bday_cumpleaneros",id,`Postulación de cumpleaños aprobada: ${c.nombre} ${c.apellido} — ${ev?.name||""}`).catch(()=>{});
+    toast(`✅ Aprobado: ${c.nombre}. Correo de bienvenida enviado.`,"ok");
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent="Aprobar y enviar bienvenida";}
+    return toast("Error al aprobar: "+e.message,"error");
+  }
+  closeModal();
+  VIEWS["bday-cumpleaneros"]();
+};
+window.bdayRechazarPost=async(id)=>{
+  const c=(D.bday_cumpleaneros||[]).find(x=>x.id===id);
+  if(!c)return;
+  if(!confirm(`¿Rechazar la postulación de ${c.nombre} ${c.apellido}? No le llega ningún correo.`))return;
+  try{
+    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,{estado:"rechazado"});
+    c.estado="rechazado";
+    log("bday_rechazar","bday_cumpleaneros",id,`Postulación de cumpleaños rechazada: ${c.nombre} ${c.apellido}`).catch(()=>{});
+    toast("Postulación rechazada","warn");
+  }catch(e){return toast("Error: "+e.message,"error");}
+  VIEWS["bday-cumpleaneros"]();
 };
 
 function bdayFormCumple(id, prodId, evs){
@@ -13591,6 +13686,111 @@ async function mostrarPostulacionEmb(prodId){
     }catch(e){
       btn.disabled=false;btn.textContent="Enviar postulación 🌸";
       document.getElementById("pe-msg").textContent="Error al enviar: "+(e.message||"intenta de nuevo");
+    }
+  };
+  form();
+}
+
+
+// ── Página pública: postulación de cumpleaños por evento (?cumple=<eventoId>) ──
+async function mostrarPostulacionBday(evId){
+  document.body.innerHTML=`<style>
+    body{margin:0;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;color:#fff}
+    .pb-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .pb-box{background:#111;border:1px solid #222;border-radius:18px;padding:28px 24px;max-width:480px;width:100%}
+    .pb-lbl{display:block;font-size:12px;font-weight:600;color:#ccc;margin:12px 0 5px}.pb-lbl span{color:#2BE07B}
+    .pb-in{width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px 14px;color:#fff;font-size:15px;outline:none}
+    .pb-in:focus{border-color:#2BE07B}.pb-in.err{border-color:#dc2626}
+    .pb-row{display:flex;gap:10px}.pb-row>*{flex:1;min-width:0}
+    .pb-btn{width:100%;margin-top:18px;background:#2BE07B;color:#06130C;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px}
+    .pb-btn:disabled{opacity:.6}
+    .pb-err{color:#f87171;font-size:11px;margin-top:4px;min-height:0}
+    .pb-chk{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:12px;color:#aaa;line-height:1.5}.pb-chk input{margin-top:3px}
+    .pb-ok{text-align:center;padding:16px 4px}.pb-ok .ic{font-size:46px;margin-bottom:10px}.pb-ok h2{margin:0 0 8px;font-size:20px}.pb-ok p{color:#999;font-size:14px;line-height:1.6;margin:0}
+    .pb-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
+  </style><div class="pb-wrap"><div class="pb-box" id="pb-box"><div class="pb-ok"><p style="color:#666">Cargando…</p></div></div></div>`;
+  const box=document.getElementById("pb-box");
+  const show=h=>{box.innerHTML=h;window.scrollTo(0,0);};
+  let ev=null,prod=null,bens=[];
+  try{
+    const evArr=await sbGet("eventos",`id=eq.${encodeURIComponent(evId)}`);
+    ev=evArr[0]||null;
+    if(ev){
+      const [pArr,bArr]=await Promise.all([
+        ev.productora_id?sbGet("productoras",`id=eq.${ev.productora_id}`):[],
+        sbGet("bday_beneficios",`evento_id=eq.${ev.id}`).catch(()=>[]),
+      ]);
+      prod=pArr[0]||null;bens=bArr||[];
+    }
+  }catch(e){}
+  if(!ev||ev.status==="archived")return show(`<div class="pb-ok"><div class="ic">😕</div><h2>Link no válido</h2><p>Este link de inscripción no existe o el evento ya no está disponible.</p></div>`);
+  const hoy=new Date().toISOString().slice(0,10);
+  if(ev.date&&ev.date<hoy)return show(`<div class="pb-ok"><div class="ic">🕐</div><h2>Evento finalizado</h2><p>Las inscripciones de cumpleaños para <strong style="color:#fff">${ev.name}</strong> ya cerraron.</p></div>`);
+  const fechaEvTxt=ev.date?(d=>`${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][d.getDay()]} ${d.getDate()} de ${["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][d.getMonth()]}`)(new Date(ev.date+"T12:00:00")):"";
+  const form=()=>show(`
+    <div style="text-align:center;margin-bottom:6px">${prod?.logo_url?`<img src="${prod.logo_url}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:18px;display:block;margin:0 auto 12px">`:""}
+      <h1 style="font-size:21px;margin:0 0 4px">Celebra tu cumpleaños</h1>
+      <p style="margin:0;color:#2BE07B;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase">${ev.name}</p>
+      ${fechaEvTxt?`<p style="margin:4px 0 0;color:#888;font-size:12px">${fechaEvTxt[0].toUpperCase()+fechaEvTxt.slice(1)}${ev.venue?" · "+ev.venue:""}</p>`:""}
+    </div>
+    <p style="color:#aaa;font-size:13px;text-align:center;line-height:1.5;margin:10px 0 4px">Postula para celebrar tu cumpleaños con ${prod?.nombre?`<strong style="color:#fff">${prod.nombre}</strong>`:"nosotros"}. Si quedas seleccionado, te llega un correo con tu panel para armar tu lista de invitados.</p>
+    <div class="pb-row">
+      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="pb-nom" placeholder="Tu nombre"></div>
+      <div><label class="pb-lbl">Apellido <span>*</span></label><input class="pb-in" id="pb-ape" placeholder="Tu apellido"></div>
+    </div>
+    <label class="pb-lbl">Fecha de nacimiento <span>*</span></label>
+    <div class="pb-row">
+      <select class="pb-in" id="pb-fd"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>
+      <select class="pb-in" id="pb-fm" style="flex:1.6"><option value="">Mes</option>${["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m,i)=>`<option value="${String(i+1).padStart(2,"0")}">${m}</option>`).join("")}</select>
+      <select class="pb-in" id="pb-fy"><option value="">Año</option>${Array.from({length:50},(_,i)=>{const y=new Date().getFullYear()-18-i;return `<option value="${y}">${y}</option>`;}).join("")}</select>
+    </div>
+    <div><label class="pb-lbl">RUT <span>*</span></label><input class="pb-in" id="pb-rut" placeholder="12.345.678-9" maxlength="12"></div>
+    <div><label class="pb-lbl">WhatsApp <span>*</span></label>
+    <div style="display:flex"><span style="background:#222;border:1px solid #333;border-right:none;border-radius:10px 0 0 10px;padding:12px 12px;font-size:14px;color:#aaa;font-weight:600">+569</span><input class="pb-in" id="pb-wtsp" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 10px 10px 0"></div></div>
+    <div><label class="pb-lbl">Correo <span>*</span></label><input class="pb-in" id="pb-email" type="email" placeholder="tu@correo.cl" autocapitalize="off"></div>
+    <label class="pb-lbl">Instagram <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pb-in" id="pb-ig" placeholder="@tuinstagram" autocapitalize="off">
+    <label class="pb-chk"><input type="checkbox" id="pb-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para gestionar mi cumpleaños con ${prod?.nombre||"la productora"}.</span></label>
+    <button class="pb-btn" id="pb-btn" onclick="window._pbEnviar()">Enviar postulación</button>
+    <div id="pb-msg" class="pb-err" style="text-align:center;margin-top:10px"></div>
+    <div class="pb-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div>`);
+  const mark=(id,msg)=>{const el=document.getElementById(id);if(!el)return;el.classList.add("err");if(msg){const e=document.createElement("div");e.className="pb-err auto";e.textContent=msg;(id==="pb-wtsp"?el.parentElement.parentElement:el.parentElement).appendChild(e);}};
+  window._pbEnviar=async()=>{
+    document.querySelectorAll(".pb-err.auto").forEach(e=>e.remove());document.querySelectorAll(".pb-in.err").forEach(e=>e.classList.remove("err"));
+    const g=id=>(document.getElementById(id)?.value||"").trim();
+    const nombre=g("pb-nom"),apellido=g("pb-ape"),rut=g("pb-rut"),wtsp=g("pb-wtsp").replace(/\D/g,""),email=g("pb-email").toLowerCase(),ig=normIG(g("pb-ig"));
+    const fd=g("pb-fd"),fm=g("pb-fm"),fy=g("pb-fy");const fnac=fd&&fm&&fy?`${fy}-${fm}-${fd}`:"";
+    const msg=t=>{document.getElementById("pb-msg").textContent=t;};
+    let errs=0;
+    if(!nombre){mark("pb-nom","Falta tu nombre");errs++;}
+    if(!apellido){mark("pb-ape","Falta tu apellido");errs++;}
+    if(!fnac){mark("pb-fy","Completa tu fecha de nacimiento");errs++;}
+    else if(edadDesde(fnac)<18){mark("pb-fy","Debes ser mayor de 18 años");errs++;}
+    if(!rut){mark("pb-rut","Falta tu RUT");errs++;}else if(!rutValido(rut)){mark("pb-rut","RUT inválido, revísalo");errs++;}
+    if(wtsp.length!==8){mark("pb-wtsp","Deben ser 8 dígitos");errs++;}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("pb-email","Correo inválido");errs++;}
+    if(!document.getElementById("pb-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
+    if(errs){const first=document.querySelector(".pb-in.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    const btn=document.getElementById("pb-btn");btn.disabled=true;btn.textContent="Enviando…";
+    try{
+      const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
+      const previos=await sbGet("bday_cumpleaneros",`evento_id=eq.${ev.id}&or=(email.ilike.${encodeURIComponent(email)},rut.eq.${encodeURIComponent(rutN)})`);
+      const prev=(previos||[])[0];
+      if(prev){
+        if(prev.estado==="pendiente")return show(`<div class="pb-ok"><div class="ic">⏳</div><h2>Ya recibimos tu postulación</h2><p>${nombre}, tu postulación para <strong style="color:#fff">${ev.name}</strong> está en revisión. Te avisaremos por correo.</p></div>`);
+        if(prev.estado==="rechazado")return show(`<div class="pb-ok"><div class="ic">😕</div><h2>Postulación no disponible</h2><p>Ya revisamos una postulación tuya para este evento. Cualquier duda, escríbele a la productora.</p></div>`);
+        return show(`<div class="pb-ok"><div class="ic">🎂</div><h2>¡Ya estás registrado!</h2><p>${nombre}, ya tienes tu cumpleaños registrado en <strong style="color:#fff">${ev.name}</strong>. Revisa tu correo: ahí está el link de tu panel.</p></div>`);
+      }
+      const row={id:uid(),productora_id:ev.productora_id||null,evento_id:ev.id,beneficio_id:null,nombre,apellido,fecha_nacimiento:fnac,email,rut:rutN,whatsapp:"+569"+wtsp,instagram:ig||null,estado:"pendiente",datos_completos:false,created_at:now()};
+      try{await sbPost("bday_cumpleaneros",[row]);}
+      catch(e){
+        // Si alguna columna opcional no existe en la base, reintenta sin ella
+        const m=String(e.message||"").match(/'([a-z_]+)' column/)||String(e.message||"").match(/column "?([a-z_]+)"?/);
+        if(m&&["instagram","rut","whatsapp","estado"].includes(m[1])){delete row[m[1]];await sbPost("bday_cumpleaneros",[row]);}else throw e;
+      }
+      show(`<div class="pb-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod?.nombre||"la productora"}</strong> revisará tu postulación para <strong style="color:#fff">${ev.name}</strong> y te avisaremos por correo.</p></div>`);
+    }catch(e){
+      btn.disabled=false;btn.textContent="Enviar postulación";
+      document.getElementById("pb-msg").textContent="Error al enviar: "+(e.message||"intenta de nuevo");
     }
   };
   form();
@@ -16200,6 +16400,7 @@ if(_esValidador){ mostrarValidadorQR(); }
 else if(_cfUrl.has("registro")){ mostrarRegistroProductora(); }
 else if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
 else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
+else if(_cfUrl.has("cumple")){ mostrarPostulacionBday(_cfUrl.get("cumple")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
