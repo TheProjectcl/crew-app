@@ -9348,6 +9348,14 @@ function getCFConfig(eventoId){
   };
 }
 
+// Texto de validez del ticket CF para el correo: "Desde las 22:00 hasta las 01:30 horas"
+function cfValidezTxt(cfg,ev){
+  const h=cfg?.ticket_valido_hasta?String(cfg.ticket_valido_hasta).slice(0,5):"";
+  if(!h)return "";
+  const ap=ev?.start_time?String(ev.start_time).slice(0,5):"";
+  return ap?`Desde las ${ap} hasta las ${h} horas`:`Hasta las ${h} horas`;
+}
+
 // ¿Ya pasó la hora de cierre de venta? Se interpreta como hora local (tal como se escribió), ignorando cualquier zona horaria que agregue la base
 function cfVentaCerrada(cfg){
   if(!cfg||!cfg.cierre_venta)return false;
@@ -11091,7 +11099,7 @@ async function cfConciliarCore(ordenId,extraPatch){
     if(post&&ev){
       const cfg=getCFConfig(ord.evento_id);
       let qrToks=[];try{qrToks=await qrAsegurar("cf",ord);}catch(e){}
-      await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,correoEntradaTicket({ev,prod:(D.productoras||[]).find(p=>p.id===ev.productora_id),nombre:`${post.nombre||""} ${post.apellido||""}`.trim()||post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,toks:qrToks,resumenFilas:[["Pagado por transferencia",`<b>$${(ord.monto_total||0).toLocaleString("es-CL")}</b>`]]}));
+      await sendEmail(post.email,`¡Entrada confirmada — ${ev.name}!`,correoEntradaTicket({ev,prod:(D.productoras||[]).find(p=>p.id===ev.productora_id),nombre:`${post.nombre||""} ${post.apellido||""}`.trim()||post.nombre,mensaje:cfg.msg_confirmacion,codigo:ord.codigo,toks:qrToks,validez:cfValidezTxt(cfg,ev),resumenFilas:[["Pagado por transferencia",`<b>$${(ord.monto_total||0).toLocaleString("es-CL")}</b>`]]}));
       toast(`✅ Conciliado: ${ord.codigo}. Email enviado a ${post.nombre}`,"ok");
     } else {
       toast(`✅ Orden ${ord?.codigo||ordenId} conciliada`,"ok");
@@ -11382,6 +11390,7 @@ VIEWS.cfConfig = async()=>{
         <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
         <div><label class="form-label">Plazo para pagar</label><select class="form-input" id="cfg-horas">${[24,48,72,96,120,144,168].map(h=>{const d=h/24;const label=h===24?"24 horas (1 día)":h===168?"7 días (máximo)":h<48?`${h} horas`:d===Math.floor(d)?`${d} días (${h} horas)`:`${h} horas`;return`<option value="${h}"${(cfg.horas_vencimiento||24)===h?" selected":""}>${label}</option>`;}).join("")}</select><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Tiempo que tiene la postulante para completar el pago desde que se aprueba.</div></div>
         <div><label class="form-label">Cierre de venta</label><input class="form-input" id="cfg-cierre" type="datetime-local" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,16):""}"></div>
+        <div><label class="form-label">Ticket válido hasta</label><input class="form-input" id="cfg-valido-hasta" type="time" value="${cfg.ticket_valido_hasta||""}" title="Hora límite de ingreso con este ticket. Si es después de medianoche, cuenta para el día siguiente del evento."></div>
         <div>
           <label class="form-label">Cupos visibles al comprador</label>
           <input class="form-input" id="cfg-cupos-display" type="number" value="${cfg.cupos_display_inicio||15}" min="3" max="999">
@@ -11460,6 +11469,7 @@ VIEWS.cfConfig = async()=>{
       tope_persona:parseInt(document.getElementById("cfg-tope")?.value||2),
       horas_vencimiento:parseInt(document.getElementById("cfg-horas")?.value||24),
       cierre_venta:document.getElementById("cfg-cierre")?.value||null,
+      ticket_valido_hasta:document.getElementById("cfg-valido-hasta")?.value||null,
       activo:document.getElementById("cfg-activo")?.checked||false,
       nombre_productora:document.getElementById("cfg-nombre-prod")?.value||"",
       banco:document.getElementById("cfg-banco")?.value||"Banco Santander",
@@ -14292,6 +14302,16 @@ function qrVencimiento(r){
     const ev=(D.eventos||[]).find(e=>e.id===c?.evento_id);
     const f=ben?.fecha_validez||ev?.date||"",h=ben?.hora_validez||"";
     if(f&&h){hasta=new Date(`${f}T${h.length===5?h:h+":00"}:00`);txt=bdayFmtFechaHora(f,h,ev?.date||"");}
+  }else if(r.tipo==="cf"){
+    const cfg=getCFConfig(r.obj.evento_id);
+    const ev=(D.eventos||[]).find(e=>e.id===r.obj.evento_id);
+    const h=cfg?.ticket_valido_hasta?String(cfg.ticket_valido_hasta).slice(0,5):"";
+    if(h&&ev?.date){
+      hasta=new Date(`${ev.date}T${h}:00`);
+      const ap=ev.start_time?String(ev.start_time).slice(0,5):null;
+      if(ap&&h<=ap)hasta.setDate(hasta.getDate()+1); // hora pasada la medianoche: dia siguiente
+      txt=`las ${h} horas`;
+    }
   }
   if(!hasta||isNaN(hasta.getTime()))return null;
   return{hasta,txt,caducado:new Date()>hasta};
@@ -14303,8 +14323,8 @@ function qrYaUsado(r){
   if(r.tipo==="cf")return t?.usado_at||r.obj.ingreso_at||null;
   return r.obj.llego?(r.obj.llego_at||"sí"):null;
 }
-async function qrMarcarToken(r,at){
-  const toks=(r.obj.qr_tokens||[]).map((x,i)=>i===r.i?{...x,usado_at:at}:x);r.obj.qr_tokens=toks;
+async function qrMarcarToken(r,at,extra){
+  const toks=(r.obj.qr_tokens||[]).map((x,i)=>i===r.i?{...x,usado_at:at,...(extra||{})}:x);r.obj.qr_tokens=toks;
   if(r.tipo==="entry")await sbPatch("acc_entries",`id=eq.${r.obj.id}`,{qr_tokens:toks});
   else if(r.tipo==="cf")await sbPatch("cf_ordenes",`id=eq.${r.obj.id}`,{qr_tokens:toks});
 }
@@ -14333,7 +14353,7 @@ window.qrVerModal=async function(tipo,id,extra,extra2){
         <div style="display:flex;justify-content:center">${svgs[i]}</div>
         <div style="font-size:12px;font-weight:700;margin-top:8px">${toks.length>1?`Entrada ${i+1} de ${toks.length}`:d.nombre}</div>
         <div style="font-family:monospace;font-size:11px;color:#888;margin-top:2px">${t.t}</div>
-        ${t.usado_at?`<div style="font-size:11px;color:#166534;font-weight:600;margin-top:4px">✔️ Validado a las ${fmtT(t.usado_at)} hrs</div>`:""}
+        ${t.usado_at?`<div style="font-size:11px;color:#166534;font-weight:600;margin-top:4px">✔️ Validado a las ${fmtT(t.usado_at)} hrs${t.fh?" · Fuera de horario":""}</div>`:""}
         <div style="display:flex;gap:6px;justify-content:center;margin-top:8px;flex-wrap:wrap">
           <button class="btn" style="padding:4px 8px;font-size:11px" onclick="navigator.clipboard.writeText('${qrLink(t.t)}').then(()=>toast('Link copiado','ok'))">📋 Copiar link</button>
           <a class="btn" style="padding:4px 8px;font-size:11px;text-decoration:none;background:#25D366;color:#fff" target="_blank" href="https://wa.me/?text=${waTxt(i+1)}">📱 WhatsApp</a>
@@ -14423,7 +14443,7 @@ function qrMostrarResultado(tipo,titulo,detalle,acciones){
   </div>`;
   if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
 }
-window.qrProcesarToken=async function(tok,manual){
+window.qrProcesarToken=async function(tok,manual,forzar){
   if(_qrProcesando)return;_qrProcesando=true;
   try{
     let r=qrResolverLocal(tok);
@@ -14436,7 +14456,11 @@ window.qrProcesarToken=async function(tok,manual){
     const usado=qrYaUsado(r);
     if(usado)return qrMostrarResultado("usado","ESTE TICKET YA FUE VALIDADO",`<strong>${d.nombre}</strong> · ${sub}<br><span style="font-size:15px;font-weight:800">Hora validación ${usado!=="sí"?fmtT(usado):"—"}</span>`);
     const venc=qrVencimiento(r);
-    if(venc?.caducado)return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${venc.txt}</strong> (fuera de horario). No puede entrar con este ticket.`);
+    const fueraH=!!(venc?.caducado&&r.tipo==="cf");
+    if(venc?.caducado){
+      if(r.tipo==="cf"&&forzar!==true)return qrMostrarResultado("warn","TICKET FUERA DE HORARIO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${venc.txt}</strong>. ¿Seguro quieres validarlo igual?`,`<button class="btn" style="padding:7px 12px;font-size:12px;background:#92400E;color:#fff;border-color:#92400E" onclick="qrProcesarToken('${tok}',true,true)">Sí, validar fuera de horario</button>`);
+      if(r.tipo!=="cf")return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${venc.txt}</strong> (fuera de horario). No puede entrar con este ticket.`);
+    }
     const at=now();
     if(r.tipo==="entry"){
       const e=r.obj;
@@ -14452,14 +14476,14 @@ window.qrProcesarToken=async function(tok,manual){
       const o=r.obj;
       if(!["pagado","conciliado"].includes(o.estado))return qrMostrarResultado("err",`${d.nombre} — SIN PAGO`,`${sub}<br>La orden está en estado <strong>${o.estado}</strong>.`);
       const aviso=o.estado!=="conciliado"?"<br>⚠️ Pago aún no conciliado.":"";
-      await qrMarcarToken(r,at);
+      await qrMarcarToken(r,at,fueraH?{fh:true}:null);
       const todos=(o.qr_tokens||[]).every(x=>x.usado_at);
       if(todos&&!o.ingreso_at){o.ingreso_at=at;try{await sbPatch("cf_ordenes",`id=eq.${o.id}`,{ingreso_at:at});}catch(e){}}
       const aforo=getAforo(),max=getMax();
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
-      try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
+      try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends${fueraH?" FUERA DE HORARIO":""} (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub+aviso);
+      return qrMostrarResultado("ok",fueraH?"VALIDADA FUERA DE HORARIO":"ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub+aviso+(fueraH?`<br>Quedó registrado como ingreso fuera de horario (límite ${venc.txt}).`:""));
     }
     if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
     if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
@@ -14522,7 +14546,7 @@ function correoEntradaTicket(o){
 <tr><td align="center" style="padding:0 0 22px"><img src="https://guestly.cl/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
 <tr><td align="center" style="padding:0 0 14px"><p style="margin:0 0 6px;${F}font-size:21px;font-weight:800;color:#0B0B0C">${e(o.nombre)}, tu entrada está confirmada</p><p style="margin:0;${F}font-size:14px;line-height:21px;color:#555">${e(o.mensaje||"Esta es tu entrada: muéstrala en la puerta junto a tu carnet.")}</p></td></tr>
 <tr><td align="center"><table role="presentation" class="gl-t" width="400" cellpadding="0" cellspacing="0" border="0" style="width:400px;max-width:100%;background:#0B0B0C;border-radius:20px">
-<tr><td style="padding:20px 20px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${miniFlyer}<td valign="top" style="padding-left:${o.ev?.flyer_url?"16":"0"}px">${marca}<p style="margin:${marca?"6":"0"}px 0 0;${F}font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#FFFFFF">${e(o.ev?.name||"Evento")}</p>${lbl("Fecha")}${val(fecha)}${lbl("Hora")}${val(hora)}${lbl("Lugar")}${val(e(lugar))}</td></tr></table>
+<tr><td style="padding:20px 20px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${miniFlyer}<td valign="top" style="padding-left:${o.ev?.flyer_url?"16":"0"}px">${marca}<p style="margin:${marca?"6":"0"}px 0 0;${F}font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#FFFFFF">${e(o.ev?.name||"Evento")}</p>${lbl("Fecha")}${val(fecha)}${lbl("Hora")}${val(hora)}${lbl("Lugar")}${val(e(lugar))}${o.validez?`${lbl("Ticket válido")}<p style="margin:3px 0 0;${F}font-size:13px;line-height:18px;font-weight:700;color:#2BE07B">${e(o.validez)}</p>`:""}</td></tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="50%" style="padding:14px 0 0">${lbl("Titular").replace("margin:10px","margin:0")}${val(e(o.nombre||""))}</td><td width="50%" align="right" valign="bottom" style="padding:14px 0 0"><p style="margin:0;${M}font-size:11px;letter-spacing:2px;color:#3A3A40">GUESTLY</p></td></tr></table>
 <p style="margin:0 0 16px;font-size:0;line-height:0">&nbsp;</p></td></tr>
 ${(o.toks||[]).map(stub).join("")}
@@ -14568,13 +14592,14 @@ async function mostrarEntradaQR(tok){
     // Datos de apoyo: evento, productora, lista, postulante, cumpleañero, beneficio
     let evId=r.obj.event_id||r.obj.evento_id||r.m?.event_id;
     if(r.tipo==="inv"){const c=(await sbGet("bday_cumpleaneros",`id=eq.${r.obj.cumpleanero_id}`))[0];if(c){D.bday_cumpleaneros=[c];evId=c.evento_id;}}
-    const [evA,lA,pA,bA]=await Promise.all([
+    const [evA,lA,pA,cfgA,bA]=await Promise.all([
       evId?sbGet("eventos",`id=eq.${evId}`):[],
       r.tipo==="entry"&&r.obj.list_id?sbGet("acc_lists",`id=eq.${r.obj.list_id}`):[],
       r.tipo==="cf"?sbGet("cf_postulantes",`id=eq.${r.obj.postulante_id}`):[],
+      r.tipo==="cf"?sbGet("cf_config",`evento_id=eq.${r.obj.evento_id}`).catch(()=>[]):[],
       (r.tipo==="cumple"||r.tipo==="inv")?(()=>{const c=r.tipo==="cumple"?r.obj:D.bday_cumpleaneros?.[0];return c?.beneficio_id?sbGet("bday_beneficios",`id=eq.${c.beneficio_id}`):[];})():[],
     ]);
-    D.eventos=evA;D.acc_lists=lA;D.cf_postulantes=pA;D.bday_beneficios=bA;currentEvId=evId;
+    D.eventos=evA;D.acc_lists=lA;D.cf_postulantes=pA;D.cf_config=cfgA;D.bday_beneficios=bA;currentEvId=evId;
     const ev=evA[0];
     const prod=ev?.productora_id?(await sbGet("productoras",`id=eq.${ev.productora_id}`))[0]:null;
     const d=qrDescribir(r);

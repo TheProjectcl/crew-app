@@ -100,7 +100,7 @@ const qrImg = (t: string, s = 520) => `https://api.qrserver.com/v1/create-qr-cod
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const clp = (n: unknown) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
 
-function correoConfirmada(o: { ev: any; prod: any; nombre: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any }) {
+function correoConfirmada(o: { ev: any; prod: any; nombre: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any; validez?: string }) {
   
   const F="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
   const M="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,'Courier New',monospace;";
@@ -131,7 +131,7 @@ function correoConfirmada(o: { ev: any; prod: any; nombre: string; mensaje: stri
 <tr><td align="center" style="padding:0 0 22px"><img src="${SITE}/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
 <tr><td align="center" style="padding:0 0 14px"><p style="margin:0 0 6px;${F}font-size:21px;font-weight:800;color:#0B0B0C">${e(o.nombre)}, tu entrada está confirmada</p><p style="margin:0;${F}font-size:14px;line-height:21px;color:#555">${e(o.mensaje||"Esta es tu entrada: muéstrala en la puerta junto a tu carnet.")}</p></td></tr>
 <tr><td align="center"><table role="presentation" class="gl-t" width="400" cellpadding="0" cellspacing="0" border="0" style="width:400px;max-width:100%;background:#0B0B0C;border-radius:20px">
-<tr><td style="padding:20px 20px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${miniFlyer}<td valign="top" style="padding-left:${o.ev?.flyer_url?"16":"0"}px">${marca}<p style="margin:${marca?"6":"0"}px 0 0;${F}font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#FFFFFF">${e(o.ev?.name||"Evento")}</p>${lbl("Fecha")}${val(fecha)}${lbl("Hora")}${val(hora)}${lbl("Lugar")}${val(e(lugar))}</td></tr></table>
+<tr><td style="padding:20px 20px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${miniFlyer}<td valign="top" style="padding-left:${o.ev?.flyer_url?"16":"0"}px">${marca}<p style="margin:${marca?"6":"0"}px 0 0;${F}font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#FFFFFF">${e(o.ev?.name||"Evento")}</p>${lbl("Fecha")}${val(fecha)}${lbl("Hora")}${val(hora)}${lbl("Lugar")}${val(e(lugar))}${o.validez?`${lbl("Ticket válido")}<p style="margin:3px 0 0;${F}font-size:13px;line-height:18px;font-weight:700;color:#2BE07B">${e(o.validez)}</p>`:""}</td></tr></table>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="50%" style="padding:14px 0 0">${lbl("Titular").replace("margin:10px","margin:0")}${val(e(o.nombre||""))}</td><td width="50%" align="right" valign="bottom" style="padding:14px 0 0"><p style="margin:0;${M}font-size:11px;letter-spacing:2px;color:#3A3A40">GUESTLY</p></td></tr></table>
 <p style="margin:0 0 16px;font-size:0;line-height:0">&nbsp;</p></td></tr>
 ${(o.toks||[]).map(stub).join("")}
@@ -169,7 +169,10 @@ async function enviarEntradaCF(p: any) {
     ]);
     if (!post?.email) return;
     const prod = ev?.productora_id ? (await dbGet("productoras", `id=eq.${ev.productora_id}&select=nombre,logo_url`))[0] : null;
-    const html = correoConfirmada({ ev, prod, nombre: `${post.nombre || ""} ${post.apellido || ""}`.trim() || "Hola", mensaje: cfg.msg_confirmacion || "Tu pago fue recibido. Esta es tu entrada: muéstrala en la puerta junto a tu carnet.", codigo: o.codigo || "", toks, pago: p });
+    const vh = cfg.ticket_valido_hasta ? String(cfg.ticket_valido_hasta).slice(0, 5) : "";
+    const ap = ev?.start_time ? String(ev.start_time).slice(0, 5) : "";
+    const validez = vh ? (ap ? `Desde las ${ap} hasta las ${vh} horas` : `Hasta las ${vh} horas`) : "";
+    const html = correoConfirmada({ ev, prod, nombre: `${post.nombre || ""} ${post.apellido || ""}`.trim() || "Hola", mensaje: cfg.msg_confirmacion || "Tu pago fue recibido. Esta es tu entrada: muéstrala en la puerta junto a tu carnet.", codigo: o.codigo || "", toks, pago: p, validez });
     const s = await fetch(`${SB_URL}/functions/v1/send-email`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SERVICE}` }, body: JSON.stringify({ to: post.email, subject: `¡Entrada confirmada — ${ev?.name || "tu evento"}!`, html }) });
     if (!s.ok) throw new Error("send-email " + s.status + " " + (await s.text()).slice(0, 200));
   } catch (e) {
