@@ -11978,7 +11978,7 @@ function bdayTokenLink(token){ return `${APP_URL}?bday_inv=${token}`; }
 
 const GL_POWERED = `<div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e8e8e8"><span style="font-size:11px;color:#bbb;letter-spacing:.5px">Powered by <a href="https://guestly.cl" style="color:#534AB7;text-decoration:none;font-weight:600">Guestly.cl</a></span></div>`;
 
-function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, productoraNombre, linkPanel, linkInvitados){
+function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, productoraNombre, linkPanel, linkInvitados, completo){
   return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
     <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
       <div style="text-align:center;margin-bottom:20px">${GL_EMAIL_LOGO}</div>
@@ -11998,6 +11998,11 @@ function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, produc
       <div style="text-align:center;margin-top:20px">
         <a href="${linkPanel}" style="background:#534AB7;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">Ingresar a mi panel 🎂</a>
       </div>
+      ${completo&&linkInvitados?`<div style="background:#f4f4f6;border-radius:10px;padding:14px 16px;margin-top:18px">
+        <p style="font-size:13px;font-weight:600;color:#1a1a1a;margin:0 0 6px">Tu link para invitar a tus amigos:</p>
+        <a href="${linkInvitados}" style="font-size:13px;color:#534AB7;word-break:break-all">${linkInvitados}</a>
+        <p style="font-size:11px;color:#888;margin:8px 0 0">Compártelo por WhatsApp o Instagram. Tus datos ya están completos: tu lista está activa.</p>
+      </div>`:""}
       <p style="font-size:11px;color:#aaa;text-align:center;margin-top:16px">Al ingresar te pediremos que cambies tu contraseña.</p>
       ${GL_POWERED}
     </div>
@@ -12703,8 +12708,11 @@ window._bdayAprobarPostOk=async(id)=>{
   const passInicial=bdayPassInicial(c.nombre,c.apellido,c.fecha_nacimiento);
   const token=c.token_invitacion||uid();
   try{
-    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,{estado:"aprobado",beneficio_id,pass_hash:passInicial,token_invitacion:token});
-    Object.assign(c,{estado:"aprobado",beneficio_id,pass_hash:passInicial,token_invitacion:token});
+    // Si ya mandó todo en la postulación (nombre, fecha, RUT, correo, WhatsApp y carnet) no se le vuelve a pedir: queda activo
+    const completo=!!(c.nombre&&c.apellido&&c.fecha_nacimiento&&c.email&&/^\+569\d{8}$/.test(c.whatsapp||"")&&String(c.rut||"").replace(/[^0-9K]/gi,"").length>=8&&/^https?:\/\//.test(c.foto_carnet||""));
+    const upd={estado:"aprobado",beneficio_id,pass_hash:passInicial,token_invitacion:token,...(completo?{datos_completos:true}:{})};
+    await sbPatch("bday_cumpleaneros",`id=eq.${id}`,upd);
+    Object.assign(c,upd);
     // Usuario con rol cumpleanero (no bloqueante)
     (async()=>{
       try{
@@ -12722,7 +12730,7 @@ window._bdayAprobarPostOk=async(id)=>{
     const linkPanel=`${APP_URL}?bday_panel=${token}`;
     const linkInv=bdayTokenLink(token);
     sendEmail(c.email,`¡Te celebras con ${prod?.nombre||"nosotros"} en ${ev?.name||"el evento"}! 🎂`,
-      emailBdayBienvenida(c.nombre,c.apellido,c.email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv));
+      emailBdayBienvenida(c.nombre,c.apellido,c.email,passInicial,ev?.name||"",prod?.nombre||"",linkPanel,linkInv,completo));
     log("bday_aprobar","bday_cumpleaneros",id,`Postulación de cumpleaños aprobada: ${c.nombre} ${c.apellido} — ${ev?.name||""}`).catch(()=>{});
     toast(`✅ Aprobado: ${c.nombre}. Correo de bienvenida enviado.`,"ok");
   }catch(e){
@@ -13137,7 +13145,7 @@ async function initBdayApp(){
               </div>
               <div>
                 <label style="font-size:12px;font-weight:600;display:block;margin-bottom:6px">Foto del carnet <span style="color:#dc2626">*</span></label>
-                <input type="file" id="bpu-carnet-file" accept="image/*" capture="environment" style="display:none" onchange="bdayPreviewCarnet(this)">
+                <input type="file" id="bpu-carnet-file" accept="image/*" style="display:none" onchange="bdayPreviewCarnet(this)">
                 <div id="bpu-carnet-preview" style="margin-bottom:8px;display:${c.foto_carnet?'block':'none'}">
                   <img id="bpu-carnet-img" src="${c.foto_carnet||''}" style="width:100%;max-height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--line)">
                 </div>
