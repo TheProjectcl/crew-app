@@ -605,7 +605,10 @@ function programarRenderSuave(){
     }else if(!modalAbierto&&CURRENT_VIEW==="cf-postulantes"&&typeof cfRenderBandeja==="function"&&document.getElementById("cf-bandeja")){
       if(!escribiendo)cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos"); // conserva pestaña, buscador y scroll
     }else if(!modalAbierto&&!escribiendo){
-      if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
+      const _panelCamp=document.getElementById("bd-campana-panel");
+      if(!(_panelCamp&&_panelCamp.style.display!=="none")){ // no cerrar la campaña de email que alguien está escribiendo
+        if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
+      }
     }
     // El aforo de la app móvil sí se actualiza siempre (es barato y no molesta)
     if(typeof updateMobAforo==="function"&&document.getElementById("mob-content"))updateMobAforo();
@@ -11839,7 +11842,12 @@ VIEWS["base-datos"]=async()=>{
         <div style="font-weight:600;margin-bottom:12px">✉ Nueva campaña de email</div>
         <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">0</strong> contactos con correo según los filtros actuales (las personas sin correo quedan fuera).</div>
         <div style="margin-bottom:10px"><label class="form-label">Asunto</label><input class="form-input" id="bd-camp-asunto" placeholder="Ej: ¡Te invitamos a nuestro próximo evento!"></div>
-        <div style="margin-bottom:10px"><label class="form-label">Mensaje (HTML o texto)</label><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
+        <div style="margin-bottom:10px"><label class="form-label">Mensaje</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="window._bdInsertarLink()">Insertar link</button>
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px;font-weight:800" onclick="window._bdInsertarNegrita()">B</button>
+          <span style="font-size:11px;color:var(--ink-4)">Escribe {nombre} donde quieras que aparezca el nombre de cada persona</span>
+        </div><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
         <div style="display:flex;gap:8px">
           <button id="bd-camp-send-btn" class="btn btn-primary" onclick="window._bdEnviarCampana()">📨 Enviar</button>
           <button class="btn" onclick="document.getElementById('bd-campana-panel').style.display='none'">Cancelar</button>
@@ -11869,6 +11877,27 @@ VIEWS["base-datos"]=async()=>{
     const f=window._bdFiltrados||[];
     const rows=[["Nombre","Apellido","RUT","Email","Instagram","WhatsApp","Fecha nacimiento","Género","Fuentes","Eventos","Eventos a los que ingresó"],...f.map(p=>[p.nombre,p.apellido,p.rut?fmtRut(p.rut):"",p.email,p.instagram?"@"+p.instagram:"",p.whatsapp,p.fecha_nacimiento,p.genero==="m"?"H":p.genero==="f"?"M":"",[...p.origenes].map(o=>ORIG[o]?.[1]||o).join(" | "),[...p.eventos].map(evNombre).filter(Boolean).join(" | "),[...p.ingresos].map(evNombre).filter(Boolean).join(" | ")])];
     descargarTabla(`base_datos_${(CP?.nombre||"guestly").replace(/\s+/g,"_").toLowerCase()}`,rows,"Base de datos",{titulo:"base de datos"});
+  };
+  const _bdInsertarEnCuerpo=(txt)=>{
+    const t=$("bd-camp-cuerpo");if(!t)return;
+    const a=t.selectionStart??t.value.length,b=t.selectionEnd??t.value.length;
+    t.value=t.value.slice(0,a)+txt+t.value.slice(b);
+    t.focus();t.selectionStart=t.selectionEnd=a+txt.length;
+  };
+  window._bdInsertarLink=()=>{
+    const texto=prompt("¿Qué texto se verá en el correo? (ej: Comprar mi entrada)");
+    if(texto===null)return;
+    let url=prompt("Pega el link al que debe llevar (ej: guestly.cl)");
+    if(url===null)return;
+    url=String(url).trim();if(!url)return toast("Falta el link","warn");
+    if(!/^https?:\/\//i.test(url))url="https://"+url;
+    _bdInsertarEnCuerpo(`<a href="${url}" style="color:#13894A;font-weight:700">${(texto||url).trim()||url}</a>`);
+  };
+  window._bdInsertarNegrita=()=>{
+    const t=$("bd-camp-cuerpo");
+    const sel=t&&t.selectionStart!==t.selectionEnd?t.value.slice(t.selectionStart,t.selectionEnd):null;
+    if(sel){const a=t.selectionStart,b=t.selectionEnd;t.value=t.value.slice(0,a)+"<b>"+sel+"</b>"+t.value.slice(b);t.focus();t.selectionStart=t.selectionEnd=b+7;}
+    else{const texto=prompt("¿Qué texto quieres en negrita?");if(!texto)return;_bdInsertarEnCuerpo(`<b>${texto}</b>`);}
   };
   window._bdEnviarCampana=async()=>{
     const asunto=($("bd-camp-asunto")||{}).value?.trim();
@@ -14313,7 +14342,10 @@ function qrDescribir(r){
   else if(r.tipo==="inv"){const i=r.obj;const c=(D.bday_cumpleaneros||[]).find(x=>x.id===i.cumpleanero_id);const ben=(D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id);nombre=`${i.nombre||""} ${i.apellido||""}`.trim();origen=`Cumpleaños de ${c?.nombre||""} ${c?.apellido||""}`.trim();pulsera=ben?.pulsera||"";color="#854d0e";icono="🎂";}
   else if(r.tipo==="mesa"||r.tipo==="mesa_extra"){const p=r.obj,m=r.m;nombre=`${p.nombre||p.name||""} ${p.apellido||""}`.trim();origen=`Mesa ${m.table_num}${m.section?" · "+m.section:""}${r.tipo==="mesa_extra"?" · pulsera extra":""}`;pulsera=pulseraDeMesa(m)||"";color="#0e7490";icono="🍾";}
   const n=qrCantidad(r.tipo,r.obj);
-  return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev};
+  let rut="";
+  if(r.tipo==="cf")rut=((D.cf_postulantes||[]).find(x=>x.id===r.obj.postulante_id)||{}).rut||"";
+  else rut=r.obj.rut||"";
+  return{nombre:nombre||"(sin nombre)",origen,pulsera:pulsera||PULSERA_DEFAULT,color,icono,evId,n,k:r.i+1,ev,rut};
 }
 // ¿Hasta cuándo es válido este ticket? Devuelve {hasta:Date, txt, caducado} o null si no tiene límite
 function qrVencimiento(r){
@@ -14461,14 +14493,24 @@ async function qrRefrescar(r){
   }catch(e){}
   return false;
 }
+// Ficha que ve el validador al validar: Nombre / RUT / Tipo de entrada, en grande
+function qrFicha(d){
+  const M="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;";
+  const f=(l,v,verde)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px dashed #26262B;padding:8px 0"><span style="${M}font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#8A8A90;white-space:nowrap">${l}</span><span style="font-size:18px;font-weight:800;text-align:right;line-height:1.15;color:${verde?"#2BE07B":"#FFFFFF"}">${v}</span></div>`;
+  return `<div style="margin:10px 0 8px">${f("Nombre",d.nombre)}${f("RUT",d.rut?fmtRut(d.rut):"—")}${f("Tipo de entrada",d.pulsera||"—",true)}</div>`;
+}
+
 function qrMostrarResultado(tipo,titulo,detalle,acciones){
   if(window._valModo&&typeof valRegistrarResultado==="function")valRegistrarResultado(tipo,titulo,detalle);
   const el=$("qr-result");if(!el)return;
-  const c={ok:["#DCFCE7","#166534","✅"],warn:["#FEF3C7","#92400E","⚠️"],err:["#FEE2E2","#991B1B","⛔"],usado:["#F97316","#fff","🔁"]}[tipo]||["#eee","#333","ℹ️"];
-  el.innerHTML=`<div style="background:${c[0]};color:${c[1]};border-radius:12px;padding:14px 16px">
-    <div style="font-size:18px;font-weight:800;line-height:1.2">${c[2]} ${titulo}</div>
-    <div style="font-size:13px;margin-top:4px">${detalle||""}</div>
-    ${acciones?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${acciones}</div>`:""}
+  const c={ok:"#2BE07B",warn:"#F59E0B",err:"#EF4444",usado:"#F97316"}[tipo]||"#8A8A90";
+  el.innerHTML=`<div style="background:#0B0B0C;color:#C9C9CE;border-radius:16px;padding:16px 16px 14px;border:1px solid #1C1C1F;box-shadow:0 10px 30px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 14px ${c};flex:none"></span>
+      <span style="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${c};line-height:1.3">${titulo}</span>
+    </div>
+    <div style="font-size:13px;margin-top:8px">${detalle||""}</div>
+    ${acciones?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${acciones}</div>`:""}
   </div>`;
   if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
 }
@@ -14495,7 +14537,7 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       const e=r.obj;
       if(e.status==="blocked")return qrMostrarResultado("err",`${d.nombre} — BLOQUEADO`,sub);
       const res=await runCheckin(e.id,1);
-      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+      if(res.ok){await qrMarcarToken(r,at);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
       if(res.code==="ALREADY_CHECKED_IN")return qrMostrarResultado("usado","ESTE TICKET YA FUE VALIDADO",`<strong>${d.nombre}</strong> · ${sub}<br><span style="font-size:15px;font-weight:800">Hora validación ${e.checked_in_at?fmtT(e.checked_in_at):"—"}</span>`);
       if(res.code==="MISSING_RUT")return qrMostrarResultado("warn",`${d.nombre} — falta RUT`,`${sub}<br>Hay que completar el RUT antes de validar.`,`<button class="btn btn-primary" style="padding:6px 10px;font-size:12px" onclick="closeModal();pedirRutYValidar('${e.id}',1,'puerta')">Completar RUT y validar</button>`);
       if(res.code==="DEADLINE_CONFIRM")return qrMostrarResultado("err","TICKET CADUCADO",`<strong>${d.nombre}</strong> · ${sub}<br>Era válido hasta <strong>${fmtDeadline(res.deadline)}</strong> (fuera de horario). No puede entrar con este ticket.`);
@@ -14512,10 +14554,10 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("checkin_cf","cf_orden",o.id,`Ingreso Close Friends${fueraH?" FUERA DE HORARIO":""} (QR ${d.k}/${d.n}): ${d.nombre} (${o.codigo})`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok",fueraH?"VALIDADA FUERA DE HORARIO":"ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub+aviso+(fueraH?`<br>Quedó registrado como ingreso fuera de horario (límite ${venc.txt}).`:""));
+      return qrMostrarResultado("ok",fueraH?"VALIDADA FUERA DE HORARIO":"ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`+aviso+(fueraH?`<br>Quedó registrado como ingreso fuera de horario (límite ${venc.txt}).`:""));
     }
-    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
-    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);}
+    if(r.tipo==="cumple"){await bdayCheckinCumple(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
+    if(r.tipo==="inv"){await bdayCheckinInv(r.obj.id);programarRenderSuave?.();return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);}
     if(r.tipo==="mesa"||r.tipo==="mesa_extra"){
       const p=r.obj,m=r.m;
       if(p.estado==="bloqueado"||p.estado==="rechazado")return qrMostrarResultado("err",`${d.nombre} — ${p.estado.toUpperCase()}`,sub);
@@ -14526,7 +14568,7 @@ window.qrProcesarToken=async function(tok,manual,forzar){
       if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);try{await sbPost("capacity_log",[cap]);}catch(e){}}
       try{await log("mesa_invitado","vip_table",m.id,`Mesa ${m.table_num} — ${d.nombre} ingresó (QR)`);}catch(e){}
       programarRenderSuave?.();
-      return qrMostrarResultado("ok","ENTRADA VALIDADA",`<strong style="font-size:15px">${d.nombre}</strong> · `+sub);
+      return qrMostrarResultado("ok","ENTRADA VALIDADA",qrFicha(d)+`<div style="font-size:12px;opacity:.85">`+sub+`</div>`);
     }
   }catch(e){qrMostrarResultado("err","Error",e.message||String(e));}
   finally{_qrProcesando=false;}
