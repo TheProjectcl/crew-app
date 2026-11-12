@@ -602,6 +602,8 @@ function programarRenderSuave(){
     const escribiendo=ae&&(ae.tagName==="INPUT"||ae.tagName==="TEXTAREA"||ae.tagName==="SELECT");
     if(!modalAbierto&&CURRENT_VIEW==="puerta"&&typeof refrescarAcreditacionSuave==="function"){
       refrescarAcreditacionSuave(); // conserva buscador, cursor y pestaña activa
+    }else if(!modalAbierto&&CURRENT_VIEW==="cf-postulantes"&&typeof cfRenderBandeja==="function"&&document.getElementById("cf-bandeja")){
+      if(!escribiendo)cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos"); // conserva pestaña, buscador y scroll
     }else if(!modalAbierto&&!escribiendo){
       if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
     }
@@ -10277,6 +10279,7 @@ goView = async function(v){
   if(!cfViews.includes(v)){ return _origGoView(v); }
   // Cargar datos CF si no están
   if(!D.cf_postulantes) await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+  CURRENT_VIEW=v; // sin esto, el render suave del tiempo real repintaba la vista ANTERIOR (p. ej. el dashboard) encima de la bandeja
   // Actualizar sidebar activo
   document.querySelectorAll(".nav-item").forEach(el=>{ el.classList.toggle("active", el.dataset.v===v); });
   const mc = $("main-content"); if(!mc) return;
