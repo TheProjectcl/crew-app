@@ -9655,7 +9655,7 @@ function mostrarCompraCF(token){
       // Usar precio específico del tipo de entrada asignado, o el precio global como fallback
       const tipoAsignado = post.tipo_entrada||"";
       const preciosPorTipo = cfg.precios_entrada||{};
-      const precio = (tipoAsignado && preciosPorTipo[tipoAsignado]) ? preciosPorTipo[tipoAsignado] : (cfg.precio||15000);
+      const precio = cfPrecioDe(cfg,tipoAsignado);
       const evDate = ev.date ? new Date(ev.date.includes("T")?ev.date:ev.date+"T12:00:00").toLocaleDateString("es-CL",{weekday:"long",day:"numeric",month:"long"}) : "";
 
       // Cupos falsos: cupos_display_inicio - pagados_reales - factor_por_persona (0-4)
@@ -9738,6 +9738,14 @@ function mostrarCompraCF(token){
   })();
 }
 
+// Precio por entrada de Close Friends según la configuración actual del evento
+function cfPrecioDe(cfg,tipo){
+  const pr=cfg?.precios_entrada||{}, n=v=>{const x=parseInt(v);return x>0?x:0;};
+  if(tipo&&n(pr[tipo]))return n(pr[tipo]);
+  const sel=(cfg?.tipos_entrada||[]).filter(t=>n(pr[t]));
+  if(sel.length===1)return n(pr[sel[0]]);        // un solo tipo con precio: ese
+  return n(cfg?.precio)||15000;
+}
 function actualizarTotalCF(precio){
   actualizarTotalCFBase(precio);
   const st=window._cfSoloTarjeta;if(!st)return;
@@ -9944,6 +9952,14 @@ function mostrarPagoCF(ordenId,opts){
     }
     const [cfgArr] = await Promise.all([sbGet("cf_config",`evento_id=eq.${ord.evento_id}`)]);
     const cfg = cfgArr[0]||{};
+    // Orden aún sin pagar ni comprobante: si la productora cambió el precio, se cobra el precio vigente
+    if(ord.estado==="pendiente"&&!ord.comprobante_url){
+      try{
+        let tipo="";if(ord.postulante_id){tipo=(await sbGet("cf_postulantes",`id=eq.${ord.postulante_id}&select=tipo_entrada`))[0]?.tipo_entrada||"";}
+        const nuevo=(parseInt(ord.cantidad)||1)*cfPrecioDe(cfg,tipo);
+        if(nuevo>0&&nuevo!==Math.round(Number(ord.monto_total)||0)){await sbPatch("cf_ordenes",`id=eq.${ord.id}&estado=eq.pendiente`,{monto_total:nuevo});ord.monto_total=nuevo;}
+      }catch(e){console.warn("No se pudo actualizar el precio de la orden:",e);}
+    }
     const vence = ord.vence_at ? new Date(ord.vence_at).toLocaleString("es-CL",{hour12:false}) : "24 horas";
     const monto = (ord.monto_total||0).toLocaleString("es-CL");
     // Solo tarjeta (Webpay activo): sin datos de transferencia. Si ya subió un comprobante, se respeta lo que hizo.
