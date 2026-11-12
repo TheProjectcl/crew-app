@@ -10375,7 +10375,7 @@ window.cfConfirmarAprobacion=async(id)=>{
   const sel=document.querySelector("input[name='cf-tipo-sel']:checked");
   const tipo=sel?.value||"";
   closeModal();
-  await window.cfAprobar(id,tipo);
+  await window.cfAprobar(id,tipo,{confirmado:true});
 };
 
 // ── Helpers globales bandeja CF (fuera del VIEWS para que persistan) ──
@@ -10554,12 +10554,12 @@ VIEWS.cfPostulantes = async()=>{
       }finally{window._cfAprobando.delete(id);}
       return;
     }
-    // Vista previa + confirmación antes de aprobar y enviar el correo
-    if(!opts.confirmado&&pPrev){ cfPreviewAprobacion(pPrev,tipoEntrada); return; }
+    // Confirmación rápida; la vista previa del correo quedó en la aprobación masiva
+    if(!opts.confirmado&&!confirm(`¿Aprobar a ${pPrev?.nombre||"esta postulante"}${tipoEntrada?" — "+tipoEntrada:""} y enviarle el correo de compra?`))return;
     window._cfAprobando.add(id);
     // Deshabilitar sus botones de inmediato
     document.querySelectorAll(`button[onclick*="'${id}'"]`).forEach(b=>{b.disabled=true;b.style.opacity=.5;});
-    try{ await _cfAprobarInterno(id,tipoEntrada); }
+    try{ await _cfAprobarInterno(id,tipoEntrada,opts.esperarCorreo); }
     finally{ window._cfAprobando.delete(id); }
   };
   // Vista previa del correo de aprobación: Para / Asunto / contenido + advertencias, y botón para confirmar
@@ -10584,7 +10584,7 @@ VIEWS.cfPostulantes = async()=>{
       </div>`);
     setTimeout(()=>{const f=$("cf-apr-prev");if(f)f.srcdoc=html;},30);
   };
-  const _cfAprobarInterno=async(id, tipoEntrada)=>{
+  const _cfAprobarInterno=async(id, tipoEntrada, esperarCorreo)=>{
     const token=cfToken();
     const aprobado_at=new Date().toISOString();
     const patchData={estado:"aprobado",buy_token:token,aprobado_por:CU.id,aprobado_at};
@@ -10606,20 +10606,20 @@ VIEWS.cfPostulantes = async()=>{
     }
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);
     if(p){p.estado="aprobado";p.buy_token=token;p.aprobado_por=CU.id;p.aprobado_at=aprobado_at;if(tipoEntrada!==undefined)p.tipo_entrada=tipoEntrada;}
-    // Enviar email
+    // La fila se actualiza de inmediato; el correo sale en segundo plano
+    if($("cf-bandeja"))cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     if(p){
       const cfg=getCFConfig(p.evento_id);
       const ev=D.eventos.find(e=>e.id===p.evento_id);
       const link=`${CF_APP_URL}?cf_buy=${token}`;
       const tipoTexto=tipoEntrada||p.tipo_entrada||"";
-      try{
-        await sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta,validez:cfValidezTxt(cfg,ev)}));
-        toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Email enviado.`,"ok");
-      }catch(e){
-        toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
-      }
+      toast(`✅ Aprobada: ${p.nombre}${tipoTexto?" — "+tipoTexto:""}. Enviando correo…`,"ok");
+      const envio=Promise.resolve()
+        .then(()=>sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:tipoTexto,link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta,validez:cfValidezTxt(cfg,ev)})))
+        .then(ok=>{if(ok===false)throw new Error("send-email");toast(`📧 Correo enviado a ${p.email}`,"ok");})
+        .catch(()=>toast(`⚠️ No salió el correo a ${p.email}. Usa "Reenviar correo" en su ficha.`,"warn"));
+      if(esperarCorreo)await envio;
     }
-    cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}${tipoEntrada?" — "+tipoEntrada:""}`);
   };
 
@@ -10700,7 +10700,7 @@ VIEWS.cfPostulantes = async()=>{
   };
   window.cfEjecutarAprobacionLote=async(ids,tipo,btn)=>{
     let i=0;
-    for(const id of ids){i++;if(btn){btn.disabled=true;btn.textContent=`Aprobando ${i}/${ids.length}…`;}await cfAprobar(id,tipo,{confirmado:true});}
+    for(const id of ids){i++;if(btn){btn.disabled=true;btn.textContent=`Aprobando ${i}/${ids.length}…`;}await cfAprobar(id,tipo,{confirmado:true,esperarCorreo:true});}
     closeModal();toast(`✅ ${ids.length} aprobadas${tipo?" — "+tipo:""}`,"ok");
   };
 
