@@ -12390,6 +12390,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
       <div style="font-weight:700;margin-bottom:4px">Postulaciones pendientes (${posts.length})</div>
       <div style="font-size:12px;color:var(--ink-4);margin-bottom:6px">Llegaron por el link público de cumpleaños. Al aprobar eliges el beneficio y les llega el correo de bienvenida con su panel.</div>
       ${posts.map(pp=>{const ev=(D.eventos||[]).find(e=>e.id===pp.evento_id);return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:10px 0;border-top:1px solid var(--line)">
+        ${pp.foto_carnet?`<a href="${pp.foto_carnet}" target="_blank" title="Ver foto del carnet" style="flex-shrink:0"><img src="${pp.foto_carnet}" alt="Carnet" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:var(--surface-2)"></a>`:""}
         <div style="flex:1;min-width:220px">
           <div style="font-weight:700">🎂 ${pp.nombre} ${pp.apellido}</div>
           <div style="font-size:12px;color:var(--ink-3);margin-top:2px">${ev?.name||"—"} · ${pp.email||""}</div>
@@ -13708,6 +13709,8 @@ async function mostrarPostulacionBday(evId){
     .pb-chk{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:12px;color:#aaa;line-height:1.5}.pb-chk input{margin-top:3px}
     .pb-ok{text-align:center;padding:16px 4px}.pb-ok .ic{font-size:46px;margin-bottom:10px}.pb-ok h2{margin:0 0 8px;font-size:20px}.pb-ok p{color:#999;font-size:14px;line-height:1.6;margin:0}
     .pb-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
+    .pb-foto{border:1.5px dashed #444;border-radius:12px;padding:14px;text-align:center;color:#aaa;font-size:13px;cursor:pointer;background:#161616}.pb-foto.err{border-color:#dc2626}
+    .pb-foto img{max-height:170px;max-width:100%;border-radius:8px;display:block;margin:0 auto 8px}
   </style><div class="pb-wrap"><div class="pb-box" id="pb-box"><div class="pb-ok"><p style="color:#666">Cargando…</p></div></div></div>`;
   const box=document.getElementById("pb-box");
   const show=h=>{box.innerHTML=h;window.scrollTo(0,0);};
@@ -13749,11 +13752,36 @@ async function mostrarPostulacionBday(evId){
     <div style="display:flex"><span style="background:#222;border:1px solid #333;border-right:none;border-radius:10px 0 0 10px;padding:12px 12px;font-size:14px;color:#aaa;font-weight:600">+569</span><input class="pb-in" id="pb-wtsp" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 10px 10px 0"></div></div>
     <div><label class="pb-lbl">Correo <span>*</span></label><input class="pb-in" id="pb-email" type="email" placeholder="tu@correo.cl" autocapitalize="off"></div>
     <label class="pb-lbl">Instagram <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pb-in" id="pb-ig" placeholder="@tuinstagram" autocapitalize="off">
+    <label class="pb-lbl">Foto de tu carnet <span>*</span></label>
+    <input type="file" id="pb-foto-file" accept="image/*" style="display:none" onchange="window._pbFoto(this)">
+    <div class="pb-foto" id="pb-foto-box" onclick="document.getElementById('pb-foto-file').click()"><div id="pb-foto-prev"></div><span id="pb-foto-txt">📷 Toma una foto o súbela desde tu galería</span><div style="font-size:11px;color:#777;margin-top:4px">Por delante, que se lean tu nombre y RUT. Solo para verificar tu identidad.</div></div>
+    <div id="pb-foto-err" class="pb-err"></div>
     <label class="pb-chk"><input type="checkbox" id="pb-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para gestionar mi cumpleaños con ${prod?.nombre||"la productora"}.</span></label>
     <button class="pb-btn" id="pb-btn" onclick="window._pbEnviar()">Enviar postulación</button>
     <div id="pb-msg" class="pb-err" style="text-align:center;margin-top:10px"></div>
     <div class="pb-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div>`);
   const mark=(id,msg)=>{const el=document.getElementById(id);if(!el)return;el.classList.add("err");if(msg){const e=document.createElement("div");e.className="pb-err auto";e.textContent=msg;(id==="pb-wtsp"?el.parentElement.parentElement:el.parentElement).appendChild(e);}};
+  // Foto del carnet: se achica en el teléfono antes de subirla (las fotos de cámara pesan varios MB)
+  window._pbFotoBlob=null;
+  window._pbFoto=async(inp)=>{
+    const f=inp.files?.[0];if(!f)return;
+    const err=document.getElementById("pb-foto-err");err.textContent="";document.getElementById("pb-foto-box").classList.remove("err");
+    if(f.type&&!/^image\//.test(f.type)){err.textContent="⚠ Debe ser una foto (JPG o PNG)";return;}
+    try{
+      const url=URL.createObjectURL(f);
+      const img=await new Promise((ok,ko)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ko;i.src=url;});
+      const k=Math.min(1,1600/Math.max(img.naturalWidth,img.naturalHeight));
+      const c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);
+      c.getContext("2d").drawImage(img,0,0,c.width,c.height);URL.revokeObjectURL(url);
+      const b=await new Promise(r=>c.toBlob(r,"image/jpeg",0.85));if(!b)throw new Error("sin blob");
+      window._pbFotoBlob=b;
+      document.getElementById("pb-foto-prev").innerHTML=`<img src="${c.toDataURL("image/jpeg",0.6)}" alt="Carnet">`;
+    }catch(e){ // si el navegador no puede procesarla, se sube tal cual
+      if(f.size>10*1024*1024){err.textContent="⚠ La foto pesa demasiado (máx. 10 MB)";return;}
+      window._pbFotoBlob=f;document.getElementById("pb-foto-prev").innerHTML=`<div style="color:#2BE07B;font-weight:700;margin-bottom:6px">✓ Foto lista</div>`;
+    }
+    document.getElementById("pb-foto-txt").textContent="Cambiar foto";
+  };
   window._pbEnviar=async()=>{
     document.querySelectorAll(".pb-err.auto").forEach(e=>e.remove());document.querySelectorAll(".pb-in.err").forEach(e=>e.classList.remove("err"));
     const g=id=>(document.getElementById(id)?.value||"").trim();
@@ -13768,8 +13796,9 @@ async function mostrarPostulacionBday(evId){
     if(!rut){mark("pb-rut","Falta tu RUT");errs++;}else if(!rutValido(rut)){mark("pb-rut","RUT inválido, revísalo");errs++;}
     if(wtsp.length!==8){mark("pb-wtsp","Deben ser 8 dígitos");errs++;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("pb-email","Correo inválido");errs++;}
+    if(!window._pbFotoBlob){document.getElementById("pb-foto-err").textContent="⚠ Sube la foto de tu carnet";document.getElementById("pb-foto-box").classList.add("err");errs++;}
     if(!document.getElementById("pb-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
-    if(errs){const first=document.querySelector(".pb-in.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    if(errs){const first=document.querySelector(".pb-in.err, .pb-foto.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
     const btn=document.getElementById("pb-btn");btn.disabled=true;btn.textContent="Enviando…";
     try{
       const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
@@ -13780,7 +13809,13 @@ async function mostrarPostulacionBday(evId){
         if(prev.estado==="rechazado")return show(`<div class="pb-ok"><div class="ic">😕</div><h2>Postulación no disponible</h2><p>Ya revisamos una postulación tuya para este evento. Cualquier duda, escríbele a la productora.</p></div>`);
         return show(`<div class="pb-ok"><div class="ic">🎂</div><h2>¡Ya estás registrado!</h2><p>${nombre}, ya tienes tu cumpleaños registrado en <strong style="color:#fff">${ev.name}</strong>. Revisa tu correo: ahí está el link de tu panel.</p></div>`);
       }
-      const row={id:uid(),productora_id:ev.productora_id||null,evento_id:ev.id,beneficio_id:null,nombre,apellido,fecha_nacimiento:fnac,email,rut:rutN,whatsapp:"+569"+wtsp,instagram:ig||null,estado:"pendiente",datos_completos:false,created_at:now()};
+      // Subir la foto del carnet
+      const fb=window._pbFotoBlob, ext=fb.type==="image/png"?"png":"jpg";
+      const path=`bday-carnet/${ev.id}_${rutN}_${Date.now()}.${ext}`;
+      const up=await fetch(`${SB_URL}/storage/v1/object/cf-comprobantes/${path}`,{method:"POST",headers:{"Authorization":"Bearer "+SB_KEY,"Content-Type":fb.type||"image/jpeg","x-upsert":"true"},body:fb});
+      if(!up.ok)throw new Error("No se pudo subir la foto del carnet. Intenta de nuevo.");
+      const foto_carnet=`${SB_URL}/storage/v1/object/public/cf-comprobantes/${path}`;
+      const row={id:uid(),productora_id:ev.productora_id||null,evento_id:ev.id,beneficio_id:null,nombre,apellido,fecha_nacimiento:fnac,email,rut:rutN,whatsapp:"+569"+wtsp,instagram:ig||null,foto_carnet,estado:"pendiente",datos_completos:false,created_at:now()};
       try{await sbPost("bday_cumpleaneros",[row]);}
       catch(e){
         // Si alguna columna opcional no existe en la base, reintenta sin ella
