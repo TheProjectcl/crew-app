@@ -14466,18 +14466,22 @@ async function qrRefrescar(r){
 }
 // Ficha que ve el validador al validar: Nombre / RUT / Tipo de entrada, en grande
 function qrFicha(d){
-  const f=(l,v)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px dashed rgba(0,0,0,.12);padding:5px 0"><span style="font-size:10px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;opacity:.6;white-space:nowrap">${l}</span><span style="font-size:17px;font-weight:800;text-align:right;line-height:1.15">${v}</span></div>`;
-  return `<div style="background:rgba(255,255,255,.6);border-radius:10px;padding:4px 12px 6px;margin:8px 0 6px">${f("Nombre",d.nombre)}${f("RUT",d.rut?fmtRut(d.rut):"—")}${f("Tipo de entrada",d.pulsera||"—")}</div>`;
+  const M="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;";
+  const f=(l,v,verde)=>`<div style="display:flex;justify-content:space-between;gap:12px;align-items:baseline;border-bottom:1px dashed #26262B;padding:8px 0"><span style="${M}font-size:9px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#8A8A90;white-space:nowrap">${l}</span><span style="font-size:18px;font-weight:800;text-align:right;line-height:1.15;color:${verde?"#2BE07B":"#FFFFFF"}">${v}</span></div>`;
+  return `<div style="margin:10px 0 8px">${f("Nombre",d.nombre)}${f("RUT",d.rut?fmtRut(d.rut):"—")}${f("Tipo de entrada",d.pulsera||"—",true)}</div>`;
 }
 
 function qrMostrarResultado(tipo,titulo,detalle,acciones){
   if(window._valModo&&typeof valRegistrarResultado==="function")valRegistrarResultado(tipo,titulo,detalle);
   const el=$("qr-result");if(!el)return;
-  const c={ok:["#DCFCE7","#166534","✅"],warn:["#FEF3C7","#92400E","⚠️"],err:["#FEE2E2","#991B1B","⛔"],usado:["#F97316","#fff","🔁"]}[tipo]||["#eee","#333","ℹ️"];
-  el.innerHTML=`<div style="background:${c[0]};color:${c[1]};border-radius:12px;padding:14px 16px">
-    <div style="font-size:18px;font-weight:800;line-height:1.2">${c[2]} ${titulo}</div>
-    <div style="font-size:13px;margin-top:4px">${detalle||""}</div>
-    ${acciones?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${acciones}</div>`:""}
+  const c={ok:"#2BE07B",warn:"#F59E0B",err:"#EF4444",usado:"#F97316"}[tipo]||"#8A8A90";
+  el.innerHTML=`<div style="background:#0B0B0C;color:#C9C9CE;border-radius:16px;padding:16px 16px 14px;border:1px solid #1C1C1F;box-shadow:0 10px 30px rgba(0,0,0,.25)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <span style="width:9px;height:9px;border-radius:50%;background:${c};box-shadow:0 0 14px ${c};flex:none"></span>
+      <span style="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,monospace;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${c};line-height:1.3">${titulo}</span>
+    </div>
+    <div style="font-size:13px;margin-top:8px">${detalle||""}</div>
+    ${acciones?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${acciones}</div>`:""}
   </div>`;
   if(navigator.vibrate)try{navigator.vibrate(tipo==="ok"?80:[60,60,60]);}catch(e){}
 }
