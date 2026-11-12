@@ -10501,8 +10501,11 @@ window.cfFiltrarFilas=()=>{
 window.cfRenderBandeja=(evId,filtro,busq)=>{
   currentCfEvId=evId;
   _cfFiltroActivo=filtro||"todos";
+  if(busq===undefined)busq=$("cf-busq")?.value||""; // conserva lo escrito en el buscador
+  const _sy=window.scrollY; // conserva la posición de scroll al re-pintar
   $("cf-bandeja").innerHTML=window._cfRenderPostulantes(evId,filtro||"todos");
   if(busq){const el=$("cf-busq");if(el){el.value=busq;cfFiltrarFilas();}}
+  window.scrollTo(0,_sy);
 };
 
 // ── Vista: Bandeja de postulantes ──
@@ -10600,7 +10603,7 @@ VIEWS.cfPostulantes = async()=>{
         toast(`✅ Aprobada: ${p.nombre}. (Email pendiente de configurar)`,"ok");
       }
     }
-    cfRenderBandeja(currentCfEvId,"pendiente");
+    cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     await log("cf_aprobar","cf_postulantes",id,`Aprobada postulante ${p?.nombre} ${p?.apellido}${tipoEntrada?" — "+tipoEntrada:""}`);
   };
 
@@ -10608,7 +10611,7 @@ VIEWS.cfPostulantes = async()=>{
     const motivo=prompt("Motivo del rechazo (opcional):")||"";
     await sbPatch("cf_postulantes",`id=eq.${id}`,{estado:"rechazado",motivo_rechazo:motivo});
     const p=(D.cf_postulantes||[]).find(x=>x.id===id);if(p){p.estado="rechazado";}
-    toast("Rechazada","warn"); cfRenderBandeja(currentCfEvId,"pendiente");
+    toast("Rechazada","warn"); cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     await log("cf_rechazar","cf_postulantes",id,`Rechazada postulante. Motivo: ${motivo}`);
   };
 
@@ -10626,7 +10629,7 @@ VIEWS.cfPostulantes = async()=>{
     } else {
       toast(`⚠️ Estado actualizado pero correo no enviado. Link: ${uploadLink}`,"warn");
     }
-    cfRenderBandeja(currentCfEvId,"falta_info");
+    cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos");
     await log("cf_falta_info","cf_postulantes",id,`Solicitada más información a ${p.nombre}`);
   };
 
@@ -10646,7 +10649,7 @@ VIEWS.cfPostulantes = async()=>{
       <p style="color:var(--ink-3);margin-bottom:14px">¿Qué tipo de entrada les asignas a los ${sel.length} seleccionados?</p>
       <div>${opciones}</div>
       <div style="display:flex;gap:8px;margin-top:16px">
-        <button class="btn btn-primary" onclick="cfConfirmarMasivo(${JSON.stringify(sel)})">✓ Aprobar todas</button>
+        <button class="btn btn-primary" onclick="cfConfirmarMasivo(${JSON.stringify(sel).replace(/"/g,"&quot;")})">✓ Aprobar todas</button>
         <button class="btn" onclick="closeModal()">Cancelar</button>
       </div>`);
   };
