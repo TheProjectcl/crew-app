@@ -605,7 +605,10 @@ function programarRenderSuave(){
     }else if(!modalAbierto&&CURRENT_VIEW==="cf-postulantes"&&typeof cfRenderBandeja==="function"&&document.getElementById("cf-bandeja")){
       if(!escribiendo)cfRenderBandeja(currentCfEvId,_cfFiltroActivo||"todos"); // conserva pestaña, buscador y scroll
     }else if(!modalAbierto&&!escribiendo){
-      if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
+      const _panelCamp=document.getElementById("bd-campana-panel");
+      if(!(_panelCamp&&_panelCamp.style.display!=="none")){ // no cerrar la campaña de email que alguien está escribiendo
+        if(typeof CURRENT_VIEW==="string"&&VIEWS[CURRENT_VIEW])VIEWS[CURRENT_VIEW]();
+      }
     }
     // El aforo de la app móvil sí se actualiza siempre (es barato y no molesta)
     if(typeof updateMobAforo==="function"&&document.getElementById("mob-content"))updateMobAforo();
@@ -11839,7 +11842,12 @@ VIEWS["base-datos"]=async()=>{
         <div style="font-weight:600;margin-bottom:12px">✉ Nueva campaña de email</div>
         <div style="font-size:12px;color:var(--ink-4);margin-bottom:10px">Se enviará a <strong id="bd-camp-count">0</strong> contactos con correo según los filtros actuales (las personas sin correo quedan fuera).</div>
         <div style="margin-bottom:10px"><label class="form-label">Asunto</label><input class="form-input" id="bd-camp-asunto" placeholder="Ej: ¡Te invitamos a nuestro próximo evento!"></div>
-        <div style="margin-bottom:10px"><label class="form-label">Mensaje (HTML o texto)</label><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
+        <div style="margin-bottom:10px"><label class="form-label">Mensaje</label>
+        <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;align-items:center">
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px" onclick="window._bdInsertarLink()">Insertar link</button>
+          <button type="button" class="btn" style="font-size:12px;padding:4px 10px;font-weight:800" onclick="window._bdInsertarNegrita()">B</button>
+          <span style="font-size:11px;color:var(--ink-4)">Escribe {nombre} donde quieras que aparezca el nombre de cada persona</span>
+        </div><textarea class="form-input" id="bd-camp-cuerpo" rows="6" style="resize:vertical" placeholder="Hola {nombre},&#10;&#10;Escribe tu mensaje aquí...&#10;&#10;Puedes usar {nombre} para personalizar con el nombre de cada persona."></textarea></div>
         <div style="display:flex;gap:8px">
           <button id="bd-camp-send-btn" class="btn btn-primary" onclick="window._bdEnviarCampana()">📨 Enviar</button>
           <button class="btn" onclick="document.getElementById('bd-campana-panel').style.display='none'">Cancelar</button>
@@ -11869,6 +11877,27 @@ VIEWS["base-datos"]=async()=>{
     const f=window._bdFiltrados||[];
     const rows=[["Nombre","Apellido","RUT","Email","Instagram","WhatsApp","Fecha nacimiento","Género","Fuentes","Eventos","Eventos a los que ingresó"],...f.map(p=>[p.nombre,p.apellido,p.rut?fmtRut(p.rut):"",p.email,p.instagram?"@"+p.instagram:"",p.whatsapp,p.fecha_nacimiento,p.genero==="m"?"H":p.genero==="f"?"M":"",[...p.origenes].map(o=>ORIG[o]?.[1]||o).join(" | "),[...p.eventos].map(evNombre).filter(Boolean).join(" | "),[...p.ingresos].map(evNombre).filter(Boolean).join(" | ")])];
     descargarTabla(`base_datos_${(CP?.nombre||"guestly").replace(/\s+/g,"_").toLowerCase()}`,rows,"Base de datos",{titulo:"base de datos"});
+  };
+  const _bdInsertarEnCuerpo=(txt)=>{
+    const t=$("bd-camp-cuerpo");if(!t)return;
+    const a=t.selectionStart??t.value.length,b=t.selectionEnd??t.value.length;
+    t.value=t.value.slice(0,a)+txt+t.value.slice(b);
+    t.focus();t.selectionStart=t.selectionEnd=a+txt.length;
+  };
+  window._bdInsertarLink=()=>{
+    const texto=prompt("¿Qué texto se verá en el correo? (ej: Comprar mi entrada)");
+    if(texto===null)return;
+    let url=prompt("Pega el link al que debe llevar (ej: guestly.cl)");
+    if(url===null)return;
+    url=String(url).trim();if(!url)return toast("Falta el link","warn");
+    if(!/^https?:\/\//i.test(url))url="https://"+url;
+    _bdInsertarEnCuerpo(`<a href="${url}" style="color:#13894A;font-weight:700">${(texto||url).trim()||url}</a>`);
+  };
+  window._bdInsertarNegrita=()=>{
+    const t=$("bd-camp-cuerpo");
+    const sel=t&&t.selectionStart!==t.selectionEnd?t.value.slice(t.selectionStart,t.selectionEnd):null;
+    if(sel){const a=t.selectionStart,b=t.selectionEnd;t.value=t.value.slice(0,a)+"<b>"+sel+"</b>"+t.value.slice(b);t.focus();t.selectionStart=t.selectionEnd=b+7;}
+    else{const texto=prompt("¿Qué texto quieres en negrita?");if(!texto)return;_bdInsertarEnCuerpo(`<b>${texto}</b>`);}
   };
   window._bdEnviarCampana=async()=>{
     const asunto=($("bd-camp-asunto")||{}).value?.trim();
