@@ -100,47 +100,44 @@ const qrImg = (t: string, s = 520) => `https://api.qrserver.com/v1/create-qr-cod
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
 const clp = (n: unknown) => "$" + Math.round(Number(n) || 0).toLocaleString("es-CL");
 
-function correoConfirmada(o: { ev: any; prod: any; nombre: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any }) {
-  const F = "font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
-  const M = "font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,'Courier New',monospace;";
-  const cap = (t: string) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
-  const DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
-  const MESES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-  let fecha = "Por confirmar";
-  if (o.ev?.date) { const d = new Date(o.ev.date + "T12:00:00"); fecha = `${cap(DIAS[d.getDay()])} ${d.getDate()} de ${MESES[d.getMonth()]}`; }
-  const hora = o.ev?.start_time ? `${String(o.ev.start_time).slice(0, 5)} hrs` : "Por confirmar";
-  const lugar = o.ev?.venue || "Por confirmar";
-  const dato = (l: string, v: string, full = false) => `<td${full ? ' colspan="2"' : ""} width="${full ? "100%" : "50%"}" style="padding:12px 0 0;vertical-align:top"><p style="margin:0;${M}font-size:10px;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#8A8A90">${l}</p><p style="margin:4px 0 0;${F}font-size:15px;line-height:21px;font-weight:700;color:#FFFFFF">${v}</p></td>`;
-  const n = (o.toks || []).length;
-  const stub = (t: { t: string }, i: number) => `
-<tr><td style="padding:0 22px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:2px dashed #2E2E33;font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>
-<tr><td align="center" style="padding:20px 24px 6px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:16px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:5px;background:#2BE07B;border-radius:16px 16px 0 0;font-size:0;line-height:0">&nbsp;</td></tr><tr><td style="padding:14px 14px 12px"><a href="${qrLink(t.t)}" target="_blank" style="text-decoration:none"><img src="${qrImg(t.t)}" width="260" height="260" alt="QR de ingreso" style="display:block;width:260px;height:260px;border:0"></a></td></tr></table></td></tr></table></td></tr>
-<tr><td align="center" style="padding:2px 24px 0"><p style="margin:0;${M}font-size:10px;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#8A8A90">${n > 1 ? `Entrada ${i + 1} de ${n}` : "Acceso · QR personal"}</p><p style="margin:6px 0 0;${M}font-size:13px;letter-spacing:3px;color:#FFFFFF">${t.t}</p></td></tr>
+function correoConfirmada(o: { ev: any; prod: any; nombre: string; mensaje: string; codigo: string; toks: { t: string }[]; pago: any; validez?: string }) {
+  
+  const F="font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;";
+  const M="font-family:'JetBrains Mono','SF Mono',Menlo,Consolas,'Courier New',monospace;";
+  const e=esc, cap=(t:string)=>t?t.charAt(0).toUpperCase()+t.slice(1):t;
+  const DIAS=["domingo","lunes","martes","miércoles","jueves","viernes","sábado"],MESES=["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+  let fecha="Por confirmar"; if(o.ev?.date){const d=new Date(o.ev.date+"T12:00:00");fecha=`${cap(DIAS[d.getDay()])} ${d.getDate()} de ${MESES[d.getMonth()]}`;}
+  const hora=o.ev?.start_time?`${String(o.ev.start_time).slice(0,5)} horas`:"Por confirmar";
+  const lugar=o.ev?.venue||"Por confirmar";
+  const n=(o.toks||[]).length;
+  const lbl=(t:string)=>`<p style="margin:10px 0 0;${M}font-size:9px;font-weight:600;letter-spacing:2.2px;text-transform:uppercase;color:#8A8A90">${t}</p>`;
+  const val=(t:string)=>`<p style="margin:3px 0 0;${F}font-size:13px;line-height:18px;font-weight:700;color:#FFFFFF">${t}</p>`;
+  const muesca=`<tr><td><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="14" height="28" style="background:#F2F2EF;border-radius:0 14px 14px 0;font-size:0;line-height:0">&nbsp;</td><td valign="middle" style="padding:0 10px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td style="border-top:2px dashed #2E2E33;font-size:0;line-height:0">&nbsp;</td></tr></table></td><td width="14" height="28" style="background:#F2F2EF;border-radius:14px 0 0 14px;font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>`;
+  const stub=(t:{t:string},i:number)=>`${muesca}
+<tr><td align="center" style="padding:16px 24px 6px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#FFFFFF;border-radius:16px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="height:5px;background:#2BE07B;border-radius:16px 16px 0 0;font-size:0;line-height:0">&nbsp;</td></tr><tr><td style="padding:14px 14px 12px"><a href="${qrLink(t.t)}" target="_blank" style="text-decoration:none"><img src="${qrImg(t.t)}" width="260" height="260" alt="QR de ingreso" style="display:block;width:260px;height:260px;border:0"></a></td></tr></table></td></tr></table></td></tr>
+<tr><td align="center" style="padding:2px 24px 0"><p style="margin:0;${M}font-size:10px;font-weight:600;letter-spacing:2.4px;text-transform:uppercase;color:#8A8A90">${n>1?`Entrada ${i+1} de ${n}`:"Acceso · QR personal"}</p><p style="margin:6px 0 0;${M}font-size:13px;letter-spacing:3px;color:#FFFFFF">${t.t}</p></td></tr>
 <tr><td align="center" style="padding:14px 24px 4px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#13261B;border:1px solid #1E4D32;border-radius:999px;padding:7px 16px;${F}font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#2BE07B">Listo para entrar</td></tr></table></td></tr>
-<tr><td align="center" style="padding:10px 24px 22px"><a href="${qrLink(t.t)}" target="_blank" style="${F}font-size:12px;font-weight:600;color:#8A8A90;text-decoration:underline">Abrir entrada digital</a></td></tr>`;
-  const flyer = o.ev?.flyer_url ? `<tr><td style="border-radius:20px 20px 0 0;overflow:hidden"><img src="${esc(o.ev.flyer_url)}" width="400" alt="${esc(o.ev?.name || "")}" style="display:block;width:100%;height:auto;border:0;border-radius:20px 20px 0 0"></td></tr>` : "";
-  const marca = o.prod?.logo_url
-    ? `<img src="${esc(o.prod.logo_url)}" alt="${esc(o.prod?.nombre || "")}" width="44" height="44" style="display:inline-block;width:44px;height:44px;border-radius:10px;object-fit:cover;border:0;vertical-align:middle">${o.prod?.nombre ? `<span style="${F}font-size:12px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#C9C9CE;padding-left:10px;vertical-align:middle">${esc(o.prod.nombre)}</span>` : ""}`
-    : (o.prod?.nombre ? `<span style="${F}font-size:12px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#C9C9CE">${esc(o.prod.nombre)}</span>` : "");
-  const fila = (a: string, b: string) => `<tr><td style="${F}font-size:12px;color:#777;padding:3px 0">${a}</td><td align="right" style="${F}font-size:12px;color:#1a1a1a;padding:3px 0">${b}</td></tr>`;
-  const r = o.pago.respuesta || {};
+<tr><td align="center" style="padding:10px 24px 20px"><a href="${qrLink(t.t)}" target="_blank" style="${F}font-size:12px;font-weight:600;color:#8A8A90;text-decoration:underline">Abrir entrada digital</a></td></tr>`;
+  const miniFlyer=o.ev?.flyer_url?`<td width="112" valign="top"><img src="${e(o.ev.flyer_url)}" width="112" height="112" alt="${e(o.ev?.name||"")}" style="display:block;width:112px;height:112px;object-fit:cover;border-radius:14px;border:0"></td>`:"";
+  const marca=o.prod?.nombre?`<p style="margin:0;${M}font-size:9px;font-weight:600;letter-spacing:2.2px;text-transform:uppercase;color:#2BE07B">${e(o.prod.nombre)}</p>`:"";
+  const r0=o.pago.respuesta||{};
+  const filas:[string,string][]=[["Código de orden",`<b>${e(o.codigo||"")}</b>`],["Pagado con tarjeta (Webpay)",`<b>${clp(o.pago.total)}</b>`],[`Incluye cargo por servicio (${Number(o.pago.cargo_pct)||0}%)`,clp(o.pago.cargo)],["Orden de compra",e(o.pago.buy_order)]];
+  if(r0.authorization_code)filas.push(["Código de autorización",e(r0.authorization_code)]);
+  if(r0.card_detail?.card_number)filas.push(["Tarjeta","•••• "+e(r0.card_detail.card_number)]);
+  const fila=(a:string,b:string)=>`<tr><td style="${F}font-size:12px;color:#777;padding:3px 0">${a}</td><td align="right" style="${F}font-size:12px;color:#1a1a1a;padding:3px 0">${b}</td></tr>`;
   return `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><meta name="color-scheme" content="light only"><meta name="supported-color-schemes" content="light only"><style>table{border-collapse:collapse}@media only screen and (max-width:620px){.gl-c{width:100%!important}.gl-t{width:100%!important}}</style></head>
 <body style="margin:0;padding:0;background:#F2F2EF"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#F2F2EF"><tr><td align="center" style="padding:36px 12px 40px">
 <table role="presentation" class="gl-c" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:100%">
 <tr><td align="center" style="padding:0 0 22px"><img src="${SITE}/brand/logo-email.png" alt="GUESTLY" width="184" height="32" style="display:block;width:184px;height:32px;border:0"></td></tr>
-<tr><td align="center" style="padding:0 0 14px"><p style="margin:0 0 6px;${F}font-size:21px;font-weight:800;color:#0B0B0C">${esc(o.nombre)}, tu entrada está confirmada</p><p style="margin:0;${F}font-size:14px;line-height:21px;color:#555">${esc(o.mensaje || "Tu pago fue recibido. Esta es tu entrada: muéstrala en la puerta junto a tu carnet.")}</p></td></tr>
+<tr><td align="center" style="padding:0 0 14px"><p style="margin:0 0 6px;${F}font-size:21px;font-weight:800;color:#0B0B0C">${e(o.nombre)}, tu entrada está confirmada</p><p style="margin:0;${F}font-size:14px;line-height:21px;color:#555">${e(o.mensaje||"Esta es tu entrada: muéstrala en la puerta junto a tu carnet.")}</p></td></tr>
 <tr><td align="center"><table role="presentation" class="gl-t" width="400" cellpadding="0" cellspacing="0" border="0" style="width:400px;max-width:100%;background:#0B0B0C;border-radius:20px">
-${flyer}
-<tr><td style="padding:${o.ev?.flyer_url ? "20px" : "24px"} 24px 4px">${marca ? `<p style="margin:0 0 10px">${marca}</p>` : ""}<p style="margin:0;${F}font-size:23px;line-height:28px;font-weight:800;letter-spacing:-0.5px;color:#FFFFFF">${esc(o.ev?.name || "Evento")}</p>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${dato("Fecha", fecha)}${dato("Hora", hora)}</tr><tr>${dato("Lugar", esc(lugar), true)}</tr><tr>${dato("Titular", esc(o.nombre || ""), true)}</tr></table>
-<p style="margin:14px 0 18px;font-size:0;line-height:0">&nbsp;</p></td></tr>
-${(o.toks || []).map(stub).join("")}
+<tr><td style="padding:20px 20px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${miniFlyer}<td valign="top" style="padding-left:${o.ev?.flyer_url?"16":"0"}px">${marca}<p style="margin:${marca?"6":"0"}px 0 0;${F}font-size:19px;line-height:24px;font-weight:800;letter-spacing:-0.4px;color:#FFFFFF">${e(o.ev?.name||"Evento")}</p>${lbl("Fecha")}${val(fecha)}${lbl("Hora")}${val(hora)}${lbl("Lugar")}${val(e(lugar))}${o.validez?`${lbl("Ticket válido")}<p style="margin:3px 0 0;${F}font-size:13px;line-height:18px;font-weight:700;color:#2BE07B">${e(o.validez)}</p>`:""}</td></tr></table>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="50%" style="padding:14px 0 0">${lbl("Titular").replace("margin:10px","margin:0")}${val(e(o.nombre||""))}</td><td width="50%" align="right" valign="bottom" style="padding:14px 0 0"><p style="margin:0;${M}font-size:11px;letter-spacing:2px;color:#3A3A40">GUESTLY</p></td></tr></table>
+<p style="margin:0 0 16px;font-size:0;line-height:0">&nbsp;</p></td></tr>
+${(o.toks||[]).map(stub).join("")}
 <tr><td style="font-size:0;line-height:0;height:6px">&nbsp;</td></tr>
 </table></td></tr>
-<tr><td align="center" style="padding:10px 0 0"><table role="presentation" class="gl-t" width="400" cellpadding="0" cellspacing="0" border="0" style="width:400px;max-width:100%;background:#FFFFFF;border-radius:16px"><tr><td style="padding:18px 22px 16px"><p style="margin:0 0 8px;${F}font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#8A8A90">Resumen del pago</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
-${fila("Código de orden", `<b>${esc(o.codigo)}</b>`)}${fila("Pagado con tarjeta (Webpay)", `<b>${clp(o.pago.total)}</b>`)}${fila(`Incluye cargo por servicio (${Number(o.pago.cargo_pct) || 0}%)`, clp(o.pago.cargo))}
-${fila("Orden de compra", esc(o.pago.buy_order))}${r.authorization_code ? fila("Código de autorización", esc(r.authorization_code)) : ""}${r.card_detail?.card_number ? fila("Tarjeta", "•••• " + esc(r.card_detail.card_number)) : ""}
-</table>${o.pago.ambiente !== "produccion" ? `<p style="margin:10px 0 0;${F}font-size:10px;color:#92400E">Pago de prueba (ambiente de integración de Transbank) · no es un cobro real</p>` : ""}</td></tr></table></td></tr>
+<tr><td align="center" style="padding:10px 0 0"><table role="presentation" class="gl-t" width="400" cellpadding="0" cellspacing="0" border="0" style="width:400px;max-width:100%;background:#FFFFFF;border-radius:16px"><tr><td style="padding:18px 22px 16px"><p style="margin:0 0 8px;${F}font-size:11px;font-weight:700;letter-spacing:1.6px;text-transform:uppercase;color:#8A8A90">Resumen</p><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${filas.map(x=>fila(x[0],x[1])).join("")}</table>${o.pago.ambiente!=="produccion"?`<p style="margin:10px 0 0;${F}font-size:10px;color:#92400E">Pago de prueba (ambiente de integración de Transbank) · no es un cobro real</p>`:""}</td></tr></table></td></tr>
 <tr><td align="center" style="padding:18px 24px 0"><p style="margin:0;${F}font-size:11px;line-height:17px;color:#8A8A90">Guarda una captura del QR o abre el link antes de llegar.<br>Si no tienes señal, igual puedes acreditarte por lista con tu carnet de identidad vigente.</p></td></tr>
 <tr><td align="center" style="padding:22px 0 0"><span style="${F}font-size:11px;color:#999">Powered by <a href="${SITE}" style="color:#13894A;text-decoration:none;font-weight:600">Guestly.cl</a></span></td></tr>
 </table></td></tr></table></body></html>`;
@@ -172,7 +169,10 @@ async function enviarEntradaCF(p: any) {
     ]);
     if (!post?.email) return;
     const prod = ev?.productora_id ? (await dbGet("productoras", `id=eq.${ev.productora_id}&select=nombre,logo_url`))[0] : null;
-    const html = correoConfirmada({ ev, prod, nombre: `${post.nombre || ""} ${post.apellido || ""}`.trim() || "Hola", mensaje: cfg.msg_confirmacion || "Tu pago fue recibido. Esta es tu entrada: muéstrala en la puerta junto a tu carnet.", codigo: o.codigo || "", toks, pago: p });
+    const vh = cfg.ticket_valido_hasta ? String(cfg.ticket_valido_hasta).slice(0, 5) : "";
+    const ap = ev?.start_time ? String(ev.start_time).slice(0, 5) : "";
+    const validez = vh ? (ap ? `Desde las ${ap} hasta las ${vh} horas` : `Hasta las ${vh} horas`) : "";
+    const html = correoConfirmada({ ev, prod, nombre: `${post.nombre || ""} ${post.apellido || ""}`.trim() || "Hola", mensaje: cfg.msg_confirmacion || "Tu pago fue recibido. Esta es tu entrada: muéstrala en la puerta junto a tu carnet.", codigo: o.codigo || "", toks, pago: p, validez });
     const s = await fetch(`${SB_URL}/functions/v1/send-email`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${SB_SERVICE}` }, body: JSON.stringify({ to: post.email, subject: `¡Entrada confirmada — ${ev?.name || "tu evento"}!`, html }) });
     if (!s.ok) throw new Error("send-email " + s.status + " " + (await s.text()).slice(0, 200));
   } catch (e) {
