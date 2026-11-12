@@ -11891,11 +11891,33 @@ VIEWS["base-datos"]=async()=>{
       <div style="margin-bottom:12px"><label class="form-label">Texto que se verá en el correo</label><input class="form-input" id="bd-link-txt" placeholder="Ej: Comprar mi entrada"></div>
       <div style="margin-bottom:6px"><label class="form-label">Link al que lleva</label><input class="form-input" id="bd-link-url" placeholder="Pega aquí el link, ej: guestly.cl"></div>
       <div style="font-size:11px;color:var(--ink-4)">Copia el link desde la barra del navegador y pégalo tal cual.</div>
+      <div style="margin:14px 0 6px;font-size:10px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-4)">O inserta un link de Guestly con un click</div>
+      <select id="bd-link-ev" class="form-input" style="margin-bottom:8px;font-size:13px">${(typeof evsOperativos==="function"?evsOperativos(CU?.role==="superadmin"?(CP?.id||null):CU?.productora_id):[]).map(e=>`<option value="${e.id}">${e.name}</option>`).join("")||`<option value="">(sin eventos activos)</option>`}</select>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('cf')">Postulación Close Friends</button>
+        <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('evento')">Página del evento</button>
+        <button type="button" class="btn" style="font-size:12px;padding:5px 10px" onclick="window._bdLinkPre('emb')">Postulación Embajadores</button>
+      </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeModal()">Cancelar</button>
         <button class="btn btn-primary" onclick="window._bdLinkOk()">Insertar link</button>
       </div>`);
     setTimeout(()=>$("bd-link-txt")?.focus(),50);
+  };
+  window._bdLinkPre=(tipo)=>{
+    const evId=$("bd-link-ev")?.value||"";
+    const pid=CU?.role==="superadmin"?(CP?.id||""):(CU?.productora_id||"");
+    let url="",def="";
+    if(tipo==="cf"){ if(!evId)return toast("Elige el evento primero","warn"); url=`${CF_APP_URL}/?cf=${evId}`; def="Postular a Close Friends"; }
+    else if(tipo==="evento"){ if(!evId)return toast("Elige el evento primero","warn"); url=`${CF_APP_URL}/?evento=${evId}`; def="Ver el evento y comprar"; }
+    else if(tipo==="emb"){ if(!pid)return toast("No encuentro tu productora","warn"); url=`${CF_APP_URL}/?emb=${pid}`; def="Postular como embajadora"; }
+    const texto=($("bd-link-txt")?.value||"").trim()||def;
+    closeModal();
+    const pos=window._bdLinkPos;
+    const t=$("bd-camp-cuerpo");
+    if(t&&pos){t.selectionStart=pos.a;t.selectionEnd=pos.b;}
+    _bdInsertarEnCuerpo(`<a href="${url}" style="color:#13894A;font-weight:700">${texto}</a>`);
+    toast("Link insertado: "+texto,"ok");
   };
   window._bdLinkOk=()=>{
     const texto=($("bd-link-txt")?.value||"").trim();
