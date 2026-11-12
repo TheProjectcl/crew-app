@@ -13785,7 +13785,7 @@ async function mostrarPostulacionBday(evId){
       catch(e){
         // Si alguna columna opcional no existe en la base, reintenta sin ella
         const m=String(e.message||"").match(/'([a-z_]+)' column/)||String(e.message||"").match(/column "?([a-z_]+)"?/);
-        if(m&&["instagram","rut","whatsapp","estado"].includes(m[1])){delete row[m[1]];await sbPost("bday_cumpleaneros",[row]);}else throw e;
+        if(m&&["instagram","rut","whatsapp"].includes(m[1])){delete row[m[1]];await sbPost("bday_cumpleaneros",[row]);}else throw e;
       }
       show(`<div class="pb-ok"><div class="ic">🎉</div><h2>¡Postulación enviada!</h2><p>Gracias ${nombre}. El equipo de <strong style="color:#fff">${prod?.nombre||"la productora"}</strong> revisará tu postulación para <strong style="color:#fff">${ev.name}</strong> y te avisaremos por correo.</p></div>`);
     }catch(e){
