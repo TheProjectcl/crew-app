@@ -11405,8 +11405,8 @@ VIEWS.cfConfig = async()=>{
         <div><label class="form-label">Cupos totales</label><input class="form-input" id="cfg-cupos" type="number" value="${cfg.cupos_total||100}"></div>
         <div><label class="form-label">Tope por persona</label><input class="form-input" id="cfg-tope" type="number" value="${cfg.tope_persona||2}" min="1" max="4"></div>
         <div><label class="form-label">Plazo para pagar</label><select class="form-input" id="cfg-horas">${[24,48,72,96,120,144,168].map(h=>{const d=h/24;const label=h===24?"24 horas (1 día)":h===168?"7 días (máximo)":h<48?`${h} horas`:d===Math.floor(d)?`${d} días (${h} horas)`:`${h} horas`;return`<option value="${h}"${(cfg.horas_vencimiento||24)===h?" selected":""}>${label}</option>`;}).join("")}</select><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Tiempo que tiene la postulante para completar el pago desde que se aprueba.</div></div>
-        <div><label class="form-label">Cierre de venta</label><input class="form-input" id="cfg-cierre" type="datetime-local" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,16):""}"></div>
-        <div><label class="form-label">Ticket válido hasta</label><input class="form-input" id="cfg-valido-hasta" type="time" value="${cfg.ticket_valido_hasta||""}" title="Hora límite de ingreso con este ticket. Si es después de medianoche, cuenta para el día siguiente del evento."></div>
+        <div><label class="form-label">Cierre de venta</label><div style="display:flex;gap:8px"><input class="form-input" id="cfg-cierre-fecha" type="date" value="${cfg.cierre_venta?cfg.cierre_venta.slice(0,10):""}" style="flex:1;min-width:0"><input class="form-input" id="cfg-cierre-hora" inputmode="numeric" placeholder="16:00" maxlength="5" value="${cfg.cierre_venta?cfg.cierre_venta.slice(11,16):""}" style="width:86px;flex:none"></div><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Hora en formato 24 horas (ej: 16:00). Sin hora, cierra a las 23:59.</div></div>
+        <div><label class="form-label">Ticket válido hasta</label><input class="form-input" id="cfg-valido-hasta" inputmode="numeric" placeholder="01:30" maxlength="5" value="${cfg.ticket_valido_hasta||""}"><div style="font-size:11px;color:var(--ink-4);margin-top:4px">Formato 24 horas (ej: 01:30). Pasada la medianoche cuenta para el día siguiente del evento.</div></div>
         <div>
           <label class="form-label">Cupos visibles al comprador</label>
           <input class="form-input" id="cfg-cupos-display" type="number" value="${cfg.cupos_display_inicio||15}" min="3" max="999">
@@ -11479,13 +11479,19 @@ VIEWS.cfConfig = async()=>{
   window.cfCopiarLinkRegistroEv=(evId)=>{ navigator.clipboard.writeText(`${CF_APP_URL}?cf=${evId}`); toast("Link copiado","ok"); };
 
   window.guardarCfgCF=async(evId,pId)=>{
+    const hora24=v=>{v=String(v||"").trim();if(!v)return null;const m=/^(\d{1,2}):(\d{2})$/.exec(v);if(!m)return undefined;const h=+m[1],mi=+m[2];if(h>23||mi>59)return undefined;return String(h).padStart(2,"0")+":"+m[2];};
+    const _vh=hora24(document.getElementById("cfg-valido-hasta")?.value);
+    if(_vh===undefined)return toast('Hora de "Ticket válido hasta" inválida: usa formato 24 horas, ej: 01:30',"error");
+    const _cfecha=document.getElementById("cfg-cierre-fecha")?.value||"";
+    const _chora=hora24(document.getElementById("cfg-cierre-hora")?.value);
+    if(_chora===undefined)return toast("Hora de cierre de venta inválida: usa formato 24 horas, ej: 16:00","error");
     const cfg={
       evento_id:evId, productora_id:pId||null,
       cupos_total:parseInt(document.getElementById("cfg-cupos")?.value||100),
       tope_persona:parseInt(document.getElementById("cfg-tope")?.value||2),
       horas_vencimiento:parseInt(document.getElementById("cfg-horas")?.value||24),
-      cierre_venta:document.getElementById("cfg-cierre")?.value||null,
-      ticket_valido_hasta:document.getElementById("cfg-valido-hasta")?.value||null,
+      cierre_venta:_cfecha?`${_cfecha}T${_chora||"23:59"}`:null,
+      ticket_valido_hasta:_vh,
       activo:document.getElementById("cfg-activo")?.checked||false,
       nombre_productora:document.getElementById("cfg-nombre-prod")?.value||"",
       banco:document.getElementById("cfg-banco")?.value||"Banco Santander",
