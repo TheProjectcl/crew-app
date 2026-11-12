@@ -11885,13 +11885,29 @@ VIEWS["base-datos"]=async()=>{
     t.focus();t.selectionStart=t.selectionEnd=a+txt.length;
   };
   window._bdInsertarLink=()=>{
-    const texto=prompt("¿Qué texto se verá en el correo? (ej: Comprar mi entrada)");
-    if(texto===null)return;
-    let url=prompt("Pega el link al que debe llevar (ej: guestly.cl)");
-    if(url===null)return;
-    url=String(url).trim();if(!url)return toast("Falta el link","warn");
+    const t=$("bd-camp-cuerpo");
+    window._bdLinkPos=t?{a:t.selectionStart??t.value.length,b:t.selectionEnd??t.value.length}:null;
+    openModal("Insertar link",`
+      <div style="margin-bottom:12px"><label class="form-label">Texto que se verá en el correo</label><input class="form-input" id="bd-link-txt" placeholder="Ej: Comprar mi entrada"></div>
+      <div style="margin-bottom:6px"><label class="form-label">Link al que lleva</label><input class="form-input" id="bd-link-url" placeholder="Pega aquí el link, ej: guestly.cl"></div>
+      <div style="font-size:11px;color:var(--ink-4)">Copia el link desde la barra del navegador y pégalo tal cual.</div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" onclick="window._bdLinkOk()">Insertar link</button>
+      </div>`);
+    setTimeout(()=>$("bd-link-txt")?.focus(),50);
+  };
+  window._bdLinkOk=()=>{
+    const texto=($("bd-link-txt")?.value||"").trim();
+    let url=($("bd-link-url")?.value||"").trim();
+    if(!url)return toast("Falta pegar el link","warn");
+    if(/\s/.test(url)||!url.includes("."))return toast("Eso no parece un link. Pega la dirección tal cual, ej: guestly.cl o instagram.com/theproject","warn");
     if(!/^https?:\/\//i.test(url))url="https://"+url;
-    _bdInsertarEnCuerpo(`<a href="${url}" style="color:#13894A;font-weight:700">${(texto||url).trim()||url}</a>`);
+    closeModal();
+    const pos=window._bdLinkPos;
+    const t=$("bd-camp-cuerpo");
+    if(t&&pos){t.selectionStart=pos.a;t.selectionEnd=pos.b;}
+    _bdInsertarEnCuerpo(`<a href="${url}" style="color:#13894A;font-weight:700">${texto||url}</a>`);
   };
   window._bdInsertarNegrita=()=>{
     const t=$("bd-camp-cuerpo");
