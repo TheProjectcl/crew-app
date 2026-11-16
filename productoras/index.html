@@ -806,13 +806,14 @@ for(let i=0;i<81;i++){const b=document.createElement('i');if(pat[i]!=='1')b.clas
 
 /* ranking live reorder */
 const rk=document.getElementById('rank');
-let rp=[{n:'Matías',c:184,col:'#34D399'},{n:'Catalina',c:171,col:'#F472B6'},{n:'Ignacio',c:156,col:'#60A5FA'}];
+const RK0=[47,43,26]; // números creíbles para un RRPP real (entre 20 y 90)
+let rp=[{n:'Matías',c:47,col:'#34D399'},{n:'Catalina',c:43,col:'#F472B6'},{n:'Ignacio',c:26,col:'#60A5FA'}];
 const els=rp.map(p=>{const d=document.createElement('div');d.className='rk';d.innerHTML=`<span class="n"></span><span class="av" style="background:${p.col}">${p.n[0]}</span><span class="nm">${p.n}<small>Comisión calculada</small></span><span class="ct"><span class="cv">${p.c}</span><small>entradas</small></span>`;rk.appendChild(d);p.el=d;return d});
 function layout(){
   [...rp].sort((a,b)=>b.c-a.c).forEach((p,i)=>{p.el.style.top=(i*68)+'px';p.el.querySelector('.n').textContent=i+1;p.el.classList.toggle('top',i===0);p.el.querySelector('.cv').textContent=p.c});
 }
 layout();
-if(!RM)setInterval(()=>{const p=rp[Math.floor(Math.random()*3)];p.c+=Math.ceil(Math.random()*14);layout()},1700);
+if(!RM)setInterval(()=>{const p=rp[Math.floor(Math.random()*3)];p.c+=1+Math.floor(Math.random()*3);if(rp.some(x=>x.c>89))rp.forEach((x,i)=>x.c=RK0[i]);layout()},1700);
 
 /* db dots */
 const db=document.getElementById('db');
