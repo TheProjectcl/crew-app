@@ -249,6 +249,7 @@ section{position:relative}
 .st{font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px}
 .st.ok{background:var(--g-d);color:var(--g)}
 .st.pd{background:rgba(245,158,11,.12);color:var(--amber)}
+.st.ed{background:rgba(255,255,255,.06);color:var(--mut,#A1A1AA)}
 
 /* payments */
 .pays{width:100%;max-width:300px;display:flex;flex-direction:column;gap:8px}
@@ -529,14 +530,14 @@ footer a:hover{color:var(--fg)}
         <p>Lista con nombre y RUT en la puerta, cruzada con los QR ya validados. Nadie entra dos veces, nadie se queda afuera por error.</p>
       </div>
 
-      <div class="card c-2 rv">
+      <div class="card c-3 rv">
         <div class="vis"><div class="rank" id="rank"></div></div>
         <span class="mtag mono">RRPP y listas</span>
         <h3>Se acabó el “¿de quién es esta lista?”.</h3>
         <p>Cada RRPP con su link, su lista y su ranking en vivo. Las comisiones se calculan solas.</p>
       </div>
 
-      <div class="card c-2 rv d1">
+      <div class="card c-3 rv d1">
         <div class="vis">
           <div class="pts">
             <div class="pt"><span class="av" style="background:#F472B6">CF</span><div class="track"><div class="fill" style="--w:92%"></div></div><b>920</b></div>
@@ -551,18 +552,33 @@ footer a:hover{color:var(--fg)}
         <p>Postulaciones por evento, aprobación y links propios. Los puntos se suman solo por lo que cumplieron.</p>
       </div>
 
-      <div class="card c-2 rv d2">
+      <div class="card c-3 rv">
         <div class="vis">
           <div class="gl">
-            <div class="gl-h">Cumpleaños de Fernanda <span>18/20</span></div>
+            <div class="gl-h">Cumpleaños de Fernanda <span>18 ingresaron</span></div>
             <div class="gi"><span class="av" style="background:#34D399">TS</span><span class="t">Tomás Silva</span><span class="st ok">Aprobado</span></div>
             <div class="gi"><span class="av" style="background:#F472B6">MV</span><span class="t">María Vidal</span><span class="st ok">Aprobado</span></div>
             <div class="gi"><span class="av" style="background:#FBBF24">DR</span><span class="t">Diego Rojas</span><span class="st pd">Pendiente</span></div>
           </div>
         </div>
-        <span class="mtag mono">Cumpleaños y mesas VIP</span>
-        <h3>El cumpleañero trae a 20. Tú solo apruebas.</h3>
-        <p>Cada uno arma su lista con su link. El titular de la mesa edita y tú ves siempre la última versión.</p>
+        <span class="mtag mono">Cumpleaños</span>
+        <h3>Premia al que más gente trae.</h3>
+        <p>Cada cumpleañero arma su lista con su propio link y tú ves en vivo cuántas personas ingresaron por su cumpleaños. Define beneficios extra según la cantidad de ingresados: una botella, un upgrade o lo que quieras.</p>
+      </div>
+
+      <div class="card c-3 rv d1">
+        <div class="vis">
+          <div class="gl">
+            <div class="gl-h">Mesa 12 · Palco <span>Titular: Javiera R.</span></div>
+            <div class="gi"><span class="av" style="background:#A78BFA">JR</span><span class="t">Javiera Rojas<small class="rut">Titular</small></span><span class="st ok">Pagada</span></div>
+            <div class="gi"><span class="av" style="background:#60A5FA">NP</span><span class="t">Nicolás Pérez</span><span class="st ok">En lista</span></div>
+            <div class="gi"><span class="av" style="background:#F472B6">FM</span><span class="t">Florencia Muñoz</span><span class="st ok">En lista</span></div>
+            <div class="gi"><span class="av" style="background:#34D399">BC</span><span class="t">Bastián Cortés</span><span class="st ed">Editado hace 5 min</span></div>
+          </div>
+        </div>
+        <span class="mtag mono">Mesas VIP</span>
+        <h3>La lista de la mesa, siempre al día.</h3>
+        <p>El titular arma y edita la lista de su mesa desde su link, y tú ves siempre la última versión. Sin capturas de WhatsApp ni listas cruzadas en la puerta.</p>
       </div>
 
       <div class="card c-3 rv">
