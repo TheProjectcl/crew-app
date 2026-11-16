@@ -16396,7 +16396,7 @@ async function mostrarEventoPublico(id){
   document.title=`${ev.nombre} · Guestly`;
   const acc=[];
   if(!ev.pasado&&ev.cf)acc.push(`<a class="c-acc pri" href="/?cf=${encodeURIComponent(ev.id)}"><span><b>Postular a Close Friends</b><small>Pides tu cupo y la productora te aprueba</small></span><span aria-hidden="true">→</span></a>`);
-  if(!ev.pasado&&ev.embajadores&&ev.productora.id)acc.push(`<a class="c-acc${acc.length?"":" pri"}" href="/?emb=${encodeURIComponent(ev.productora.id)}"><span><b>Quiero ser embajador</b><small>Postula para invitar gente con tu propio link</small></span><span aria-hidden="true">→</span></a>`);
+  if(!ev.pasado&&ev.embajadores&&ev.productora.id)acc.push(`<a class="c-acc${acc.length?"":" pri"}" href="/?emb=${encodeURIComponent(ev.productora.id)}"><span><b>Quiero ser embajador</b><small>Postula y sé parte de los embajadores de ${escH(ev.productora.nombre||"la productora")}</small></span><span aria-hidden="true">→</span></a>`);
   main.innerHTML=`<a class="c-back" href="/">← Todos los eventos</a>
     <div class="c-ev">
       <div class="c-izq">
