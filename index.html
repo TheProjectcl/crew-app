@@ -13262,7 +13262,7 @@ async function initBdayApp(){
             <button onclick="bdaySelfAprobar('${inv.id}')" style="background:#dcfce7;color:#166534;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✓</button>
             <button onclick="bdaySelfRechazar('${inv.id}')" style="background:#fee2e2;color:#991b1b;border:none;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">✕</button>
           `:""}
-          ${!cerrada?`<button onclick="bdaySelfEliminar('${inv.id}')" style="background:none;border:none;color:#ccc;font-size:14px;cursor:pointer;padding:2px 6px">🗑</button>`:""}
+          ${!inv.llego?`<button onclick="bdaySelfEliminar('${inv.id}')" title="Quitar de mi lista" style="background:#fff;border:1px solid #fca5a5;color:#b91c1c;padding:4px 9px;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">Quitar</button>`:""}
         </div>
       </div>`).join("");
   }
@@ -13309,12 +13309,22 @@ async function initBdayApp(){
       updateContadores();
       toast("Rechazado","warn");
     };
-    window.bdaySelfEliminar=async(invId)=>{
-      await sbDelete("bday_invitados",`id=eq.${invId}`);
+    // Quitar a alguien de la lista (también si ya estaba aprobado): pide confirmación; no se puede si ya ingresó
+    window.bdaySelfEliminar=(invId)=>{
+      const inv=invitados.find(i=>i.id===invId);if(!inv)return;
+      if(inv.llego)return toast("Ya ingresó al evento, no se puede quitar","warn");
+      openModal("Quitar de tu lista",`
+        <p style="font-size:14px;margin:0 0 8px">¿Quitar a <b>${escH(inv.nombre)} ${escH(inv.apellido||"")}</b> de tu lista?</p>
+        <p style="font-size:12px;color:#888;margin:0">${inv.estado==="aprobado"?"Su QR deja de servir y se libera un cupo.":"Se borra su inscripción."} Si fue un error, puede volver a inscribirse con tu link.</p>
+        <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="bdaySelfEliminarOk('${invId}')">Quitar</button></div>`);
+    };
+    window.bdaySelfEliminarOk=async(invId)=>{
+      closeModal();
+      try{await sbDelete("bday_invitados",`id=eq.${invId}`);}catch(e){return toast("No se pudo quitar. Intenta de nuevo.","error");}
       invitados=invitados.filter(i=>i.id!==invId);
       document.getElementById("bday-inv-list").innerHTML=renderInvList();
       updateContadores();
-      toast("Eliminado","warn");
+      toast("Quitado de tu lista","ok");
     };
     window.bdayPreviewCarnet=async(input)=>{
       const file=input.files[0];if(!file)return;
