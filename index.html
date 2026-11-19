@@ -11978,6 +11978,20 @@ function bdayTokenLink(token){ return `${APP_URL}?bday_inv=${token}`; }
 
 const GL_POWERED = `<div style="text-align:center;margin-top:24px;padding-top:16px;border-top:1px solid #e8e8e8"><span style="font-size:11px;color:#bbb;letter-spacing:.5px">Powered by <a href="https://guestly.cl" style="color:#534AB7;text-decoration:none;font-weight:600">Guestly.cl</a></span></div>`;
 
+// Cuenta de cumpleañero para ese correo. NUNCA cambia el rol de una cuenta que ya existe (dueño, admin, staff, etc.):
+// si el correo ya tiene otras cuentas, se crea una cuenta aparte de cumpleañero y al entrar elige con cuál (igual que el superadmin).
+async function bdayAsegurarCuenta({email,nombre,apellido,productora_id,bday_id,pass}){
+  const cuentas=await sbGet("users",`email=ilike.${encodeURIComponent(String(email||"").trim())}`)||[];
+  const ya=cuentas.find(u=>u.role==="cumpleanero");
+  if(ya){
+    await sbPatch("users",`id=eq.${ya.id}`,{bday_id,...(pass?{pass,must_change_pass:true}:{})});
+    return {cuenta:ya,nueva:false,otras:cuentas.length-1};
+  }
+  const nueva={id:uid(),name:`${nombre} ${apellido}`.trim(),email:String(email).trim(),pass,role:"cumpleanero",productora_id:productora_id||null,puntos:0,equipo_id:null,bday_id,must_change_pass:true};
+  await sbPost("users",[nueva]);
+  try{(D.users||[]).push({...nueva,pass:null});}catch(e){}
+  return {cuenta:nueva,nueva:true,otras:cuentas.length};
+}
 function emailBdayBienvenida(nombre, apellido, email, pass, eventoNombre, productoraNombre, linkPanel, linkInvitados, completo){
   return `<div style="font-family:system-ui,sans-serif;max-width:520px;margin:0 auto;background:#f4f4f6;padding:24px">
     <div style="background:#fff;border-radius:14px;padding:32px;border:1px solid #e8e8e8">
@@ -12716,15 +12730,7 @@ window._bdayAprobarPostOk=async(id)=>{
     // Usuario con rol cumpleanero (no bloqueante)
     (async()=>{
       try{
-        const existing=await sbGet("users",`email=eq.${encodeURIComponent(c.email)}`);
-        if(existing&&existing.length>0){
-          const ex=existing[0];
-          if(!ex.bday_id){await sbPatch("users",`id=eq.${ex.id}`,{bday_id:id,role:"cumpleanero"});}
-        }else{
-          const userBday={id:uid(),name:`${c.nombre} ${c.apellido}`,email:c.email,pass:passInicial,role:"cumpleanero",productora_id:c.productora_id||null,puntos:0,equipo_id:null,bday_id:id,must_change_pass:true};
-          await sbPost("users",[userBday]);
-          D.users.push(userBday);
-        }
+        await bdayAsegurarCuenta({email:c.email,nombre:c.nombre,apellido:c.apellido,productora_id:c.productora_id,bday_id:id,pass:passInicial});
       }catch(e){console.error("User bday error:",e.message);}
     })();
     const linkPanel=`${APP_URL}?bday_panel=${token}`;
@@ -12897,18 +12903,8 @@ window.bdayGuardarCumple=async(id,prodId)=>{
       // Verificar si ya existe un usuario con ese email antes de crear
       (async()=>{
         try{
-          const existing=await sbGet("users",`email=eq.${encodeURIComponent(email)}`);
-          if(existing&&existing.length>0){
-            // Ya existe — actualizar bday_id si no lo tiene
-            const ex=existing[0];
-            if(!ex.bday_id){await sbPatch("users",`id=eq.${ex.id}`,{bday_id:cumpleId,role:"cumpleanero"});}
-            toast("✅ Usuario cumpleañero vinculado","ok");
-          }else{
-            const userBday={id:uid(),name:`${nombre} ${apellido}`,email,pass:passInicial,role:"cumpleanero",productora_id:prodId||null,puntos:0,equipo_id:null,bday_id:cumpleId,must_change_pass:true};
-            await sbPost("users",[userBday]);
-            D.users.push(userBday);
-            toast("✅ Usuario cumpleañero creado","ok");
-          }
+          const r=await bdayAsegurarCuenta({email,nombre,apellido,productora_id:prodId,bday_id:cumpleId,pass:passInicial});
+          toast(r.nueva?(r.otras?"✅ Cuenta de cumpleañero creada aparte (ese correo ya tenía otra cuenta, que no se tocó)":"✅ Usuario cumpleañero creado"):"✅ Usuario cumpleañero vinculado","ok");
         }catch(e){console.error("User bday error:",e.message);toast("⚠️ Error creando usuario: "+e.message,"warn");}
       })();
       // Correo bienvenida
@@ -13066,7 +13062,8 @@ async function mostrarPanelBdayInv(token){
 // Se llama desde initAdminApp cuando role === "cumpleanero"
 async function initBdayApp(){
   // Cargar datos
-  const bdays=await sbGet("bday_cumpleaneros",`email=eq.${CU.email}`);
+  const bdays=await sbGet("bday_cumpleaneros",`email=eq.${encodeURIComponent(CU.email)}&order=created_at.desc`);
+  if(CU.bday_id){const i=bdays.findIndex(b=>b.id===CU.bday_id);if(i>0)bdays.unshift(bdays.splice(i,1)[0]);}
   if(!bdays.length){document.getElementById("main-content").innerHTML=`<div style="padding:32px;text-align:center;color:var(--ink-4)">Sin datos de cumpleaños asociados.</div>`;return;}
   const c=bdays[0];
   const [invArr, benArr, evArr, prodArr]=await Promise.all([
