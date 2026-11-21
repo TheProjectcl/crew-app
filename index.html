@@ -9369,6 +9369,12 @@ function cfVentaCerrada(cfg){
   const d=new Date(raw.length===16?raw+":00":raw);
   return !isNaN(d)&&new Date()>d;
 }
+// Plazo de pago de una orden: las horas configuradas, pero nunca después del cierre de venta
+function cfVenceOrden(cfg){
+  let t=Date.now()+(Number(cfg?.horas_vencimiento)||24)*3600e3;
+  if(cfg?.cierre_venta){const raw=String(cfg.cierre_venta).slice(0,19);const d=new Date(raw.length===16?raw+":00":raw);if(!isNaN(d)&&d.getTime()<t)t=d.getTime();}
+  return new Date(t).toISOString();
+}
 // Cupos disponibles CF para un evento
 function cfCuposDisponibles(eventoId){
   const cfg = getCFConfig(eventoId);
@@ -9864,7 +9870,7 @@ async function confirmarOrdenCF(token, postId, eventoId, productora_id, precio, 
     const cuposNecesarios = cant; // siempre reservamos el total de cupos
     if(cuposDisp < cuposNecesarios) return (btn.disabled=false, btn.textContent="Confirmar y ver datos de pago", show(`Solo quedan ${cuposDisp} cupo(s) disponibles.`));
 
-    const vence = new Date(Date.now()+(cfg.horas_vencimiento||24)*3600*1000).toISOString();
+    const vence = cfVenceOrden(cfg);
 
     if(modoPago==="separado" && amiga2){
       // Modo separado: orden de 1 entrada para quien compra, orden separada para amiga
@@ -10306,10 +10312,10 @@ window.cfReenviarCorreo=async(id)=>{
   // Si tiene una orden sin pagar que ya venció, se le da un plazo nuevo antes de reenviar (así el link no le llega caducado)
   let renovada=false;
   try{
-    const horas=Number(cfg.horas_vencimiento)||24;
     const ord=(D.cf_ordenes||[]).find(o=>o.postulante_id===p.id&&o.estado==="pendiente"&&!o.comprobante_url);
     if(ord&&ord.vence_at&&new Date(ord.vence_at)<new Date()){
-      const nuevo=new Date(Date.now()+horas*3600e3).toISOString();
+      if(cfVentaCerrada(cfg)){toast("La venta de Close Friends ya cerró (Config CF → Cierre de venta). No se renovó el plazo ni se envió el correo.","warn");return;}
+      const nuevo=cfVenceOrden(cfg);
       await sbPatch("cf_ordenes",`id=eq.${ord.id}&estado=eq.pendiente`,{vence_at:nuevo});
       ord.vence_at=nuevo;renovada=true;
     }
