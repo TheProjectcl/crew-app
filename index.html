@@ -10300,34 +10300,68 @@ goView = async function(v){
 };
 
 // ── Funciones globales CF (disponibles en todas las vistas) ──
-window.cfReenviarCorreo=async(id)=>{
+window.cfReenviarCorreo=async(id,opt)=>{
+  const silencioso=!!opt?.silencioso, T=(m,t)=>{if(!silencioso)toast(m,t);};
   const p=(D.cf_postulantes||[]).find(x=>x.id===id);
-  if(!p){toast("Postulante no encontrado","error");return;}
-  if(p.estado!=="aprobado"){toast("Solo se puede reenviar a postulantes aprobadas","warn");return;}
+  if(!p){T("Postulante no encontrado","error");return "error";}
+  if(p.estado!=="aprobado"){T("Solo se puede reenviar a postulantes aprobadas","warn");return "error";}
   const cfg=getCFConfig(p.evento_id);
   const ev=(D.eventos||[]).find(e=>e.id===p.evento_id);
   const token=p.buy_token;
-  if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
+  if(!token){T("Esta postulante no tiene link de compra. Apruébala primero.","warn");return "error";}
+  if(cfVentaCerrada(cfg)){T("La venta de Close Friends ya cerró (Config CF → Cierre de venta). No se envió el correo.","warn");return "cerrada";}
   const link=`${CF_APP_URL}?cf_buy=${token}`;
   // Si tiene una orden sin pagar que ya venció, se le da un plazo nuevo antes de reenviar (así el link no le llega caducado)
   let renovada=false;
   try{
     const ord=(D.cf_ordenes||[]).find(o=>o.postulante_id===p.id&&o.estado==="pendiente"&&!o.comprobante_url);
     if(ord&&ord.vence_at&&new Date(ord.vence_at)<new Date()){
-      if(cfVentaCerrada(cfg)){toast("La venta de Close Friends ya cerró (Config CF → Cierre de venta). No se renovó el plazo ni se envió el correo.","warn");return;}
       const nuevo=cfVenceOrden(cfg);
       await sbPatch("cf_ordenes",`id=eq.${ord.id}&estado=eq.pendiente`,{vence_at:nuevo});
       ord.vence_at=nuevo;renovada=true;
     }
-  }catch(e){toast("No se pudo renovar el plazo de la orden: "+e.message,"error");return;}
+  }catch(e){T("No se pudo renovar el plazo de la orden: "+e.message,"error");return "error";}
   try{
     await sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta,validez:cfValidezTxt(cfg,ev)}));
-    toast(renovada?`📧 Plazo renovado y correo reenviado a ${p.email}`:`📧 Correo reenviado a ${p.email}`,"ok");
+    T(renovada?`📧 Plazo renovado y correo reenviado a ${p.email}`:`📧 Correo reenviado a ${p.email}`,"ok");
     await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}${renovada?" (plazo de pago renovado)":""}`);
-    try{if(renovada&&CURRENT_VIEW==="cf-planilla")VIEWS.cfPlanilla();}catch(e){}
+    if(!silencioso){try{if(renovada&&CURRENT_VIEW==="cf-planilla")VIEWS.cfPlanilla();}catch(e){}}
+    return renovada?"renovada":"ok";
   }catch(e){
-    toast(`Error al enviar correo: ${e.message}`,"error");
+    T(`Error al enviar correo: ${e.message}`,"error");return "error";
   }
+};
+
+// Aprobadas que no han comprado: sin orden, con orden vencida o sin pagar (y sin comprobante en revisión)
+function cfSinCompra(p){
+  if(p.estado!=="aprobado")return false;
+  const ords=(D.cf_ordenes||[]).filter(o=>o.postulante_id===p.id);
+  return !ords.some(o=>["pagado","conciliado"].includes(o.estado)||(o.estado==="pendiente"&&o.comprobante_url));
+}
+window.cfReenviarSinCompra=(evId)=>{
+  const posts=(D.cf_postulantes||[]).filter(p=>p.evento_id===evId&&cfSinCompra(p)&&p.buy_token);
+  const cfg=getCFConfig(evId);
+  if(!posts.length)return toast("No hay aprobadas sin compra","warn");
+  if(cfVentaCerrada(cfg))return toast("La venta de Close Friends ya cerró (Config CF → Cierre de venta)","warn");
+  const cierre=cfg.cierre_venta?String(cfg.cierre_venta).slice(0,16).replace("T"," "):"";
+  openModal("Reenviar a aprobadas sin compra",`
+    <p style="font-size:14px;margin:0 0 8px">Se reenviará el correo con su link de compra a <b>${posts.length}</b> persona${posts.length===1?"":"s"} aprobada${posts.length===1?"":"s"} que no ha${posts.length===1?"":"n"} comprado.</p>
+    <p style="font-size:12px;color:var(--ink-4);margin:0">A las que tengan la orden vencida se les renueva el plazo${cierre?` (máximo hasta el cierre de venta: ${escH(cierre)})`:""}.</p>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" id="cf-rsc-btn" onclick="cfReenviarSinCompraOk('${evId}')">📧 Reenviar a ${posts.length}</button></div>`);
+};
+window.cfReenviarSinCompraOk=async(evId)=>{
+  const posts=(D.cf_postulantes||[]).filter(p=>p.evento_id===evId&&cfSinCompra(p)&&p.buy_token);
+  const btn=$("cf-rsc-btn");if(btn){btn.disabled=true;}
+  let ok=0,ren=0,err=0;
+  for(let i=0;i<posts.length;i++){
+    if(btn)btn.textContent=`Enviando ${i+1} de ${posts.length}…`;
+    const r=await window.cfReenviarCorreo(posts[i].id,{silencioso:true});
+    if(r==="ok")ok++;else if(r==="renovada"){ok++;ren++;}else if(r==="cerrada"){break;}else err++;
+    await new Promise(res=>setTimeout(res,350)); // no saturar el envío de correos
+  }
+  closeModal();
+  toast(`📧 Reenviado a ${ok}${ren?` (${ren} con plazo renovado)`:""}${err?` · ${err} con error`:""}`,err?"warn":"ok");
+  try{if(typeof cfRenderBandeja==="function"&&currentCfEvId)cfRenderBandeja(currentCfEvId,_cfFiltroActivo);}catch(e){}
 };
 
 window.cfCambiarEmail=async(id)=>{
@@ -10432,6 +10466,7 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
   let filtrados=filtro==="todos"?posts:filtro==="pendiente"?posts.filter(p=>p.estado==="pendiente"||p.estado==="docs_recibidos")
     :filtro==="ya_cf"?posts.filter(p=>cfHistorial(p).aprobadas.length)
     :filtro==="nuevo"?posts.filter(p=>!cfHistorial(p).compras.length)
+    :filtro==="sin_compra"?posts.filter(cfSinCompra)
     :posts.filter(p=>p.estado===filtro);
   if(busq&&busq.trim()){
     const ql=busq.trim().toLowerCase();
@@ -10495,12 +10530,14 @@ window._cfRenderPostulantes=(evId,filtro)=>{
     {key:"rechazado",label:"Rechazados"},
     {key:"ya_cf",label:`⭐ Ya fue CF (${posts.filter(p=>cfHistorial(p).aprobadas.length).length})`},
     {key:"nuevo",label:`🆕 Nunca compró (${posts.filter(p=>!cfHistorial(p).compras.length).length})`},
+    {key:"sin_compra",label:`🛒 Aprobados sin compra (${posts.filter(cfSinCompra).length})`},
   ];
   return `
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
       ${tabs.map(t=>`<button id="cf-tab-${t.key}" class="btn${filtro===t.key?" btn-primary":""}" style="font-size:12px;padding:5px 12px${t.key==="falta_info"&&filtro!==t.key?";background:#f5f3ff;color:#7c3aed;border-color:#7c3aed":""}" onclick="cfCambiarFiltro('${evId}','${t.key}')">${t.label}</button>`).join("")}
       <input id="cf-busq" class="form-input" style="max-width:240px;margin:0;font-size:12px;padding:5px 10px" placeholder="🔍 Nombre, email, RUT, WhatsApp..." oninput="cfFiltrarFilas()">
-      <button class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
+      <button id="cf-btn-reenviar-sc" class="btn" style="font-size:12px;padding:5px 12px;margin-left:auto;background:#fdf2f8;color:#be185d;border-color:#f9a8d4;${filtro==="sin_compra"?"":"display:none"}" onclick="cfReenviarSinCompra('${evId}')">📧 Reenviar a todos</button>
+      <button id="cf-btn-aprobar-masivo" class="btn btn-primary" style="font-size:12px;padding:5px 12px;margin-left:auto;${filtro==="sin_compra"?"display:none":""}" onclick="cfAprobarMasivo('${evId}')">✓ Aprobar seleccionados</button>
     </div>
     <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:12px">
@@ -10521,7 +10558,8 @@ window._cfRenderPostulantes=(evId,filtro)=>{
 
 window.cfCambiarFiltro=(evId,filtro)=>{
   _cfFiltroActivo=filtro;
-  ["todos","pendiente","falta_info","aprobado","rechazado","ya_cf","nuevo"].forEach(k=>{
+  {const a=$("cf-btn-reenviar-sc"),b=$("cf-btn-aprobar-masivo");if(a)a.style.display=filtro==="sin_compra"?"":"none";if(b)b.style.display=filtro==="sin_compra"?"none":"";}
+  ["todos","pendiente","falta_info","aprobado","rechazado","ya_cf","nuevo","sin_compra"].forEach(k=>{
     const btn=$(`cf-tab-${k}`);
     if(!btn)return;
     btn.className=`btn${k===filtro?" btn-primary":""}`;
