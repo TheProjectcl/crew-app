@@ -10303,10 +10303,22 @@ window.cfReenviarCorreo=async(id)=>{
   const token=p.buy_token;
   if(!token){toast("Esta postulante no tiene link de compra. Apruébala primero.","warn");return;}
   const link=`${CF_APP_URL}?cf_buy=${token}`;
+  // Si tiene una orden sin pagar que ya venció, se le da un plazo nuevo antes de reenviar (así el link no le llega caducado)
+  let renovada=false;
+  try{
+    const horas=Number(cfg.horas_vencimiento)||24;
+    const ord=(D.cf_ordenes||[]).find(o=>o.postulante_id===p.id&&o.estado==="pendiente"&&!o.comprobante_url);
+    if(ord&&ord.vence_at&&new Date(ord.vence_at)<new Date()){
+      const nuevo=new Date(Date.now()+horas*3600e3).toISOString();
+      await sbPatch("cf_ordenes",`id=eq.${ord.id}&estado=eq.pendiente`,{vence_at:nuevo});
+      ord.vence_at=nuevo;renovada=true;
+    }
+  }catch(e){toast("No se pudo renovar el plazo de la orden: "+e.message,"error");return;}
   try{
     await sendEmail(p.email,cfAsuntoAprobado(ev,cfg),glMail.aprobado({nombre:p.nombre,mensaje:cfg.msg_aprobacion,tipo:p.tipo_entrada||"",link,horas:cfg.horas_vencimiento||24,cierre:cfg.cierre_venta,validez:cfValidezTxt(cfg,ev)}));
-    toast(`📧 Correo reenviado a ${p.email}`,"ok");
-    await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}`);
+    toast(renovada?`📧 Plazo renovado y correo reenviado a ${p.email}`:`📧 Correo reenviado a ${p.email}`,"ok");
+    await log("cf_reenviar_correo","cf_postulantes",id,`Correo de aprobación reenviado a ${p.email}${renovada?" (plazo de pago renovado)":""}`);
+    try{if(renovada&&CURRENT_VIEW==="cf-planilla")VIEWS.cfPlanilla();}catch(e){}
   }catch(e){
     toast(`Error al enviar correo: ${e.message}`,"error");
   }
