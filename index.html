@@ -13941,6 +13941,20 @@ try{new MutationObserver(()=>document.querySelectorAll('input[type="datetime-loc
 // Tablas: amigos_config (beneficio por evento) · amigos_inscritos (inscritos por evento). Ver supabase/sql-lista-amigos.sql
 // ══════════════════════════════════════════════════════════════════════════════
 const AMIGOS_GEN={m:"Hombre",f:"Mujer"};
+// Género probable según el primer nombre (nombres comunes en Chile). Devuelve "m", "f" o "" si no está claro.
+const _GEN_F=new Set("isabel raquel ines carmen beatriz belen consuelo rocio pilar soledad mercedes dolores luz abigail ingrid karen miriam ruth nicole nicol michelle michel denisse denise yasmin jazmin jasmin maite noemi esther lourdes rosario asuncion trinidad amparo socorro cristel cristal crystal scarlett scarlet ivonne yvonne giselle gisele marisol maribel anabel annabel mabel madeleine madelein muriel raquel genesis jennifer yennifer evelyn evelin kimberly kimberlyn ashley britany brittany estefany stefany tiffany emily emely aylin ailin iris flor eli elizabeth lizbeth itzel rut marlen marleen arlette ines ines maiten anais naomi noemi yael abril maite agustine dafne daphne fabiola jocelyn joselyn katherine katherinne catherine solange nahiara".split(" "));
+const _GEN_M=new Set("luca joshua josua borja bautista nikita jose dante vicente felipe jorge enrique clemente alexis matias tomas nicolas lucas andres martin benjamin cristian christian sebastian joaquin agustin maximiliano ignacio diego rodrigo gonzalo eduardo francisco pablo pedro juan carlos luis miguel angel daniel david gabriel rafael samuel manuel emanuel ismael elias isaac jesus josue noe abel ariel uriel axel oliver bruno simon ivan adrian fabian julian damian esteban renato renzo thiago tiago santiago mateo marco franco gino aldo hugo dario mario sergio claudio alonso alfonso ramiro hernan fernando alvaro osvaldo arturo rene raul saul cesar oscar victor hector nestor elvis kevin bryan brian steven jhon john william dylan maxi".split(" "));
+function generoPorNombre(nombre){
+  const n=String(nombre||"").trim().split(/\s+/)[0].normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-zñ]/g,"");
+  if(n.length<2)return "";
+  if(_GEN_F.has(n))return "f";
+  if(_GEN_M.has(n))return "m";
+  if(/a$/.test(n))return "f";
+  if(/o$/.test(n))return "m";
+  if(/(iz|el|en|ne|ie|ys|is)$/.test(n))return "";   // poco claro: que elija la persona
+  if(/[bcdfgjklmnprstvxz]$/.test(n))return "m";
+  return "";
+}
 const amigosClp=n=>"$"+(Number(n)||0).toLocaleString("es-CL");
 // Beneficio configurado para un género: {ok, precio, hora, cover, txt}
 function amigosBen(cfg,g){
@@ -14016,8 +14030,10 @@ async function mostrarAmigos(evId){
   const bH=amigosBen(cfg,"m"),bM=amigosBen(cfg,"f");
   const fechaEvTxt=ev.date?(d=>`${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][d.getDay()]} ${d.getDate()} de ${["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][d.getMonth()]}`)(new Date(ev.date+"T12:00:00")):"";
   const benHtml=(bH.ok||bM.ok)?`<div class="am-ben">${bH.ok?`<div><span>Hombre</span><b>${bH.txt}</b></div>`:""}${bM.ok?`<div><span>Mujer</span><b>${bM.txt}</b></div>`:""}${cfg.nota?`<div style="display:block;color:#9ca3af;font-size:12px;padding-top:6px">${escH(cfg.nota)}</div>`:""}</div>`:"";
-  let gen="";
-  window._amGen=g=>{gen=g;document.querySelectorAll(".am-gen button").forEach(b=>b.classList.toggle("on",b.dataset.g===g));document.querySelector(".am-gen").classList.remove("err");};
+  let gen="",genManual=false;
+  window._amGen=(g,auto)=>{gen=g;if(!auto)genManual=true;document.querySelectorAll(".am-gen button").forEach(b=>b.classList.toggle("on",b.dataset.g===g));document.querySelector(".am-gen")?.classList.remove("err");
+    const h=document.getElementById("am-gen-hint");if(h)h.textContent=auto&&g?`Lo marcamos según tu nombre. Si no corresponde, cámbialo.`:"";};
+  window._amNombre=v=>{if(genManual)return;const g=generoPorNombre(v);if(g)window._amGen(g,true);else if(gen){gen="";document.querySelectorAll(".am-gen button").forEach(b=>b.classList.remove("on"));const h=document.getElementById("am-gen-hint");if(h)h.textContent="";}};
   show(`
     <div style="text-align:center;margin-bottom:6px">${prod?.logo_url?`<img src="${prod.logo_url}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:18px;display:block;margin:0 auto 12px">`:""}
       <h1 style="font-size:21px;margin:0 0 4px">Lista de Amigos</h1>
@@ -14027,11 +14043,12 @@ async function mostrarAmigos(evId){
     ${benHtml}
     <p style="color:#aaa;font-size:13px;text-align:center;line-height:1.5;margin:10px 0 4px">Inscríbete y entra con el beneficio de la Lista de Amigos de ${prod?.nombre?`<strong style="color:#fff">${escH(prod.nombre)}</strong>`:"la productora"}. En la puerta solo muestra tu carnet.</p>
     <div class="pb-row">
-      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="am-nom" placeholder="Tu nombre"></div>
+      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="am-nom" placeholder="Tu nombre" oninput="window._amNombre(this.value)"></div>
       <div><label class="pb-lbl">Apellido <span>*</span></label><input class="pb-in" id="am-ape" placeholder="Tu apellido"></div>
     </div>
     <label class="pb-lbl">Género <span>*</span></label>
     <div class="am-gen"><button type="button" data-g="m" onclick="_amGen('m')">Hombre</button><button type="button" data-g="f" onclick="_amGen('f')">Mujer</button></div>
+    <div id="am-gen-hint" style="font-size:11px;color:#888;margin-top:5px"></div>
     <div id="am-gen-err" class="pb-err"></div>
     <label class="pb-lbl">Fecha de nacimiento <span>*</span></label>
     <div class="pb-row">
