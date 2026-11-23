@@ -708,7 +708,7 @@ let EV_DENTRO = null; // evento en el que el usuario "entró" (navegación en do
 const uid = ()=>crypto.randomUUID();
 const now = ()=>new Date().toISOString();
 const acrNorm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[.\-\s]/g,"");
-const fmtDT = s=>s?new Date(s).toLocaleString("es-CL",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"}):"—";
+const fmtDT = s=>s?new Date(s).toLocaleString("es-CL",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit",hour12:false}):"—";
 const fmtT  = s=>s?new Date(s).toLocaleTimeString("es-CL",{hour:"2-digit",minute:"2-digit",hour12:false}):"—";
 const fmtM  = n=>"$"+(n||0).toLocaleString("es-CL");
 const $     = id=>document.getElementById(id);
@@ -3217,7 +3217,7 @@ async function exportarAcreditacionCompleta(){
   const ev=D.eventos.find(e=>e.id===currentEvId);if(!ev){toast("Selecciona un evento","warn");return;}
   if(!(await cargarSheetJSStyled())){toast("No se pudo cargar el generador de Excel","error");return;}
   const X=window.XLSX_STYLE||window.XLSX; const conEstilo=!!window.XLSX_STYLE;
-  const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"});};
+  const fechaHora=iso=>{if(!iso)return "";const d=new Date(iso);return isNaN(d)?"":d.toLocaleString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false});};
   const cumps=(D.bday_cumpleaneros||[]).filter(c=>c.evento_id===currentEvId&&bdayActivo(c));
 
   // 1) Listas y entradas (sin staff: va en su propia hoja)
@@ -13915,6 +13915,26 @@ async function mostrarPostulacionBday(evId){
   form();
 }
 
+// ── Horario 24 h en toda la plataforma: los campos fecha+hora (datetime-local) del navegador muestran AM/PM según el computador.
+// Se reemplazan por fecha + hora (00-23) + minutos; el campo original queda oculto con el mismo valor "YYYY-MM-DDTHH:MM",
+// así el resto del código lo sigue leyendo igual.
+function gl24Campo(inp){
+  if(inp.dataset.gl24)return;inp.dataset.gl24="1";
+  const v=inp.value||"";const fecha=v.slice(0,10),hh=v.slice(11,13),mm=v.slice(14,16);
+  inp.type="hidden";
+  const w=document.createElement("div");w.style.cssText="display:flex;gap:6px;align-items:center;flex-wrap:wrap";
+  const cls=inp.className||"form-input";
+  const mins=Array.from({length:12},(_,i)=>String(i*5).padStart(2,"0"));if(mm&&!mins.includes(mm))mins.push(mm),mins.sort();
+  w.innerHTML=`<input type="date" class="${cls}" style="flex:1;min-width:140px;margin:0" value="${fecha}">
+    <select class="${cls}" style="width:auto;margin:0;padding-right:4px" aria-label="Hora"><option value="">--</option>${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,"0");return `<option value="${h}" ${h===hh?"selected":""}>${h}</option>`;}).join("")}</select><b>:</b>
+    <select class="${cls}" style="width:auto;margin:0;padding-right:4px" aria-label="Minutos">${mins.map(m=>`<option value="${m}" ${m===(mm||"00")?"selected":""}>${m}</option>`).join("")}</select><span style="font-size:12px;color:var(--ink-4)">hrs</span>`;
+  inp.insertAdjacentElement("afterend",w);
+  const [d,h,m]=w.querySelectorAll("input,select");
+  const sync=()=>{const nv=d.value&&h.value?`${d.value}T${h.value}:${m.value}`:(d.value?`${d.value}T00:00`:"");if(inp.value!==nv){inp.value=nv;inp.dispatchEvent(new Event("input",{bubbles:true}));inp.dispatchEvent(new Event("change",{bubbles:true}));}};
+  [d,h,m].forEach(el=>el.addEventListener("change",sync));
+}
+try{new MutationObserver(()=>document.querySelectorAll('input[type="datetime-local"]:not([data-gl24])').forEach(gl24Campo)).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // LISTA DE AMIGOS — la gente se inscribe por fiesta (guestly.cl/?amigos=<eventoId>), entra directo,
 // y en la puerta se le aplica el beneficio del evento según género y hora tope (precio, con o sin cover).
@@ -14090,6 +14110,17 @@ VIEWS["amigos"]=async()=>{
   }
   amigosRender();
 };
+// Hora en formato 24 h con dos listas (hora y minutos), sin AM/PM
+function amigosSelHora(id,val){
+  const [hh,mm]=/^\d{1,2}:\d{2}/.test(val||"")?val.split(":"):["",""];
+  const st='class="form-input" style="margin:0;padding-left:8px;padding-right:4px"';
+  return `<div style="display:flex;align-items:center;gap:4px">
+    <select ${st} id="${id}-hh"><option value="">--</option>${Array.from({length:24},(_,i)=>{const h=String(i).padStart(2,"0");return `<option value="${h}" ${h===String(hh).padStart(2,"0")&&hh!==""?"selected":""}>${h}</option>`;}).join("")}</select>
+    <b>:</b>
+    <select ${st} id="${id}-mm">${["00","15","30","45"].map(m=>`<option value="${m}" ${m===mm?"selected":""}>${m}</option>`).join("")}</select>
+    <span style="font-size:12px;color:var(--ink-4)">hrs</span></div>`;
+}
+function amigosLeerHora(id){const h=$(id+"-hh")?.value||"",m=$(id+"-mm")?.value||"00";return h?`${h}:${m}`:null;}
 function amigosRender(){
   const mc=$("main-content");const ev=(D.eventos||[]).find(e=>e.id===currentEvId);if(!ev||!mc)return;
   const cfg=D.amigos_cfg?.[ev.id]||null;
@@ -14099,10 +14130,10 @@ function amigosRender(){
   const nq=acrNorm(_amQ);
   const vis=ins.filter(i=>_amGenF==="todos"||i.genero===_amGenF).filter(i=>!nq||[`${i.nombre} ${i.apellido}`,i.rut,i.email,i.instagram,i.whatsapp].some(v=>acrNorm(v||"").includes(nq)));
   const v=(k,d="")=>cfg&&cfg[k]!==null&&cfg[k]!==undefined?cfg[k]:d;
-  const fila=(g,lbl)=>{const k=g==="f"?"mujer":"hombre";return `<div style="display:grid;grid-template-columns:90px 190px 170px auto;gap:14px;align-items:end;margin-bottom:10px;justify-content:start">
+  const fila=(g,lbl)=>{const k=g==="f"?"mujer":"hombre";return `<div style="display:grid;grid-template-columns:90px 190px 210px auto;gap:14px;align-items:end;margin-bottom:10px;justify-content:start">
       <div style="font-weight:700;padding-bottom:9px">${lbl}</div>
       <div><label class="form-label">Precio (0 = gratis)</label><div style="display:flex;align-items:stretch"><span style="display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;background:var(--line-2);font-weight:700;color:var(--ink-2)">$</span><input class="form-input" id="am-p-${g}" type="number" min="0" step="500" placeholder="10000" value="${v("precio_"+k)}" style="border-radius:0 8px 8px 0;margin:0"></div></div>
-      <div><label class="form-label">Válido hasta las</label><input class="form-input" id="am-h-${g}" type="time" value="${v("hora_"+k)}"></div>
+      <div><label class="form-label">Válido hasta las (24 h)</label>${amigosSelHora("am-h-"+g,v("hora_"+k))}</div>
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;padding-bottom:9px;white-space:nowrap"><input type="checkbox" id="am-c-${g}" ${v("cover_"+k,false)?"checked":""}> Con cover</label>
     </div>`;};
   mc.innerHTML=`
@@ -14141,7 +14172,7 @@ function amigosRender(){
           <td>${i.genero==="m"?"♂ Hombre":i.genero==="f"?"♀ Mujer":"—"}</td>
           <td>${wa?`<a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="color:#128C4B;font-weight:600">${escH(i.whatsapp)}</a>`:"—"}</td>
           <td>${i.instagram?`<a href="https://instagram.com/${encodeURIComponent(i.instagram)}" target="_blank" rel="noopener">@${escH(i.instagram)}</a>`:"—"}</td>
-          <td style="font-size:12px;color:var(--ink-4)">${i.created_at?new Date(i.created_at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</td>
+          <td style="font-size:12px;color:var(--ink-4)">${i.created_at?new Date(i.created_at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):""}</td>
           <td>${i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green")+(i.cobro?`<div style="font-size:11px;color:var(--ink-4);margin-top:2px">${escH(i.cobro)}</div>`:""):badge("Inscrito","gray")}</td>
           <td style="text-align:right">${!i.llego?`<button class="btn" style="font-size:11px;padding:4px 9px;color:#b91c1c;border-color:#fca5a5" onclick="amigosQuitar('${i.id}')">Quitar</button>`:""}</td>
         </tr>`;}).join("")||`<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">${ins.length?"Sin resultados.":"Todavía no hay inscritos."}</td></tr>`}</tbody>
@@ -14152,8 +14183,8 @@ window.amigosGuardar=async()=>{
   const ev=(D.eventos||[]).find(e=>e.id===currentEvId);if(!ev)return;
   const num=id=>{const s=($(id)?.value||"").trim();return s===""?null:Math.max(0,parseInt(s)||0);};
   const row={evento_id:ev.id,productora_id:ev.productora_id||null,activo:!!$("am-activo")?.checked,
-    precio_hombre:num("am-p-m"),hora_hombre:$("am-h-m")?.value||null,cover_hombre:!!$("am-c-m")?.checked,
-    precio_mujer:num("am-p-f"),hora_mujer:$("am-h-f")?.value||null,cover_mujer:!!$("am-c-f")?.checked,
+    precio_hombre:num("am-p-m"),hora_hombre:amigosLeerHora("am-h-m"),cover_hombre:!!$("am-c-m")?.checked,
+    precio_mujer:num("am-p-f"),hora_mujer:amigosLeerHora("am-h-f"),cover_mujer:!!$("am-c-f")?.checked,
     cupo:num("am-cupo")||null,nota:($("am-nota")?.value||"").trim()||null,updated_at:new Date().toISOString()};
   if(row.precio_hombre===null&&row.precio_mujer===null)return toast("Define el beneficio al menos para hombre o para mujer","warn");
   if((row.precio_hombre!==null&&!row.hora_hombre)||(row.precio_mujer!==null&&!row.hora_mujer))return toast("Falta la hora tope del beneficio","warn");
@@ -14180,7 +14211,7 @@ window.amigosExportar=()=>{
   const ev=(D.eventos||[]).find(e=>e.id===currentEvId);
   const ins=(D.amigos_inscritos||[]).filter(i=>i.evento_id===currentEvId);
   const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
-  const rows=[["Nombre","Apellido","RUT","Género","Fecha nacimiento","WhatsApp","Correo","Instagram","Inscrito","Ingresó","Cobro"]].concat(ins.map(i=>[i.nombre,i.apellido,fmtRut(i.rut||""),AMIGOS_GEN[i.genero]||"",i.fecha_nacimiento||"",i.whatsapp,i.email,i.instagram?"@"+i.instagram:"",i.created_at?new Date(i.created_at).toLocaleString("es-CL"):"",i.llego?new Date(i.llego_at).toLocaleString("es-CL"):"",i.cobro||""]));
+  const rows=[["Nombre","Apellido","RUT","Género","Fecha nacimiento","WhatsApp","Correo","Instagram","Inscrito","Ingresó","Cobro"]].concat(ins.map(i=>[i.nombre,i.apellido,fmtRut(i.rut||""),AMIGOS_GEN[i.genero]||"",i.fecha_nacimiento||"",i.whatsapp,i.email,i.instagram?"@"+i.instagram:"",i.created_at?new Date(i.created_at).toLocaleString("es-CL",{hour12:false}):"",i.llego?new Date(i.llego_at).toLocaleString("es-CL",{hour12:false}):"",i.cobro||""]));
   const blob=new Blob(["﻿"+rows.map(r=>r.map(q).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`lista-amigos-${(ev?.name||"evento").replace(/[^\w]+/g,"-").toLowerCase()}.csv`;a.click();
 };
