@@ -726,6 +726,18 @@ const IG_ICON = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" sty
 // Extrae el RUT de un registro de acreditación.
 // Lugar correcto: campo `rut`. Como fallback histórico mira `role` con prefijo "RUT:"
 // (formato legacy de antes de la migración).
+// Una persona (mismo RUT) no puede quedar dos veces en las listas de un mismo evento
+const rutClave = r => String(r||"").toUpperCase().replace(/[^0-9K]/g,"").replace(/^0+/,"");
+function accDuplicado(evId,rut,excluirId){
+  const k=rutClave(rut);if(k.length<7)return null;
+  return (D.acc_entries||[]).find(e=>e.event_id===evId&&e.id!==excluirId&&rutClave(getRut(e))===k)||null;
+}
+function accAvisarDuplicado(evId,rut,nombre,excluirId){
+  const d=accDuplicado(evId,rut,excluirId);if(!d)return false;
+  const l=(D.acc_lists||[]).find(x=>x.id===d.list_id);
+  toast(`${nombre||d.name} ya está en ${l?`la lista "${l.name}"`:"walk-in"} de este evento (mismo RUT). No se puede agregar dos veces.`,"error");
+  return true;
+}
 const getRut = e => {
   if(!e)return "";
   if(e.rut&&typeof e.rut==="string"&&e.rut.trim())return e.rut.trim();
@@ -1028,6 +1040,10 @@ function chequearDuplicado(mesa, nombre, rut, instagram){
   const norm = s => (s||"").toLowerCase().trim().replace(/[.\-\s]/g,"");
   const activos = (mesa.perfiles||[]).filter(p=>p.estado!=="rechazado");
   if(rut && activos.find(p=>p.rut && norm(p.rut)===norm(rut))) return {campo:"RUT", valor:rut};
+  if(rut && typeof D!=="undefined" && D.vip_tables){
+    const otra=D.vip_tables.find(m=>m.id!==mesa.id&&m.event_id===mesa.event_id&&(m.perfiles||[]).some(p=>p.estado!=="rechazado"&&p.rut&&rutClave(p.rut)===rutClave(rut)));
+    if(otra) return {campo:"RUT", valor:`${rut} (ya está en la mesa ${otra.table_num||""})`};
+  }
   if(instagram && activos.find(p=>p.instagram && igHandle(p.instagram).toLowerCase()===igHandle(instagram).toLowerCase())) return {campo:"Instagram", valor:"@"+igHandle(instagram)};
   if(nombre && activos.find(p=>p.nombre && norm(p.nombre)===norm(nombre))) return {campo:"nombre", valor:nombre};
   return null;
@@ -4360,6 +4376,7 @@ async function saveWalkin(){
   const comp=Math.max(parseInt($("wk-c")?.value)||1,1)-1;
   const eid=uid();
   const total=1+comp;
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:null,event_id:currentEvId,name,rut,pulsera,companions:comp,role:"Walk-in",zone_id:null,status:"checked_in",entradas_usadas:total,checked_in_at:now(),checked_in_by:CU?.id,notes:$("wk-notes")?.value||""};
   const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:total,recorded_by:CU?.id,recorded_at:now()};
   D.acc_entries.push(entry);D.capacity_log.push(cap);
@@ -4409,6 +4426,7 @@ async function saveAgregarALista(){
   if(!pulsera){toast("Selecciona una pulsera","error");return;}
   const totalEnt=Math.max(parseInt($("al-ent")?.value)||1,1);
   const eid=uid();
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:listId,event_id:currentEvId,name,rut,companions:totalEnt-1,role:null,pulsera,zone_id:null,status:"pending",entradas_usadas:0,checked_in_at:null,checked_in_by:null,notes:$("al-notes")?.value||""};
   D.acc_entries.push(entry);
   try{await sbPost("acc_entries",[entry]);await log("add_entry","entry",eid,`Agregado a lista: ${name} ${rut} (${totalEnt} entradas, pulsera: ${pulsera})`);}catch(e){toast("Error: "+e.message,"error");}
@@ -6019,6 +6037,7 @@ async function saveEntry(lid){
   // El campo "Entradas" es el TOTAL (1 = solo la persona). En BD guardamos companions = total - 1.
   const totalEnt=Math.max(parseInt($("ae-c")?.value)||1,1);
   const eid=uid();
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:lid,event_id:currentEvId,name,rut,companions:totalEnt-1,role:null,zone_id:null,status:"pending",checked_in_at:null,checked_in_by:null,notes:$("ae-no")?.value||"",pulsera};
   D.acc_entries.push(entry);
   try{await sbPost("acc_entries",[entry]);await log("add_entry","entry",eid,`Agregado: ${name} ${rut} (${totalEnt} entradas, pulsera: ${pulsera})`);}catch(e){toast("Error: "+e.message,"error");}
@@ -6221,7 +6240,11 @@ async function procesarImportLista(lid){
 
 async function confirmarImportLista(lid){
   const buf=window._importBuf;if(!buf||buf.lid!==lid){toast("Vuelve a procesar el archivo","error");return;}
-  const nuevas=buf.filas.map(r=>({
+  const vistos=new Set();let repetidas=0;
+  const filas=buf.filas.filter(r=>{const k=rutClave(r.rut);if(k.length<7)return true;if(vistos.has(k)||accDuplicado(currentEvId,r.rut)){repetidas++;return false;}vistos.add(k);return true;});
+  if(repetidas)toast(`${repetidas} persona${repetidas===1?"":"s"} omitida${repetidas===1?"":"s"}: ya estaba${repetidas===1?"":"n"} en este evento (mismo RUT)`,"warn");
+  if(!filas.length){toast("No hay personas nuevas para importar","warn");return;}
+  const nuevas=filas.map(r=>({
     id:uid(),list_id:lid,event_id:currentEvId,name:r.nombre,rut:r.rut,
     companions:Math.max(r.entradas-1,0),
     role:null,zone_id:null,status:"pending",checked_in_at:null,checked_in_by:null,
@@ -6284,6 +6307,7 @@ async function saveStaff(lid){
     D.acc_lists.push(nl);try{await sbPost("acc_lists",[nl]);}catch(e){}
   }
   const eid=uid();
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:listId,event_id:currentEvId,name,rut,pulsera,companions:0,role:$("as-r")?.value||"Staff",zone_id:null,status:"pending",checked_in_at:null,checked_in_by:null,notes:""};
   D.acc_entries.push(entry);
   try{await sbPost("acc_entries",[entry]);await log("add_entry","entry",eid,`Staff: ${name} ${rut} — ${pulsera}`);}catch(e){toast("Error: "+e.message,"error");}
@@ -7792,6 +7816,7 @@ async function procesarCSV(text){
         const pNombre=getCol(row,idxPulsera);if(!pNombre){sinP++;return;}
         const lista=getList(pNombre);
         if(D.acc_entries.find(e=>e.event_id===currentEvId&&norm(e.name)===norm(nombre)&&e.list_id===lista.id)){dupes++;return;}
+        {const rc=getCol(row,idxRut);if(rc&&accDuplicado(currentEvId,rc)){dupes++;return;}}
         // "entradas" = total de entradas (1 = solo, 2 = +1...). companions = total - 1.
         const totalEnt=Math.max(parseInt(getCol(row,idxEntradas)||"1")||1,1);
         const rutCsv=getCol(row,idxRut);
@@ -7991,6 +8016,7 @@ async function saveMobWalkin(){
   const puls=(ev?.pulseras||[]).find(p=>p.nombre===pNombre)||null;
   const eid=uid();
   const total=1+comp;
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:null,event_id:currentEvId,name,rut,pulsera:pNombre,companions:comp,role:"Walk-in",zone_id:null,status:"checked_in",entradas_usadas:total,checked_in_at:now(),checked_in_by:CU?.id,notes:""};
   const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:total,recorded_by:CU?.id,recorded_at:now()};
   D.acc_entries.push(entry);D.capacity_log.push(cap);
@@ -8066,6 +8092,7 @@ async function saveMobAdd(checkin=true){
   const comp=parseInt($("madd-c")?.value)||0;
   const eid=uid();
   const total=1+comp;
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:$("madd-l")?.value||null,event_id:currentEvId,name,rut,pulsera,companions:comp,role:"Walk-in",zone_id:null,status:checkin?"checked_in":"pending",entradas_usadas:checkin?total:0,checked_in_at:checkin?now():null,checked_in_by:checkin?CU?.id:null,notes:""};
   D.acc_entries.push(entry);
   if(checkin){const ce={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:total,recorded_by:CU?.id,recorded_at:now()};D.capacity_log.push(ce);try{await sbPost("capacity_log",[ce]);}catch(e){}}
@@ -8116,6 +8143,7 @@ async function saveCaja(){
   const comp=parseInt($("caj-c")?.value)||0;
   const total=1+comp;
   const eid=uid();
+  if(accAvisarDuplicado(currentEvId,rut,name))return;
   const entry={id:eid,list_id:null,event_id:currentEvId,name,rut,pulsera:pNombre,companions:comp,role:"Walk-in",zone_id:null,status:"checked_in",entradas_usadas:total,checked_in_at:now(),checked_in_by:CU?.id,notes:`Caja: ${pNombre}`};
   const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:total,recorded_by:CU?.id,recorded_at:now()};
   D.acc_entries.push(entry);D.capacity_log.push(cap);
@@ -9614,7 +9642,8 @@ async function enviarPostulacionCF(eventoId, productora_id){
     if(existing.find(p=>normRUT(p.rut)===rut)) return show("Ya existe una postulación con este RUT para este evento.");
     if(existing.find(p=>normIG(p.instagram)===ig)) return show("Ya existe una postulación con este Instagram para este evento.");
     if(existing.find(p=>(p.email||"").toLowerCase()===email.toLowerCase())) return show("Ya existe una postulación con este email.");
-    const bloq = bloqueados.find(b=>normRUT(b.rut)===rut || norm(b.nombre)===norm(nombre+" "+apellido));
+    const hoyB=new Date().toISOString().slice(0,10);
+    const bloq = bloqueados.find(b=>(!b.vence||b.vence>=hoyB)&&rutClave(b.rut)===rutClave(rut));
     if(bloq) return show("No es posible procesar tu postulación en este momento.");
 
     const id = uid();
@@ -13131,11 +13160,25 @@ async function mostrarPanelBdayInv(token){
       if(!emailInv.includes("@")||!emailInv.includes(".")){
         mostrarErr("Ingresa un correo válido.");return;
       }
-      // Validar bloqueado
-      const bl=(D.lista_bloqueo||[]).filter(b=>!pidBloq||b.productora_id===pidBloq);
-      const norm=s=>(s||"").toLowerCase().trim().replace(/[.\-]/g,"");
-      const esBloq=bl.find(b=>norm(b.nombre)===norm(nombre+" "+apellido));
+      if(!rutValido(rut)){mostrarErr("RUT inválido, revísalo.");return;}
+      // Validar bloqueado (solo por RUT)
+      let bl=(D.lista_bloqueo||[]).filter(b=>!pidBloq||b.productora_id===pidBloq);
+      if(!bl.length&&pidBloq){try{bl=await sbGet("lista_bloqueo",`productora_id=eq.${pidBloq}&select=rut,vence`);}catch(e){bl=[];}}
+      const hoyB=new Date().toISOString().slice(0,10);
+      const esBloq=bl.find(b=>(!b.vence||b.vence>=hoyB)&&rutClave(b.rut)===rutClave(rut));
       if(esBloq){mostrarErr("No es posible inscribir a esta persona. Por favor reemplázala.");return;}
+      // No repetir a la misma persona en el mismo evento (en este u otro cumpleaños de la misma fiesta)
+      try{
+        const yo=(await sbGet("bday_cumpleaneros",`id=eq.${cid}&select=evento_id`))[0];
+        if(yo?.evento_id){
+          const cumps=await sbGet("bday_cumpleaneros",`evento_id=eq.${yo.evento_id}&select=id,rut`);
+          if(cumps.some(c=>rutClave(c.rut)===rutClave(rut))){mostrarErr("Esta persona ya está inscrita como cumpleañero/a en este evento.");return;}
+          const ids=cumps.map(c=>c.id).filter(Boolean);
+          const invs=ids.length?await sbGet("bday_invitados",`cumpleanero_id=in.(${ids.join(",")})&estado=neq.rechazado&select=cumpleanero_id,rut`):[];
+          const ya=invs.find(i=>rutClave(i.rut)===rutClave(rut));
+          if(ya){mostrarErr(ya.cumpleanero_id===cid?"Ya estás inscrito/a en este cumpleaños.":"Ya estás inscrito/a en otro cumpleaños de este evento. Solo puedes estar en una lista.");return;}
+        }
+      }catch(e){console.warn("chequeo de duplicados",e);}
       // Guardar
       const invData={id:uid(),cumpleanero_id:cid,productora_id:pidBloq||null,nombre,apellido,rut:rut||null,genero,fecha_nacimiento,email:emailInv,instagram:instagram||null,whatsapp:whatsapp||null,estado:"pendiente",created_at:now()};
       try{
@@ -14018,7 +14061,8 @@ function amigosEvaluar(ev,cfg,g,ahora){
   const que=b.precio===0?`Entra gratis${b.cover?" con cover":""}`:`Paga ${amigosClp(b.precio)}${b.cover?" con cover":""}`;
   return {...b,aplica:true,cobro:que,chip:badge(`${que}${b.hora?` · hasta ${b.hora}`:""}`,b.precio===0?"green":"blue")};
 }
-function amigosLink(evId){return `${APP_URL}/?amigos=${encodeURIComponent(evId)}`;}
+// Link corto: guestly.cl/?a=<primeros 8 caracteres del evento> (el link largo ?amigos=<id> sigue funcionando)
+function amigosLink(evId){const id=String(evId||"");return `${APP_URL}/?a=${encodeURIComponent(id.length>8?id.slice(0,8):id)}`;}
 
 // ── Página pública de inscripción ──
 async function mostrarAmigos(evId){
@@ -14044,6 +14088,10 @@ async function mostrarAmigos(evId){
   let ev=null,prod=null,cfg=null,nIns=0;
   try{
     ev=(await sbGet("eventos",`id=eq.${encodeURIComponent(evId)}`))[0]||null;
+    if(!ev&&/^[A-Za-z0-9_-]{4,12}$/.test(evId||"")){ // link corto: buscar el evento por el comienzo de su id
+      const c=await sbGet("eventos",`id=like.${encodeURIComponent(evId)}*&status=neq.archived&order=date.desc&limit=2`);
+      if(c.length===1)ev=c[0];
+    }
     if(ev){
       const [pArr,cArr]=await Promise.all([
         ev.productora_id?sbGet("productoras",`id=eq.${ev.productora_id}&select=id,nombre,logo_url`):[],
@@ -16937,6 +16985,7 @@ else if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
 else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cumple")){ mostrarPostulacionBday(_cfUrl.get("cumple")); }
 else if(_cfUrl.has("amigos")){ mostrarAmigos(_cfUrl.get("amigos")); }
+else if(_cfUrl.has("a")){ mostrarAmigos(_cfUrl.get("a")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
@@ -16962,7 +17011,7 @@ else if(_esPortadaPublica||(_cfUrl.has("inicio")&&/^\/(index\.html)?$/.test(loca
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora","buscar","inicio","amigos"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora","buscar","inicio","amigos","a"].some(k=>_pub.has(k));
   if(!_esLinkPublico&&!_esValidador&&!_esPortadaPublica) await restaurarSesion();
 })();
 
