@@ -14099,9 +14099,9 @@ function amigosRender(){
   const nq=acrNorm(_amQ);
   const vis=ins.filter(i=>_amGenF==="todos"||i.genero===_amGenF).filter(i=>!nq||[`${i.nombre} ${i.apellido}`,i.rut,i.email,i.instagram,i.whatsapp].some(v=>acrNorm(v||"").includes(nq)));
   const v=(k,d="")=>cfg&&cfg[k]!==null&&cfg[k]!==undefined?cfg[k]:d;
-  const fila=(g,lbl)=>{const k=g==="f"?"mujer":"hombre";return `<div style="display:grid;grid-template-columns:90px 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px">
+  const fila=(g,lbl)=>{const k=g==="f"?"mujer":"hombre";return `<div style="display:grid;grid-template-columns:90px 190px 170px auto;gap:14px;align-items:end;margin-bottom:10px;justify-content:start">
       <div style="font-weight:700;padding-bottom:9px">${lbl}</div>
-      <div><label class="form-label">Precio en $ (0 = gratis, vacío = sin beneficio)</label><input class="form-input" id="am-p-${g}" type="number" min="0" step="500" placeholder="Ej: 10000" value="${v("precio_"+k)}"></div>
+      <div><label class="form-label">Precio (0 = gratis)</label><div style="display:flex;align-items:stretch"><span style="display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;background:var(--line-2);font-weight:700;color:var(--ink-2)">$</span><input class="form-input" id="am-p-${g}" type="number" min="0" step="500" placeholder="10000" value="${v("precio_"+k)}" style="border-radius:0 8px 8px 0;margin:0"></div></div>
       <div><label class="form-label">Válido hasta las</label><input class="form-input" id="am-h-${g}" type="time" value="${v("hora_"+k)}"></div>
       <label style="display:flex;gap:6px;align-items:center;font-size:13px;padding-bottom:9px;white-space:nowrap"><input type="checkbox" id="am-c-${g}" ${v("cover_"+k,false)?"checked":""}> Con cover</label>
     </div>`;};
@@ -14110,7 +14110,7 @@ function amigosRender(){
     <div class="card" style="margin-bottom:14px">
       <div class="sec-header"><div class="sec-title">Beneficio de este evento</div>
         <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="am-activo" ${!cfg||cfg.activo!==false?"checked":""}> Inscripciones abiertas</label></div>
-      <div style="font-size:12px;color:var(--ink-4);margin:-4px 0 12px">Lo que paga cada inscrito en la puerta según su género, hasta la hora tope. Después de esa hora paga el precio normal. Deja el precio vacío si ese género no tiene beneficio.</div>
+      <div style="font-size:12px;color:var(--ink-4);margin:-4px 0 12px">Lo que paga cada inscrito en la puerta según su género, hasta la hora tope. Después de esa hora paga el precio normal. Escribe el precio solo con números (ej. 10000). Déjalo vacío si ese género no tiene beneficio.</div>
       ${fila("m","Hombre")}${fila("f","Mujer")}
       <div style="display:grid;grid-template-columns:160px 1fr;gap:10px">
         <div><label class="form-label">Cupo (opcional)</label><input class="form-input" id="am-cupo" type="number" min="1" placeholder="Sin límite" value="${v("cupo")}"></div>
