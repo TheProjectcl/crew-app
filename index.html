@@ -1013,13 +1013,14 @@ async function cerrarPendientesEvento(ev){
   return resumen;
 }
 
+// La lista de bloqueo se cruza SOLO por RUT (dos personas pueden llamarse igual). El nombre no se usa para bloquear.
 function chequearBloqueo(nombre, rut, prodId){
   const lista = D.lista_bloqueo||[];
-  const norm = s => (s||"").toLowerCase().trim().replace(/[.\-]/g,"");
+  const norm = s => String(s||"").toUpperCase().replace(/[^0-9K]/g,"").replace(/^0+/,"");
+  const r = norm(rut);
+  if(r.length<7) return null;
   const vigente = b => !b.vence || b.vence >= new Date().toISOString().slice(0,10); // sin fecha = permanente
-  const bloqueadoRut  = rut  && lista.find(b=>b.productora_id===prodId && vigente(b) && norm(b.rut)===norm(rut));
-  const bloqueadoNom  = nombre && lista.find(b=>b.productora_id===prodId && vigente(b) && norm(b.nombre)===norm(nombre));
-  return bloqueadoRut||bloqueadoNom||null;
+  return lista.find(b=>b.productora_id===prodId && vigente(b) && norm(b.rut)===r) || null;
 }
 
 // Detecta duplicados de nombre, rut o instagram dentro de la misma mesa (ignora rechazados)
@@ -3432,7 +3433,7 @@ function renderAcrTotal(q){
         <thead><tr><th>Nombre completo</th><th>RUT</th><th>Lista (origen)</th><th>Pulsera</th><th>Entradas</th><th>Estado</th><th></th></tr></thead>
         <tbody>${vis.map(it=>`<tr style="background:${it.esCumple?"#FEF9C3":it.usadas>=it.entradas&&it.usadas>0?"#f0fdf4":"#fff"}">
           <td><strong>${it.esCumple?"🎂 ":""}${it.nombre}</strong><br><span style="font-size:11px;color:${it.subColor};font-weight:600">${it.sub}</span></td>
-          <td style="font-size:12px;color:#555">${it.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+          <td style="font-size:12px;color:#555">${it.rut?fmtRut(it.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
           <td style="font-size:12px;color:${it.origenColor};font-weight:600">${it.origen}</td>
           <td>${pulseraCellPorNombre(it.pulsera)}</td>
           <td style="font-weight:600;text-align:center">${it.entradas}${it.entradas>1?`<div style="font-size:10px;color:#aaa;font-weight:400">${it.usadas} usadas</div>`:""}</td>
@@ -3550,7 +3551,7 @@ function renderAcrCF(q){
           const conc=f.o.estado==="conciliado";
           return `<tr style="background:${ya?"#f0fdf4":"#fff"}">
             <td><strong>${f.nombre}</strong><br><span style="font-size:11px;color:#EC4899;font-weight:600">🌸 ${f.codigo}</span>${f.p.instagram?` <span style="font-size:11px;color:#aaa">· @${String(f.p.instagram).replace("@","")}</span>`:""}</td>
-            <td style="font-size:12px;color:#555">${f.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+            <td style="font-size:12px;color:#555">${f.rut?fmtRut(f.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
             <td style="font-size:12px;color:#EC4899;font-weight:600">Close Friends${conc?"":`<br>${badge("Pago por conciliar","amber")}`}</td>
             <td>${pulseraCellPorNombre(f.p.tipo_entrada)}</td>
             <td style="font-weight:600;text-align:center">${f.o.cantidad||1}</td>
@@ -3614,7 +3615,7 @@ function renderAcrBday(q){
     const covers=ben?.covers_cumple??1;
     const filaCumple=`<tr style="background:#FEF9C3">
       <td><strong>🎂 ${cNom}</strong><br><span style="font-size:11px;color:#854d0e;font-weight:600">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}${c.instagram?` · @${String(c.instagram).replace("@","")}`:""}</span></td>
-      <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+      <td style="font-size:12px;color:#555">${c.rut?fmtRut(c.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
       <td style="font-size:12px;color:#854d0e;font-weight:600">Lista cumpleaños</td>
       <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
       <td style="font-weight:600;text-align:center">1</td>
@@ -3625,7 +3626,7 @@ function renderAcrBday(q){
       </div></td></tr>`;
     const filasInv=invVis.map(inv=>`<tr style="background:${inv.llego?"#f0fdf4":"#fff"}">
       <td style="padding-left:28px"><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumpleaños de ${cNom}</span>${inv.instagram?` <span style="font-size:11px;color:#aaa">· @${String(inv.instagram).replace("@","")}</span>`:""}</td>
-      <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+      <td style="font-size:12px;color:#555">${inv.rut?fmtRut(inv.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
       <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
       <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
       <td style="font-weight:600;text-align:center">1</td>
@@ -3723,7 +3724,7 @@ function renderAcrMesas(q){
       const args=`'${m.id}','${p.id||idx}',${idx}`;
       return `<tr style="background:${p.llego?"#f0fdf4":"#fff"}">
         <td><strong>${nom}</strong><br><span style="font-size:11px;color:#0e7490;font-weight:600">🍾 Mesa ${m.table_num}${esExtra?" · pulsera extra":""}</span>${p.instagram?` <span style="font-size:11px;color:#aaa">· @${igHandle(p.instagram)}</span>`:""}</td>
-        <td style="font-size:12px;color:#555">${p.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+        <td style="font-size:12px;color:#555">${p.rut?fmtRut(p.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#0e7490;font-weight:600">Mesa ${m.table_num}${m.section?` · ${m.section}`:""}</td>
         <td>${pulseraCellPorNombre(pulsera)}</td>
         <td style="font-weight:600;text-align:center">1</td>
@@ -3833,7 +3834,7 @@ function renderInvitadosMesaLista(m,perfiles){
     return `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px;border:1px solid ${llego?"#BBF7D0":esExtra?"#fed7aa":"#e8e8e8"};border-radius:10px;margin-bottom:8px;background:${llego?"#F0FDF4":esExtra?"#fff7ed":"#fff"}">
       <div style="flex:1">
         <div style="font-size:15px;font-weight:600">${p.nombre||"—"}${esExtra?` <span style="font-size:10px;color:#9a3412;background:#fed7aa;padding:1px 6px;border-radius:4px;font-weight:700">PULSERA EXTRA</span>`:idx===0&&m.responsible_name&&(p.nombre===m.responsible_name)?` <span style="font-size:10px;color:#534AB7">(responsable)</span>`:""}</div>
-        ${p.rut?`<div style="font-size:13px;color:#111;font-weight:600;margin-top:2px">${p.rut}</div>`:""}
+        ${p.rut?`<div style="font-size:13px;color:#111;font-weight:600;margin-top:2px">${fmtRut(p.rut)}</div>`:""}
         ${p.instagram?`<div style="font-size:11px;color:#C13584;margin-top:2px">@${igHandle(p.instagram)}</div>`:""}
         ${p.rut?`<div style="font-size:10px;color:#92400E;margin-top:2px">⚠️ Verifica el carnet</div>`:""}
       </div>
@@ -3926,7 +3927,7 @@ function searchAcc(q){
       <div>
         <div style="font-size:14px;font-weight:600">${esCumple?"🎂 ":""}${inv.nombre} ${inv.apellido} ${!esCumple?`<span style="font-size:11px;color:#534AB7;font-weight:600">${inv.genero==="m"?"♂":"♀"}</span>`:""}</div>
         <div style="font-size:11px;color:${esCumple?"#854d0e":"#534AB7"};font-weight:600">${inv.info}</div>
-        ${inv.rut?`<div style="font-size:11px;color:#777">${inv.rut}</div>`:""}
+        ${inv.rut?`<div style="font-size:11px;color:#777">${fmtRut(inv.rut)}</div>`:""}
         ${inv.whatsapp?`<div style="font-size:11px;color:#25D366">📱 ${inv.whatsapp}</div>`:""}
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;align-items:flex-end">
@@ -4010,7 +4011,7 @@ function filterAccType(type){
       const covers=ben?.covers_cumple??1;
       return `<tr style="background:#FEF9C3">
         <td><strong>🎂 ${c.nombre} ${c.apellido}</strong><br><span style="font-size:11px;color:#854d0e;font-weight:600">Cumpleañero/a · ${covers} cover${covers===1?"":"s"}</span></td>
-        <td style="font-size:12px;color:#555">${c.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+        <td style="font-size:12px;color:#555">${c.rut?fmtRut(c.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#854d0e;font-weight:600">Lista cumpleaños</td>
         <td>${pulseraCellPorNombre(ben?.pulsera||"")}</td>
         <td style="font-weight:600;text-align:center">${Math.max(1,covers)}</td>
@@ -4025,7 +4026,7 @@ function filterAccType(type){
       const yaEntro=!!inv.llego;
       return `<tr style="background:#f5f3ff">
         <td><strong>${inv.nombre} ${inv.apellido}</strong><br><span style="font-size:11px;color:#534AB7">🎂 Cumpleaños de ${c?.nombre||""} ${c?.apellido||""}</span></td>
-        <td style="font-size:12px;color:#555">${inv.rut||`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
+        <td style="font-size:12px;color:#555">${inv.rut?fmtRut(inv.rut):`<span style="color:#9a3412;font-weight:600">— falta</span>`}</td>
         <td style="font-size:12px;color:#534AB7;font-weight:600">Lista cumpleaños</td>
         <td>${pulseraCellPorNombre((D.bday_beneficios||[]).find(b=>b.id===c?.beneficio_id)?.pulsera||"")}</td>
         <td style="font-weight:600;text-align:center">1</td>
@@ -4964,13 +4965,13 @@ function openDetallesMesa(mesaId,activeTab="info"){
                 <div>
                   <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.4px">QUITAR</div>
                   <div style="font-size:13px;font-weight:600;text-decoration:line-through;color:#991b1b">${s.perfil_original.nombre}</div>
-                  <div style="font-size:11px;color:#888">RUT: ${s.perfil_original.rut||"—"}${s.perfil_original.instagram?` · <a href="${igUrl(s.perfil_original.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(s.perfil_original.instagram)}</a>`:""}</div>
+                  <div style="font-size:11px;color:#888">RUT: ${s.perfil_original.rut?fmtRut(s.perfil_original.rut):"—"}${s.perfil_original.instagram?` · <a href="${igUrl(s.perfil_original.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(s.perfil_original.instagram)}</a>`:""}</div>
                 </div>
                 <div style="font-size:18px;color:#9a3412;font-weight:700">→</div>
                 <div>
                   <div style="font-size:10px;color:#888;font-weight:600;letter-spacing:.4px">REEMPLAZAR POR</div>
                   <div style="font-size:13px;font-weight:600;color:#166534">${s.nuevo_perfil.nombre}</div>
-                  <div style="font-size:11px;color:#888">RUT: ${s.nuevo_perfil.rut||"—"}${s.nuevo_perfil.instagram?` · <a href="${igUrl(s.nuevo_perfil.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(s.nuevo_perfil.instagram)}</a>`:""}</div>
+                  <div style="font-size:11px;color:#888">RUT: ${s.nuevo_perfil.rut?fmtRut(s.nuevo_perfil.rut):"—"}${s.nuevo_perfil.instagram?` · <a href="${igUrl(s.nuevo_perfil.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(s.nuevo_perfil.instagram)}</a>`:""}</div>
                   ${s.nuevo_perfil.instagram?`<a href="${igUrl(s.nuevo_perfil.instagram)}" target="_blank" rel="noopener" class="btn" style="margin-top:6px;padding:5px 10px;font-size:11px;background:linear-gradient(45deg,#F58529,#DD2A7B,#8134AF);color:#fff;border:none;text-decoration:none;display:inline-flex;align-items:center;gap:6px;font-weight:600">${IG_ICON} Ver Instagram del reemplazo</a>`:""}
                 </div>
               </div>
@@ -5005,7 +5006,7 @@ function openDetallesMesa(mesaId,activeTab="info"){
                   <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
                     <div style="min-width:0;flex:1">
                       <div style="font-size:12px;font-weight:600">${p.nombre}</div>
-                      <div style="font-size:10px;color:#888">RUT: ${p.rut||"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}</div>
+                      <div style="font-size:10px;color:#888">RUT: ${p.rut?fmtRut(p.rut):"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}</div>
                       ${bloq?`<div style="font-size:10px;color:#991B1B;margin-top:2px;font-weight:600">🚫 EN LISTA DE BLOQUEO (${bloq.motivo||"sin motivo"})</div>`:""}
                       ${p.motivo_rechazo?`<div style="font-size:10px;color:#991B1B;margin-top:2px">${p.motivo_rechazo}</div>`:""}
                     </div>
@@ -5066,7 +5067,7 @@ function openDetallesMesa(mesaId,activeTab="info"){
           return `<div style="background:#f9f9f9;border-radius:8px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-size:13px;font-weight:500">${p.nombre}</div>
-              <div style="font-size:11px;color:#888">RUT: ${p.rut||"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}${p.notas?` · ${p.notas}`:""}</div>
+              <div style="font-size:11px;color:#888">RUT: ${p.rut?fmtRut(p.rut):"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}${p.notas?` · ${p.notas}`:""}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               ${p.instagram?`<a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" title="Abrir Instagram de ${p.nombre}" style="text-decoration:none;display:flex;align-items:center">${IG_ICON}</a>`:""}
@@ -5214,7 +5215,7 @@ async function saveEditarPerfilMesa(mesaId,idx){
   if(!puedeEditarPerfilMesa()){toast("Sin permiso","error");return;}
   const m=D.vip_tables.find(m=>m.id===mesaId);if(!m?.perfiles?.[idx])return;
   const p=m.perfiles[idx];
-  const prev=`${p.nombre} (${p.rut||"sin RUT"})`;
+  const prev=`${p.nombre} (${p.rut?fmtRut(p.rut):"sin RUT"})`;
   const nuevoNombre=($("ep-n")?.value||"").trim();
   if(!nuevoNombre){toast("El nombre no puede quedar vacío","error");return;}
   p.nombre=nuevoNombre;
@@ -5226,7 +5227,7 @@ async function saveEditarPerfilMesa(mesaId,idx){
   const bloq=chequearBloqueo(p.nombre,p.rut,prodId);
   if(bloq){p.estado="bloqueado";toast(`⚠️ ${p.nombre} está en lista de bloqueo: ${bloq.motivo||""}`,"warn");}
   else if(p.estado==="bloqueado"){p.estado="aprobado";} // si antes era bloqueado y ahora no lo es, queda aprobado
-  try{await sbPatch("vip_tables",`id=eq.${mesaId}`,{perfiles:m.perfiles});await log("edit_perfil_mesa","vip_table",mesaId,`Reemplazo en mesa: ${prev} → ${p.nombre} (${p.rut||"sin RUT"})`);}catch(e){toast("Error: "+e.message,"error");}
+  try{await sbPatch("vip_tables",`id=eq.${mesaId}`,{perfiles:m.perfiles});await log("edit_perfil_mesa","vip_table",mesaId,`Reemplazo en mesa: ${prev} → ${p.nombre} (${p.rut?fmtRut(p.rut):"sin RUT"})`);}catch(e){toast("Error: "+e.message,"error");}
   closeModal();toast(`✓ Perfil actualizado: ${p.nombre}`,"success");openDetallesMesa(mesaId,"perfiles");
 }
 async function rechazarPerfil(mesaId,idx){
@@ -5237,7 +5238,7 @@ async function rechazarPerfil(mesaId,idx){
   m.perfiles[idx].estado="rechazado";
   try{
     await sbPatch("vip_tables",`id=eq.${mesaId}`,{perfiles:m.perfiles});
-    await log("reject_perfil","vip_table",mesaId,`Rechazado: ${perfil.nombre} ${perfil.rut||""} — cupo liberado`);
+    await log("reject_perfil","vip_table",mesaId,`Rechazado: ${perfil.nombre} ${perfil.rut?fmtRut(perfil.rut):""} — cupo liberado`);
     toast(`✕ ${perfil.nombre} rechazado — cupo liberado`,"warn");
   }catch(e){toast("Error: "+e.message,"error");}
   // NO se envía email aquí — se envía un único resumen al presionar "Finalizar revisión"
@@ -5652,7 +5653,8 @@ VIEWS.bloqueo=(q)=>{
         <button class="btn btn-primary" onclick="openAddBloqueo()">+ Agregar</button>
       </div>
     </div>
-    <div class="alert alert-info">Esta lista aplica a <strong>todos los eventos</strong> de la productora. Al cargar perfiles en cualquier mesa, se cruza automáticamente por RUT y nombre.</div>
+    <div class="alert alert-info">Esta lista aplica a <strong>todos los eventos</strong> de la productora. Se cruza automáticamente <strong>por RUT</strong> (no por nombre, porque puede haber dos personas con el mismo nombre).</div>
+    ${todos.filter(b=>!rutValido(b.rut)).length?`<div class="alert alert-warn">⚠️ <strong>${todos.filter(b=>!rutValido(b.rut)).length}</strong> persona${todos.filter(b=>!rutValido(b.rut)).length===1?"":"s"} de la lista no tiene${todos.filter(b=>!rutValido(b.rut)).length===1?"":"n"} RUT válido, así que <strong>no se bloquea${todos.filter(b=>!rutValido(b.rut)).length===1?"":"n"}</strong>. Agrégales el RUT con el botón "Agregar RUT".</div>`:""}
     <div class="card" style="margin-bottom:14px">
       <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
         <input class="form-input" id="bl-q" placeholder="🔍 Buscar por nombre y apellido, RUT, correo o motivo..." style="flex:1;min-width:240px;font-size:15px;padding:11px" value="${(_blQ||"").replace(/"/g,"&quot;")}" oninput="VIEWS.bloqueo(this.value)">
@@ -5665,7 +5667,7 @@ VIEWS.bloqueo=(q)=>{
       <thead><tr><th>Nombre</th><th>RUT</th><th>Motivo</th><th>Vence</th><th>Agregado</th><th></th></tr></thead>
       <tbody>${lista.length?lista.map(b=>{const hoy=new Date().toISOString().slice(0,10);const vencido=b.vence&&b.vence<hoy;return `<tr style="${vencido?"opacity:.55":""}">
         <td><strong>${b.nombre}</strong>${vencido?` <span style="font-size:10px;background:#e5e7eb;color:#555;padding:2px 6px;border-radius:6px;font-weight:600">bloqueo vencido</span>`:""}</td>
-        <td style="font-size:12px">${b.rut||"—"}</td>
+        <td style="font-size:12px">${rutValido(b.rut)?fmtRut(b.rut):`<span style="color:#9a3412;font-weight:600">${b.rut?escH(b.rut)+" (inválido)":"Sin RUT"}</span><br><button class="btn" style="font-size:10px;padding:2px 7px;margin-top:3px" onclick="bloqueoAgregarRut('${b.id}')">Agregar RUT</button>`}</td>
         <td style="font-size:12px;color:#888">${b.motivo||"—"}</td>
         <td style="font-size:12px;font-weight:600;color:${b.vence?(vencido?"#6b7280":"#92400E"):"#991B1B"}">${b.vence?fmtFechaBloqueo(b.vence):"🚫 Permanente"}</td>
         <td style="font-size:11px;color:#aaa">${fmtDT(b.created_at)}</td>
@@ -5674,6 +5676,19 @@ VIEWS.bloqueo=(q)=>{
     </table></div></div>`;
   const inp=$("bl-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 };
+function bloqueoAgregarRut(bid){
+  const b=(D.lista_bloqueo||[]).find(x=>x.id===bid);if(!b)return;
+  openModal("Agregar RUT",`<p style="font-size:14px;margin:0 0 10px">RUT de <b>${escH(b.nombre)}</b> para que el bloqueo funcione:</p>
+    <input class="form-input" id="blr-rut" placeholder="12.345.678-9" value="${escH(b.rut||"")}">
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-primary" onclick="bloqueoAgregarRutOk('${bid}')">Guardar</button></div>`);
+}
+async function bloqueoAgregarRutOk(bid){
+  const b=(D.lista_bloqueo||[]).find(x=>x.id===bid);if(!b)return;
+  const r=($("blr-rut")?.value||"").trim();
+  if(!rutValido(r))return toast("RUT inválido, revísalo","error");
+  try{await sbPatch("lista_bloqueo",`id=eq.${bid}`,{rut:fmtRut(r)});b.rut=fmtRut(r);await log("edit_bloqueo","bloqueo",bid,`RUT agregado: ${b.nombre} ${b.rut}`);}catch(e){return toast("No se pudo guardar: "+e.message,"error");}
+  closeModal();toast("RUT guardado: ya queda bloqueado","success");VIEWS.bloqueo();
+}
 const fmtFechaBloqueo=iso=>{const d=new Date(iso+" 12:00:00");return isNaN(d)?iso:"Hasta el "+d.toLocaleDateString("es-CL",{day:"2-digit",month:"2-digit",year:"numeric"});};
 // Acepta "permanente", "", DD-MM-AAAA, DD/MM/AAAA, AAAA-MM-DD o fecha serial de Excel → ISO o null (permanente)
 function parseVenceBloqueo(v){
@@ -5689,7 +5704,7 @@ function parseVenceBloqueo(v){
 function openAddBloqueo(){
   openModal("Agregar a lista de bloqueo",`
     <label class="form-label">Nombre y apellido</label><input class="form-input" id="bl-n" placeholder="Nombre completo">
-    <label class="form-label">RUT</label><input class="form-input" id="bl-r" placeholder="12.345.678-9">
+    <label class="form-label">RUT <span style="color:#dc2626">*</span> <span style="font-size:11px;color:#888;font-weight:400">(el bloqueo se aplica por RUT)</span></label><input class="form-input" id="bl-r" placeholder="12.345.678-9">
     <label class="form-label">Motivo</label><input class="form-input" id="bl-m" placeholder="Ej: Comportamiento, deuda, etc.">
     <label class="form-label">Duración del bloqueo</label>
     <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
@@ -5704,11 +5719,15 @@ function openAddBloqueo(){
 }
 async function saveBloqueo(){
   const nombre=($("bl-n")?.value||"").trim();if(!nombre){toast("Escribe un nombre","error");return;}
+  const rutIn=($("bl-r")?.value||"").trim();
+  if(!rutIn){toast("Falta el RUT: el bloqueo se aplica por RUT","error");return;}
+  if(!rutValido(rutIn)){toast("RUT inválido, revísalo","error");return;}
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
   const esFecha=document.querySelector("input[name='bl-tipo']:checked")?.value==="fecha";
   const vence=esFecha?($("bl-v")?.value||null):null;
   if(esFecha&&!vence){toast("Indica hasta qué fecha dura el bloqueo","error");return;}
-  const b={id:uid(),productora_id:prodId,nombre,rut:$("bl-r")?.value||"",motivo:$("bl-m")?.value||"",vence,created_at:now(),created_by:CU?.id};
+  if(chequearBloqueo("",rutIn,prodId)){toast("Ese RUT ya está en la lista de bloqueo","warn");return;}
+  const b={id:uid(),productora_id:prodId,nombre,rut:fmtRut(rutIn),motivo:$("bl-m")?.value||"",vence,created_at:now(),created_by:CU?.id};
   if(!D.lista_bloqueo)D.lista_bloqueo=[];
   D.lista_bloqueo.push(b);
   try{await sbPost("lista_bloqueo",[b]);await log("add_bloqueo","bloqueo",b.id,`Bloqueado: ${nombre} ${b.rut}`);}catch(e){toast("Error: "+e.message,"error");}
@@ -5847,18 +5866,23 @@ async function importBloqueoCSV(){
   }else hi=-1; // sin encabezado: asumir columnas A-D
   const getC=(row,idx)=>idx>=0?String(row[idx]??"").trim():"";
   const prodId=CU.role==="superadmin"?(CP?.id||null):CU.productora_id;
-  const nuevos=[];
+  const nuevos=[];let sinRut=0,repetidos=0;const vistos=new Set();
   rows.slice(hi+1).forEach(row=>{
     const nombre=getC(row,iN);if(!nombre)return;
-    nuevos.push({id:uid(),productora_id:prodId,nombre,rut:getC(row,iR),motivo:getC(row,iM),vence:iV>=0?parseVenceBloqueo(row[iV]):null,created_at:now(),created_by:CU?.id});
+    const rut=getC(row,iR);
+    if(!rutValido(rut)){sinRut++;return;}           // sin RUT válido no se puede bloquear
+    const k=fmtRut(rut);
+    if(vistos.has(k)||chequearBloqueo("",k,prodId)){repetidos++;return;}
+    vistos.add(k);
+    nuevos.push({id:uid(),productora_id:prodId,nombre,rut:k,motivo:getC(row,iM),vence:iV>=0?parseVenceBloqueo(row[iV]):null,created_at:now(),created_by:CU?.id});
   });
-  if(!nuevos.length){toast("No se encontraron filas con nombre","error");return;}
+  if(!nuevos.length){toast(`No se importó nadie${sinRut?` · ${sinRut} sin RUT válido`:""}${repetidos?` · ${repetidos} ya estaban`:""}`,"error");return;}
   if(!D.lista_bloqueo)D.lista_bloqueo=[];
   try{await sbPost("lista_bloqueo",nuevos);await log("import_bloqueo","bloqueo","all",`+${nuevos.length} bloqueados importados`);}
   catch(err){toast("Error: "+err.message,"error");alert("Error al importar:\n"+err.message+(/vence/.test(err.message)?"\n\nFalta crear la columna 'vence' en Supabase.":""));return;}
   D.lista_bloqueo.push(...nuevos);
   const perm=nuevos.filter(x=>!x.vence).length;
-  closeModal();toast(`✓ ${nuevos.length} personas importadas (${perm} permanentes, ${nuevos.length-perm} con fecha)`,"success");VIEWS.bloqueo();
+  closeModal();toast(`✓ ${nuevos.length} personas importadas (${perm} permanentes, ${nuevos.length-perm} con fecha)${sinRut?` · ${sinRut} omitidas por no tener RUT válido`:""}${repetidos?` · ${repetidos} ya estaban`:""}`,sinRut?"warn":"success");VIEWS.bloqueo();
 }
 
 // ── LISTAS ──
@@ -5914,7 +5938,7 @@ function openListaDetail(lid){
       const incompleta=!e.rut;
       return `<tr style="${incompleta?'background:#fffbeb':''}">
         <td><strong>${e.name}</strong>${incompleta?` <span style="font-size:9px;font-weight:700;color:#9a3412;background:#fed7aa;padding:1px 6px;border-radius:4px;margin-left:4px">⚠ INCOMPLETO</span>`:""}${e.notes?`<br><span style="font-size:11px;color:#aaa">${e.notes}</span>`:""}</td>
-        <td style="font-size:12px;color:${incompleta?'#9a3412':'#555'};font-weight:${incompleta?'600':'400'}">${e.rut||"⚠ falta"}</td>
+        <td style="font-size:12px;color:${incompleta?'#9a3412':'#555'};font-weight:${incompleta?'600':'400'}">${e.rut?fmtRut(e.rut):"⚠ falta"}</td>
         <td>${e.pulsera?`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11px;padding:3px 8px;border-radius:20px;border:1px solid #ddd;background:#fafafa"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${c}"></span>${e.pulsera}</span>`:`<span style="color:#bbb;font-size:11px">—</span>`}</td>
         <td>${e.companions||0}</td>
         <td>${e.status==="checked_in"?badge("✓ "+fmtT(e.checked_in_at),"green"):badge("Pendiente","amber")}</td>
@@ -6185,7 +6209,7 @@ async function procesarImportLista(lid){
         ${errores.length?`<div style="font-size:11px;color:#991B1B;background:#FEF2F2;padding:8px;border-radius:6px;margin-bottom:8px;max-height:120px;overflow-y:auto">${errores.map(e=>`• ${e}`).join("<br>")}</div>`:""}
         ${aImportar.length?`
           <div style="font-size:11px;color:#666;max-height:200px;overflow-y:auto">
-            ${aImportar.slice(0,10).map(r=>`<div style="padding:4px 0;border-bottom:1px solid #f5f5f5">${r.incompleta?`<span style="color:#9a3412">⚠</span> `:""}${r.nombre} · ${r.rut||`<span style="color:#9a3412;font-style:italic">sin RUT</span>`} · <strong>${r.pulsera}</strong> · ${r.entradas} entrada(s)</div>`).join("")}
+            ${aImportar.slice(0,10).map(r=>`<div style="padding:4px 0;border-bottom:1px solid #f5f5f5">${r.incompleta?`<span style="color:#9a3412">⚠</span> `:""}${r.nombre} · ${r.rut?fmtRut(r.rut):`<span style="color:#9a3412;font-style:italic">sin RUT</span>`} · <strong>${r.pulsera}</strong> · ${r.entradas} entrada(s)</div>`).join("")}
             ${aImportar.length>10?`<div style="padding:4px 0;color:#999">... y ${aImportar.length-10} más</div>`:""}
           </div>
           <button class="btn btn-success btn-full" style="margin-top:10px" onclick="confirmarImportLista('${lid}')">✓ Importar ${aImportar.length} personas</button>
@@ -8320,7 +8344,7 @@ function renderCompradorApp(mesaId){
               <div style="display:flex;justify-content:space-between;align-items:center">
                 <div>
                   <div style="font-size:13px;font-weight:500">${p.nombre}</div>
-                  <div style="font-size:11px;color:#888">RUT: ${p.rut||"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}</div>
+                  <div style="font-size:11px;color:#888">RUT: ${p.rut?fmtRut(p.rut):"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none;font-weight:600">@${igHandle(p.instagram)}</a>`:""}</div>
                   ${p.estado==="bloqueado"?`<div style="font-size:11px;color:#991B1B;margin-top:3px;font-weight:600">⚠️ No puede ingresar — agrega a otra persona en su lugar</div>`:""}
                   ${solicitudPendiente?`<div style="font-size:11px;color:#92400E;margin-top:4px;font-weight:600">⏳ Solicitud de reemplazo pendiente — propone: ${solicitudPendiente.nuevo_perfil.nombre}</div>`:""}
                 </div>
@@ -8434,7 +8458,7 @@ function renderCompradorApp(mesaId){
               ${ev.datos_pago.tipo?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#777">Tipo</span><strong>${ev.datos_pago.tipo}</strong></div>`:""}
               ${ev.datos_pago.numero?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px;align-items:center"><span style="color:#777">N° cuenta</span><span style="display:flex;gap:6px;align-items:center"><strong>${ev.datos_pago.numero}</strong><button class="btn" style="padding:2px 8px;font-size:10px" onclick="cpTxt('${ev.datos_pago.numero}',this)">Copiar</button></span></div>`:""}
               ${ev.datos_pago.titular?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#777">Titular</span><strong>${ev.datos_pago.titular}</strong></div>`:""}
-              ${ev.datos_pago.rut?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#777">RUT</span><strong>${ev.datos_pago.rut}</strong></div>`:""}
+              ${ev.datos_pago.rut?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#777">RUT</span><strong>${fmtRut(ev.datos_pago.rut)}</strong></div>`:""}
               ${ev.datos_pago.email?`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span style="color:#777">Email</span><strong>${ev.datos_pago.email}</strong></div>`:""}
               ${ev.datos_pago.notas?`<div style="font-size:12px;color:#4C1D95;margin-top:8px;padding-top:8px;border-top:1px solid #C4B5FD">${ev.datos_pago.notas}</div>`:""}
             </div>`:`
@@ -8500,7 +8524,7 @@ function renderCompradorApp(mesaId){
                 return `<div style="background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:5px;display:flex;justify-content:space-between;align-items:center;border:1px solid #f0f0f0">
                   <div style="min-width:0;flex:1">
                     <div style="font-size:12px;font-weight:500">${p.nombre}</div>
-                    <div style="font-size:10px;color:#888">RUT: ${p.rut||"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none">@${igHandle(p.instagram)}</a>`:""}</div>
+                    <div style="font-size:10px;color:#888">RUT: ${p.rut?fmtRut(p.rut):"—"}${p.instagram?` · <a href="${igUrl(p.instagram)}" target="_blank" rel="noopener" style="color:#C13584;text-decoration:none">@${igHandle(p.instagram)}</a>`:""}</div>
                     ${p.motivo_rechazo?`<div style="font-size:10px;color:#991B1B;margin-top:2px">${p.motivo_rechazo}</div>`:""}
                   </div>
                   <div style="font-size:13px;font-weight:700;color:${cl};margin-left:8px">${ic}</div>
@@ -8518,7 +8542,7 @@ function renderCompradorApp(mesaId){
                       ${datosPago.tipo?`<div><span style="color:#888">Tipo:</span> ${datosPago.tipo}</div>`:""}
                       ${datosPago.numero?`<div style="display:flex;justify-content:space-between;align-items:center"><span><span style="color:#888">N° cuenta:</span> ${datosPago.numero}</span><button class="btn" style="padding:2px 8px;font-size:10px" onclick="cpTxt('${datosPago.numero}',this)">Copiar</button></div>`:""}
                       ${datosPago.titular?`<div><span style="color:#888">Titular:</span> ${datosPago.titular}</div>`:""}
-                      ${datosPago.rut?`<div><span style="color:#888">RUT:</span> ${datosPago.rut}</div>`:""}
+                      ${datosPago.rut?`<div><span style="color:#888">RUT:</span> ${fmtRut(datosPago.rut)}</div>`:""}
                       ${datosPago.email?`<div><span style="color:#888">Email:</span> ${datosPago.email}</div>`:""}
                     </div>`:`<div class="alert alert-warn" style="margin-bottom:10px">Aún no están los datos de pago del evento. Contacta al organizador.</div>`}
                   <input type="file" id="lote-comp-${li}" accept="image/*" style="display:none" onchange="compradorSubirComprobanteLote('${mesaId}','${lote.id}',this)">
@@ -8620,7 +8644,7 @@ function abrirSolicitudReemplazo(mesaId,perfilIdx){
     <div style="background:#f9f9f9;border-radius:8px;padding:12px;margin:10px 0">
       <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:4px">PERSONA A REEMPLAZAR</div>
       <div style="font-size:14px;font-weight:600">${p.nombre}</div>
-      <div style="font-size:11px;color:#888">RUT: ${p.rut||"—"}${p.instagram?` · @${igHandle(p.instagram)}`:""}</div>
+      <div style="font-size:11px;color:#888">RUT: ${p.rut?fmtRut(p.rut):"—"}${p.instagram?` · @${igHandle(p.instagram)}`:""}</div>
     </div>
     <div style="font-size:11px;color:#888;font-weight:600;letter-spacing:.5px;margin-bottom:6px;margin-top:14px">DATOS DEL REEMPLAZO</div>
     <input class="form-input" id="sr-n" placeholder="Nombre y apellido *" style="margin-bottom:8px">
@@ -10499,7 +10523,7 @@ window._cfRenderFilas=(evId,filtro,busq)=>{
           return `<div style="margin-top:3px"><span title="${fechas.join(" · ").replace(/"/g,"&quot;")}" style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 7px;border-radius:10px">⭐ CF anterior</span> <span style="font-size:10px;color:#92400E">${fechas.slice(0,3).join(" · ")}${fechas.length>3?` · +${fechas.length-3}`:""}</span></div>`;})()}
         ${alertaNombreMasculino(p.nombre)?`<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px">⚠ Verificar género</span>`:""}
       </td>
-      <td style="padding:8px;font-family:monospace">${p.rut||"—"}</td>
+      <td style="padding:8px;font-family:monospace">${p.rut?fmtRut(p.rut):"—"}</td>
       <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram||"—"}</a></td>
       <td style="padding:8px">${p.whatsapp?`<a href="https://wa.me/${p.whatsapp.replace(/[^0-9]/g,"")}" target="_blank" style="color:#25D366;font-weight:500;text-decoration:none">💬 ${p.whatsapp}</a>`:"—"}</td>
       <td style="padding:8px">
@@ -11442,7 +11466,7 @@ function renderTablaPlanilla(ordenes,posts,q,filtroEstado="todos"){
       const venceLabel=vencida?`<span style="color:#DC2626;font-weight:600">⛔ Vencida</span>`:diff!==null&&diff<24?`<span style="color:#D97706;font-weight:600">⏰ ${Math.round(diff)}h</span>`:"";
       return `<tr style="border-bottom:1px solid var(--line);background:${vencida?"#FFF5F5":""}">
         <td style="padding:8px"><div style="font-weight:500">${p.nombre} ${p.apellido}</div><div style="font-size:11px;color:var(--ink-4)">${p.email}</div></td>
-        <td style="padding:8px;font-family:monospace">${p.rut}</td>
+        <td style="padding:8px;font-family:monospace">${fmtRut(p.rut)}</td>
         <td style="padding:8px"><a href="https://instagram.com/${p.instagram}" target="_blank" style="color:var(--accent-ink)">@${p.instagram}</a></td>
         <td style="padding:8px">${p.whatsapp}</td>
         <td style="padding:8px">${badge(p.estado==="aprobado"?"Aprobado":p.estado==="rechazado"?"Rechazado":"Pendiente",p.estado==="aprobado"?"green":p.estado==="rechazado"?"red":"amber")}</td>
@@ -12513,7 +12537,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
               <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px">
                 ${c.instagram?`<a href="https://instagram.com/${c.instagram.replace('@','')}" target="_blank" style="font-size:12px;color:#E1306C;font-weight:600;text-decoration:none">📸 ${c.instagram}</a>`:""}
                 ${c.whatsapp?`<a href="https://wa.me/${c.whatsapp.replace('+','')}" target="_blank" style="font-size:12px;color:#25D366;font-weight:600;text-decoration:none">💬 ${c.whatsapp}</a>`:""}
-                ${c.rut?`<span style="font-size:12px;color:var(--ink-3)">🪪 ${c.rut}</span>`:""}
+                ${c.rut?`<span style="font-size:12px;color:var(--ink-3)">🪪 ${fmtRut(c.rut)}</span>`:""}
               </div>
               <!-- Barra de ingresados -->
               <div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -12716,7 +12740,7 @@ VIEWS["bday-cumpleaneros"] = async()=>{
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;border-radius:8px;background:var(--line-2)">
             <div>
               <div style="font-weight:600;font-size:13px">${inv.nombre} ${inv.apellido} <span style="font-weight:400;color:var(--ink-4);font-size:11px">${inv.genero==="m"?"♂ H":"♀ M"}</span></div>
-              <div style="font-size:11px;color:var(--ink-4)">${inv.rut?`<strong>${inv.rut}</strong> · `:""}${inv.email||""} ${inv.instagram?`· @${inv.instagram}`:""}</div>
+              <div style="font-size:11px;color:var(--ink-4)">${inv.rut?`<strong>${fmtRut(inv.rut)}</strong> · `:""}${inv.email||""} ${inv.instagram?`· @${inv.instagram}`:""}</div>
             </div>
             <div style="display:flex;gap:6px;align-items:center">
               ${badge(inv.estado==="aprobado"?"Aprobado":inv.estado==="rechazado"?"Rechazado":"Pendiente",inv.estado==="aprobado"?"green":inv.estado==="rechazado"?"red":"amber")}
@@ -13915,6 +13939,16 @@ async function mostrarPostulacionBday(evId){
   form();
 }
 
+// ── RUT con formato 19.555.680-9 en toda la plataforma: cualquier campo de RUT se ordena solo mientras se escribe ──
+function gl_esCampoRut(el){return el&&el.tagName==="INPUT"&&el.type!=="hidden"&&(/(^|[-_])rut([-_]|$)/i.test(el.id||"")||/(^|[-_])rut([-_]|$)/i.test(el.name||"")||/12\.345\.678-?9/.test(el.placeholder||""));}
+function gl_fmtRutCampo(el){
+  const limpio=String(el.value||"").toUpperCase().replace(/[^0-9K]/g,"").replace(/K(?=.)/g,"").slice(0,9);
+  const nuevo=limpio.length>=2?fmtRut(limpio):limpio;
+  if(el.value!==nuevo)el.value=nuevo;
+}
+document.addEventListener("input",e=>{if(gl_esCampoRut(e.target))gl_fmtRutCampo(e.target);},true);
+document.addEventListener("focusout",e=>{if(gl_esCampoRut(e.target))gl_fmtRutCampo(e.target);},true);
+
 // ── Horario 24 h en toda la plataforma: los campos fecha+hora (datetime-local) del navegador muestran AM/PM según el computador.
 // Se reemplazan por fecha + hora (00-23) + minutos; el campo original queda oculto con el mismo valor "YYYY-MM-DDTHH:MM",
 // así el resto del código lo sigue leyendo igual.
@@ -14004,8 +14038,6 @@ async function mostrarAmigos(evId){
     .pb-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
     .am-ben{background:#0f1f16;border:1px solid #1f4d33;border-radius:12px;padding:12px 14px;margin:14px 0 4px}
     .am-ben div{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}.am-ben span{white-space:nowrap}.am-ben b{color:#2BE07B;text-align:right}
-    .am-gen{display:flex;gap:10px}.am-gen button{flex:1;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px;color:#ccc;font-size:15px;font-weight:600;cursor:pointer}
-    .am-gen button.on{border-color:#2BE07B;color:#2BE07B;background:#0f1f16}.am-gen.err button{border-color:#dc2626}
   </style><div class="pb-wrap"><div class="pb-box" id="pb-box"><div class="pb-ok"><p style="color:#666">Cargando…</p></div></div></div>`;
   const box=document.getElementById("pb-box");
   const show=h=>{box.innerHTML=h;window.scrollTo(0,0);};
@@ -14030,10 +14062,6 @@ async function mostrarAmigos(evId){
   const bH=amigosBen(cfg,"m"),bM=amigosBen(cfg,"f");
   const fechaEvTxt=ev.date?(d=>`${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][d.getDay()]} ${d.getDate()} de ${["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][d.getMonth()]}`)(new Date(ev.date+"T12:00:00")):"";
   const benHtml=(bH.ok||bM.ok)?`<div class="am-ben">${bH.ok?`<div><span>Hombre</span><b>${bH.txt}</b></div>`:""}${bM.ok?`<div><span>Mujer</span><b>${bM.txt}</b></div>`:""}${cfg.nota?`<div style="display:block;color:#9ca3af;font-size:12px;padding-top:6px">${escH(cfg.nota)}</div>`:""}</div>`:"";
-  let gen="",genManual=false;
-  window._amGen=(g,auto)=>{gen=g;if(!auto)genManual=true;document.querySelectorAll(".am-gen button").forEach(b=>b.classList.toggle("on",b.dataset.g===g));document.querySelector(".am-gen")?.classList.remove("err");
-    const h=document.getElementById("am-gen-hint");if(h)h.textContent=auto&&g?`Lo marcamos según tu nombre. Si no corresponde, cámbialo.`:"";};
-  window._amNombre=v=>{if(genManual)return;const g=generoPorNombre(v);if(g)window._amGen(g,true);else if(gen){gen="";document.querySelectorAll(".am-gen button").forEach(b=>b.classList.remove("on"));const h=document.getElementById("am-gen-hint");if(h)h.textContent="";}};
   show(`
     <div style="text-align:center;margin-bottom:6px">${prod?.logo_url?`<img src="${prod.logo_url}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:18px;display:block;margin:0 auto 12px">`:""}
       <h1 style="font-size:21px;margin:0 0 4px">Lista de Amigos</h1>
@@ -14043,13 +14071,9 @@ async function mostrarAmigos(evId){
     ${benHtml}
     <p style="color:#aaa;font-size:13px;text-align:center;line-height:1.5;margin:10px 0 4px">Inscríbete y entra con el beneficio de la Lista de Amigos de ${prod?.nombre?`<strong style="color:#fff">${escH(prod.nombre)}</strong>`:"la productora"}. En la puerta solo muestra tu carnet.</p>
     <div class="pb-row">
-      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="am-nom" placeholder="Tu nombre" oninput="window._amNombre(this.value)"></div>
+      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="am-nom" placeholder="Tu nombre"></div>
       <div><label class="pb-lbl">Apellido <span>*</span></label><input class="pb-in" id="am-ape" placeholder="Tu apellido"></div>
     </div>
-    <label class="pb-lbl">Género <span>*</span></label>
-    <div class="am-gen"><button type="button" data-g="m" onclick="_amGen('m')">Hombre</button><button type="button" data-g="f" onclick="_amGen('f')">Mujer</button></div>
-    <div id="am-gen-hint" style="font-size:11px;color:#888;margin-top:5px"></div>
-    <div id="am-gen-err" class="pb-err"></div>
     <label class="pb-lbl">Fecha de nacimiento <span>*</span></label>
     <div class="pb-row">
       <select class="pb-in" id="am-fd"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>
@@ -14071,11 +14095,11 @@ async function mostrarAmigos(evId){
     const g=id=>(document.getElementById(id)?.value||"").trim();
     const nombre=g("am-nom"),apellido=g("am-ape"),rut=g("am-rut"),wtsp=g("am-wtsp").replace(/\D/g,""),email=g("am-email").toLowerCase(),ig=normIG(g("am-ig"));
     const fd=g("am-fd"),fm=g("am-fm"),fy=g("am-fy");const fnac=fd&&fm&&fy?`${fy}-${fm}-${fd}`:"";
-    const msg=t=>{document.getElementById("am-msg").textContent=t;};msg("");document.getElementById("am-gen-err").textContent="";
+    const msg=t=>{document.getElementById("am-msg").textContent=t;};msg("");
+    const gen=generoPorNombre(nombre); // el género lo decide el sistema según el nombre (la persona no lo elige); si no es claro queda por definir
     let errs=0;
     if(!nombre){mark("am-nom","Falta tu nombre");errs++;}
     if(!apellido){mark("am-ape","Falta tu apellido");errs++;}
-    if(!gen){document.querySelector(".am-gen").classList.add("err");document.getElementById("am-gen-err").textContent="Elige tu género";errs++;}
     if(!fnac){mark("am-fy","Completa tu fecha de nacimiento");errs++;}
     else if(isNaN(new Date(fnac+"T12:00:00"))||new Date(fnac+"T12:00:00").getDate()!==Number(fd)){mark("am-fy","Esa fecha no existe");errs++;}
     else if(edadDesde(fnac)<18){mark("am-fy","Debes ser mayor de 18 años");errs++;}
@@ -14083,21 +14107,21 @@ async function mostrarAmigos(evId){
     if(wtsp.length!==8){mark("am-wtsp","Deben ser 8 dígitos");errs++;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("am-email","Correo inválido");errs++;}
     if(!document.getElementById("am-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
-    if(errs){const first=document.querySelector(".pb-in.err, .am-gen.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    if(errs){const first=document.querySelector(".pb-in.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
     const btn=document.getElementById("am-btn");btn.disabled=true;btn.textContent="Enviando…";
     const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
-    const listo=(titulo,yaEstaba)=>{const b=amigosBen(cfg,gen);show(`<div class="pb-ok"><div class="ic">${yaEstaba?"🙌":"🎉"}</div><h2>${titulo}</h2>
+    const listo=(titulo,yaEstaba)=>{const b=gen?amigosBen(cfg,gen):{ok:false};show(`<div class="pb-ok"><div class="ic">${yaEstaba?"🙌":"🎉"}</div><h2>${titulo}</h2>
       <p>${escH(nombre)}, estás en la Lista de Amigos de <strong style="color:#fff">${escH(ev.name)}</strong>.</p>
-      ${b.ok?`<div class="am-ben" style="text-align:left"><div><span>Tu beneficio</span><b>${b.txt}</b></div></div>`:""}
+      ${b.ok?`<div class="am-ben" style="text-align:left"><div><span>Tu beneficio</span><b>${b.txt}</b></div></div>`:benHtml}
       <p style="margin-top:10px">En la puerta di que vienes en la Lista de Amigos y muestra tu carnet.</p></div>`);};
     try{
       const prev=(await sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&rut=eq.${encodeURIComponent(rutN)}&select=id`))[0];
       if(prev)return listo("¡Ya estabas inscrito!",true);
-      const row={id:uid(),evento_id:ev.id,productora_id:ev.productora_id||null,nombre,apellido,rut:rutN,email,whatsapp:"+569"+wtsp,instagram:ig||null,fecha_nacimiento:fnac,genero:gen,created_at:new Date().toISOString()};
+      const row={id:uid(),evento_id:ev.id,productora_id:ev.productora_id||null,nombre,apellido,rut:rutN,email,whatsapp:"+569"+wtsp,instagram:ig||null,fecha_nacimiento:fnac,genero:gen||null,created_at:new Date().toISOString()};
       try{await sbPost("amigos_inscritos",[row]);}
       catch(e){if(/duplicate|unique/i.test(e.message||""))return listo("¡Ya estabas inscrito!",true);throw e;}
       listo("¡Listo, estás en la lista!",false);
-      const b=amigosBen(cfg,gen);
+      const b=gen?amigosBen(cfg,gen):{ok:false};
       sendEmail(email,`Estás en la Lista de Amigos · ${ev.name}`,`<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:520px">
         <p style="font-size:18px;font-weight:bold;margin:0 0 10px">¡Hola ${escH(nombre)}!</p>
         <p>Quedaste inscrito en la <b>Lista de Amigos</b> de <b>${escH(ev.name)}</b>${fechaEvTxt?` (${fechaEvTxt}${ev.venue?" · "+escH(ev.venue):""})`:""}.</p>
@@ -14186,7 +14210,7 @@ function amigosRender(){
         <tbody>${vis.map(i=>{const wa=String(i.whatsapp||"").replace(/\D/g,"");return `<tr>
           <td><strong>${escH(i.nombre)} ${escH(i.apellido||"")}</strong><br><span style="font-size:11px;color:var(--ink-4)">${escH(i.email||"")}</span></td>
           <td style="font-size:12px">${escH(fmtRut(i.rut||""))}</td>
-          <td>${i.genero==="m"?"♂ Hombre":i.genero==="f"?"♀ Mujer":"—"}</td>
+          <td>${i.genero==="m"?"♂ Hombre":i.genero==="f"?"♀ Mujer":`<span style="font-size:11px;color:#9a3412;font-weight:600">Por definir</span><div style="display:flex;gap:4px;margin-top:3px"><button class="btn" style="font-size:10px;padding:2px 6px" onclick="amigosFijarGenero('${i.id}','m')">♂ H</button><button class="btn" style="font-size:10px;padding:2px 6px" onclick="amigosFijarGenero('${i.id}','f')">♀ M</button></div>`}</td>
           <td>${wa?`<a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="color:#128C4B;font-weight:600">${escH(i.whatsapp)}</a>`:"—"}</td>
           <td>${i.instagram?`<a href="https://instagram.com/${encodeURIComponent(i.instagram)}" target="_blank" rel="noopener">@${escH(i.instagram)}</a>`:"—"}</td>
           <td style="font-size:12px;color:var(--ink-4)">${i.created_at?new Date(i.created_at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}):""}</td>
@@ -14212,6 +14236,11 @@ window.amigosGuardar=async()=>{
     try{await log("amigos_beneficio","amigos_config",ev.id,`Lista de Amigos: H ${amigosBen(row,"m").txt} · M ${amigosBen(row,"f").txt}`);}catch(e){}
     toast("Beneficio guardado","ok");amigosRender();
   }catch(e){toast("No se pudo guardar: "+e.message,"error");}
+};
+window.amigosFijarGenero=async(id,g)=>{
+  const x=(D.amigos_inscritos||[]).find(a=>a.id===id);if(!x)return;
+  try{await sbPatch("amigos_inscritos",`id=eq.${id}`,{genero:g});x.genero=g;toast("Género guardado","ok");amigosRender();}
+  catch(e){toast("No se pudo guardar: "+e.message,"error");}
 };
 window.amigosQuitar=i=>{
   const x=(D.amigos_inscritos||[]).find(a=>a.id===i);if(!x)return;
@@ -14242,9 +14271,10 @@ async function amigosCargarEvento(evId){
     D.amigos_inscritos=(D.amigos_inscritos||[]).filter(i=>i.evento_id!==evId).concat(ins);
   }catch(e){D.amigos_cfg=D.amigos_cfg||{};} // si las tablas aún no existen, la puerta sigue funcionando igual
 }
-async function amigosCheckin(id){
+async function amigosCheckin(id,gForzado){
   const x=(D.amigos_inscritos||[]).find(a=>a.id===id);if(!x)return;
   if(x.llego)return toast("Ya ingresó","warn");
+  if(!x.genero&&gForzado){try{await sbPatch("amigos_inscritos",`id=eq.${id}`,{genero:gForzado});x.genero=gForzado;}catch(e){}}
   const ev=(D.eventos||[]).find(e=>e.id===x.evento_id);
   const r=amigosEvaluar(ev,D.amigos_cfg?.[x.evento_id],x.genero);
   const at=now();
@@ -14265,11 +14295,13 @@ async function amigosAnular(id){
 function amigosItemsPuerta(R){
   const ev=(D.eventos||[]).find(e=>e.id===currentEvId);const cfg=D.amigos_cfg?.[currentEvId];
   return (D.amigos_inscritos||[]).filter(i=>i.evento_id===currentEvId).map(i=>{
-    const r=amigosEvaluar(ev,cfg,i.genero);
+    const r=i.genero?amigosEvaluar(ev,cfg,i.genero):null;
+    const hM=amigosEvaluar(ev,cfg,"m"),hF=amigosEvaluar(ev,cfg,"f");
     return {seg:"amigos",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:fmtRut(i.rut||""),sub:`🤝 Lista de Amigos · ${AMIGOS_GEN[i.genero]||"—"}`,subColor:"#0f766e",origen:"Lista de Amigos",origenColor:"#0f766e",
       pulsera:"",entradas:1,usadas:i.llego?1:0,
-      estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):r.chip,extra:i.llego&&i.cobro?`<div style="font-size:11px;color:#666;margin-top:2px">${escH(i.cobro)}</div>`:"",
-      acciones:!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="amigosCheckin('${i.id}').then(()=>${R})">✓ Ingresar</button>`
+      estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):r?r.chip:`<span style="font-size:11px;color:#9a3412;font-weight:600">Género por definir</span><div style="font-size:11px;color:#555">♂ ${hM.cobro} · ♀ ${hF.cobro}</div>`,extra:i.llego&&i.cobro?`<div style="font-size:11px;color:#666;margin-top:2px">${escH(i.cobro)}</div>`:"",
+      acciones:!i.llego?(i.genero?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="amigosCheckin('${i.id}').then(()=>${R})">✓ Ingresar</button>`
+        :`<button class="btn btn-success" style="padding:4px 8px;font-size:11px" onclick="amigosCheckin('${i.id}','m').then(()=>${R})">✓ Ingresar hombre</button><button class="btn btn-success" style="padding:4px 8px;font-size:11px" onclick="amigosCheckin('${i.id}','f').then(()=>${R})">✓ Ingresar mujer</button>`)
         :(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#fff7ed;color:#9a3412;border-color:#fed7aa" onclick="amigosAnular('${i.id}').then(()=>${R})">Anular</button>`:"")};
   });
 }
