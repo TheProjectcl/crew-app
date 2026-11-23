@@ -1899,6 +1899,9 @@ function buildSidebar(){
         {v:"bday-cumpleaneros",icon:"users",label:"Cumpleañeros"},
         {v:"bday-beneficios",icon:"gift",label:"Beneficios"},
       ]});
+      allSections.push({label:"Lista de Amigos",items:[
+        {v:"amigos",icon:"users",label:"Inscritos y beneficio"},
+      ]});
     }
     allSections.push({label:"Embajadores",items:[
       {v:"tareas",icon:"megaphone",label:"Campañas"},
@@ -1948,7 +1951,7 @@ function buildSidebar(){
 
 // ── Navegación en dos niveles ──
 // Vistas que trabajan sobre UN evento: solo se abren dentro de un evento
-const EV_VIEWS=new Set(["dashboard","puerta","aforo","vip","listas","staff-list","tareas","cf-postulantes","cf-ordenes","cf-planilla","cf-config","cf-conciliacion","bday-cumpleaneros","bday-beneficios","conciliacion"]);
+const EV_VIEWS=new Set(["amigos","dashboard","puerta","aforo","vip","listas","staff-list","tareas","cf-postulantes","cf-ordenes","cf-planilla","cf-config","cf-conciliacion","bday-cumpleaneros","bday-beneficios","conciliacion"]);
 // Un evento "terminó" si está cerrado/archivado/cancelado o ya pasó su hora de término (los borradores NO han terminado)
 function eventoTermino(ev){
   if(!ev)return true;
@@ -3164,6 +3167,7 @@ VIEWS.puerta=async()=>{
         <button class="btn" id="acr-tab-mesas" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('mesas')">🍾 Mesas VIP</button>
         <button class="btn" id="acr-tab-cf" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('cf')">🌸 Close Friends</button>
         <button class="btn" id="acr-tab-bday" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('bday')">🎂 Cumpleaños</button>
+        <button class="btn" id="acr-tab-amigos" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('amigos')">🤝 Lista de Amigos</button>
         <button class="btn" id="acr-tab-staff" style="font-size:12px;padding:6px 14px" onclick="setAcrTab('staff')">🪪 Staff</button>
       </div>
     </div>
@@ -3201,6 +3205,7 @@ VIEWS.puerta=async()=>{
     <div id="acr-mesas" style="display:none"></div>
     <div id="acr-cf" style="display:none"></div>
     <div id="acr-bday" style="display:none"></div>
+    <div id="acr-amigos" style="display:none"></div>
     <div id="acr-staff" style="display:none"></div>
     <div id="acr-total" style="display:none"></div>`;
   filterAccType("all");
@@ -3319,7 +3324,7 @@ async function exportarAcreditacionCompleta(){
 
 // Alterna entre las pestañas de Acreditación: Listas/Entradas · Mesas VIP · Close Friends · Cumpleaños
 function setAcrTab(tab){
-  const tabs={total:"acr-total",listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday",staff:"acr-staff"};
+  const tabs={total:"acr-total",listas:"acr-listas",mesas:"acr-mesas",cf:"acr-cf",bday:"acr-bday",amigos:"acr-amigos",staff:"acr-staff"};
   if(!tabs[tab])tab="total";
   if(!$("acr-listas"))return;
   window._acrTabActual=tab;
@@ -3331,6 +3336,7 @@ function setAcrTab(tab){
   if(tab==="mesas")renderAcrMesas();
   if(tab==="cf")renderAcrCF();
   if(tab==="bday")renderAcrBday();
+  if(tab==="amigos")renderAcrAmigos();
   if(tab==="staff")renderAcrStaff();
   if(tab==="total")renderAcrTotal();
 }
@@ -3387,6 +3393,8 @@ function acrTotalItems(){
         acciones:(!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="bdayCheckinInv('${i.id}').then(()=>${R()})">✓ Ingresar</button>`:(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#FEE2E2;color:#991B1B;border-color:#FCA5A5" onclick="bdayAnularCheckin('${i.id}','all').then(()=>${R()})">🔓 Anular</button>`:""))+`<button class="btn" style="padding:4px 8px;font-size:11px" title="Ver / enviar QR" onclick="qrVerModal('inv','${i.id}')">🎟 QR</button>`});
     });
   });
+  // Lista de Amigos
+  try{amigosItemsPuerta(R()).forEach(it=>items.push(it));}catch(e){}
   return items.sort((a,b)=>a.nombre.localeCompare(b.nombre,"es"));
 }
 let _acrTotalQ="", _acrTotalSeg="all";
@@ -3398,14 +3406,14 @@ function renderAcrTotal(q){
   const vis=items.filter(it=>_acrTotalSeg==="all"||it.seg===_acrTotalSeg)
     .filter(it=>!nq||acrNorm(it.nombre).includes(nq)||acrNorm(it.rut).includes(nq)||acrNorm(it.origen).includes(nq)||acrNorm(it.sub).includes(nq));
   const tot=items.reduce((s,i)=>s+i.entradas,0), ing=items.reduce((s,i)=>s+i.usadas,0);
-  const segNames={all:"Todos",listas:"👥 Listas",mesas:"🍾 Mesas",cf:"🌸 Close Friends",bday:"🎂 Cumpleaños",staff:"🪪 Staff"};
+  const segNames={all:"Todos",listas:"👥 Listas",mesas:"🍾 Mesas",cf:"🌸 Close Friends",bday:"🎂 Cumpleaños",amigos:"🤝 Amigos",staff:"🪪 Staff"};
   const cnt=seg=>items.filter(i=>i.seg===seg).length;
   el.innerHTML=`
     <div class="card" style="margin-bottom:14px;background:#f8fafc;padding:12px 16px;border-left:4px solid #1a1a1a">
       <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
         <span>📋 <strong>${items.length}</strong> personas · <strong>${tot}</strong> entradas en total</span>
         <span style="color:#166534"><strong>${ing}/${tot}</strong> ingresadas</span>
-        <span style="color:#888;font-size:12px">👥 ${cnt("listas")} · 🍾 ${cnt("mesas")} · 🌸 ${cnt("cf")} · 🎂 ${cnt("bday")} · 🪪 ${cnt("staff")}</span>
+        <span style="color:#888;font-size:12px">👥 ${cnt("listas")} · 🍾 ${cnt("mesas")} · 🌸 ${cnt("cf")} · 🎂 ${cnt("bday")} · 🤝 ${cnt("amigos")} · 🪪 ${cnt("staff")}</span>
       </div>
     </div>
     <div class="card" style="margin-bottom:14px">
@@ -11610,6 +11618,7 @@ if(_origGoViewPuerta){
   const __origPuerta = _origGoViewPuerta;
   VIEWS.puerta = async function(){
     await loadCF(CU.role==="superadmin"?(CP?.id||null):CU.productora_id);
+    await amigosCargarEvento(currentEvId);
     return __origPuerta.apply(this, arguments);
   };
 }
@@ -11772,6 +11781,8 @@ VIEWS["base-datos"]=async()=>{
     ]);
     if(cumps.length)invs=await sbGet("bday_invitados",`cumpleanero_id=in.(${cumps.map(c=>c.id).join(",")})`);
   }catch(e){toast("Error cargando la base de datos: "+e.message,"error");}
+  // Lista de Amigos (si la tabla aún no existe, se omite sin romper nada)
+  let amigos=[];try{if(evIn)amigos=await sbGet("amigos_inscritos",`evento_id=${evIn}`);}catch(e){}
   // ── 2) Unificar personas: misma persona = mismo RUT, o mismo correo, o mismo Instagram, o mismo WhatsApp ──
   const personas=[];const idx={rut:{},email:{},ig:{},wa:{}};
   const kRut=r=>{const n=normRut(r);return n.length>=7?n:"";};
@@ -11804,6 +11815,8 @@ VIEWS["base-datos"]=async()=>{
   // Cumpleañeros e invitados
   cumps.forEach(c=>agregar({...c,origen:"cumple",evento_id:c.evento_id,ingreso:!!c.llego,fecha:c.created_at||""}));
   invs.forEach(i=>{const c=cumps.find(x=>x.id===i.cumpleanero_id);agregar({...i,origen:"inv_cumple",evento_id:c?.evento_id,ingreso:!!i.llego,fecha:i.created_at||""});});
+  // Lista de Amigos (inscritos por evento)
+  amigos.forEach(a=>agregar({...a,origen:"amigos",evento_id:a.evento_id,ingreso:!!a.llego,fecha:a.created_at||""}));
   // Listas / staff (solo nombre y RUT)
   entries.forEach(e=>agregar({...splitNombre(e.name),rut:e.rut,origen:"lista",evento_id:e.event_id,ingreso:(e.entradas_usadas||0)>0||e.status==="checked_in",fecha:e.checked_in_at||""}));
   // Mesas VIP: comprador + invitados de mesa + pulseras extra
@@ -11818,7 +11831,7 @@ VIEWS["base-datos"]=async()=>{
   compradores.filter(u=>u.role==="embajador").forEach(u=>agregar({...splitNombre(u.name),email:u.email,whatsapp:u.whatsapp,instagram:u.instagram,origen:"embajadora",evento_id:null,ingreso:false,fecha:""}));
   personas.forEach(p=>{if(p.nombre&&!p.apellido){const s=splitNombre(p.nombre);p.nombre=s.nombre;p.apellido=s.apellido;}});
   window._bdPersonas=personas;
-  const ORIG={cf:["🌸","Close Friends","#EC4899"],cumple:["🎂","Cumpleañero/a","#854d0e"],inv_cumple:["🎂","Invitado cumple","#b45309"],lista:["👥","Lista / staff","#534AB7"],mesa:["🍾","Mesa VIP","#0e7490"],mesa_comprador:["🍾","Comprador mesa","#0e7490"],embajadora:["📣","Embajadora","#7c3aed"]};
+  const ORIG={cf:["🌸","Close Friends","#EC4899"],cumple:["🎂","Cumpleañero/a","#854d0e"],inv_cumple:["🎂","Invitado cumple","#b45309"],lista:["👥","Lista / staff","#534AB7"],mesa:["🍾","Mesa VIP","#0e7490"],mesa_comprador:["🍾","Comprador mesa","#0e7490"],embajadora:["📣","Embajadora","#7c3aed"],amigos:["🤝","Lista de Amigos","#0f766e"]};
   // ── 3) Filtros y tabla ──
   // WhatsApp clickeable: abre el chat directo. Números chilenos sin código de país se completan con 56.
   const bdWaNum=w=>{let d=String(w||"").replace(/\D/g,"");if(d.startsWith("00"))d=d.slice(2);if(d.length===8)d="569"+d;else if(d.length===9&&d[0]==="9")d="56"+d;return d.length>=10?d:"";};
@@ -13900,6 +13913,342 @@ async function mostrarPostulacionBday(evId){
     }
   };
   form();
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// LISTA DE AMIGOS — la gente se inscribe por fiesta (guestly.cl/?amigos=<eventoId>), entra directo,
+// y en la puerta se le aplica el beneficio del evento según género y hora tope (precio, con o sin cover).
+// Tablas: amigos_config (beneficio por evento) · amigos_inscritos (inscritos por evento). Ver supabase/sql-lista-amigos.sql
+// ══════════════════════════════════════════════════════════════════════════════
+const AMIGOS_GEN={m:"Hombre",f:"Mujer"};
+const amigosClp=n=>"$"+(Number(n)||0).toLocaleString("es-CL");
+// Beneficio configurado para un género: {ok, precio, hora, cover, txt}
+function amigosBen(cfg,g){
+  if(!cfg)return {ok:false,txt:"Sin beneficio"};
+  const k=g==="f"?"mujer":"hombre";
+  const precio=cfg["precio_"+k], hora=cfg["hora_"+k]||"", cover=!!cfg["cover_"+k];
+  if(precio===null||precio===undefined||precio==="")return {ok:false,txt:"Sin beneficio"};
+  const p=Number(precio)||0;
+  const txt=`${p===0?"Gratis":amigosClp(p)}${cover?" con cover":""}${hora?` hasta las ${hora}`:""}`;
+  return {ok:true,precio:p,hora,cover,txt};
+}
+// Momento en que vence el beneficio: fecha del evento + hora; si la hora es "de madrugada" (antes del inicio), es al día siguiente
+function amigosVence(ev,hora){
+  if(!ev?.date||!/^\d{1,2}:\d{2}/.test(hora||""))return null;
+  const [h,m]=hora.split(":").map(Number);
+  const d=new Date(ev.date+"T00:00:00");d.setHours(h,m,0,0);
+  const ini=/^\d{1,2}:\d{2}/.test(ev.start_time||"")?ev.start_time.split(":").map(Number):[12,0];
+  if(h*60+m<ini[0]*60+ini[1])d.setDate(d.getDate()+1);
+  return d;
+}
+// Qué le toca a un inscrito ahora en la puerta
+function amigosEvaluar(ev,cfg,g,ahora){
+  const b=amigosBen(cfg,g);
+  if(!b.ok)return {...b,aplica:false,cobro:"Sin beneficio configurado",chip:badge("Sin beneficio","gray")};
+  const v=amigosVence(ev,b.hora);
+  if(v&&(ahora||new Date())>v)return {...b,aplica:false,cobro:`Fuera de horario (beneficio hasta ${b.hora})`,chip:badge(`⏰ Pasó la hora (${b.hora}) · precio normal`,"amber")};
+  const que=b.precio===0?`Entra gratis${b.cover?" con cover":""}`:`Paga ${amigosClp(b.precio)}${b.cover?" con cover":""}`;
+  return {...b,aplica:true,cobro:que,chip:badge(`${que}${b.hora?` · hasta ${b.hora}`:""}`,b.precio===0?"green":"blue")};
+}
+function amigosLink(evId){return `${APP_URL}/?amigos=${encodeURIComponent(evId)}`;}
+
+// ── Página pública de inscripción ──
+async function mostrarAmigos(evId){
+  document.body.innerHTML=`<style>
+    body{margin:0;background:#0a0a0a;font-family:system-ui,-apple-system,sans-serif;color:#fff}
+    .pb-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+    .pb-box{background:#111;border:1px solid #222;border-radius:18px;padding:28px 24px;max-width:480px;width:100%}
+    .pb-lbl{display:block;font-size:12px;font-weight:600;color:#ccc;margin:12px 0 5px}.pb-lbl span{color:#2BE07B}
+    .pb-in{width:100%;box-sizing:border-box;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px 14px;color:#fff;font-size:16px;outline:none}
+    .pb-in:focus{border-color:#2BE07B}.pb-in.err{border-color:#dc2626}
+    .pb-row{display:flex;gap:10px}.pb-row>*{flex:1;min-width:0}
+    .pb-btn{width:100%;margin-top:18px;background:#2BE07B;color:#06130C;border:none;border-radius:12px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;letter-spacing:.3px}
+    .pb-btn:disabled{opacity:.6}
+    .pb-err{color:#f87171;font-size:11px;margin-top:4px}
+    .pb-chk{display:flex;gap:10px;align-items:flex-start;margin-top:14px;font-size:12px;color:#aaa;line-height:1.5}.pb-chk input{margin-top:3px}
+    .pb-ok{text-align:center;padding:16px 4px}.pb-ok .ic{font-size:46px;margin-bottom:10px}.pb-ok h2{margin:0 0 8px;font-size:20px}.pb-ok p{color:#999;font-size:14px;line-height:1.6;margin:0}
+    .pb-foot{text-align:center;color:#555;font-size:11px;margin-top:18px;letter-spacing:1px}
+    .am-ben{background:#0f1f16;border:1px solid #1f4d33;border-radius:12px;padding:12px 14px;margin:14px 0 4px}
+    .am-ben div{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:3px 0}.am-ben span{white-space:nowrap}.am-ben b{color:#2BE07B;text-align:right}
+    .am-gen{display:flex;gap:10px}.am-gen button{flex:1;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:12px;color:#ccc;font-size:15px;font-weight:600;cursor:pointer}
+    .am-gen button.on{border-color:#2BE07B;color:#2BE07B;background:#0f1f16}.am-gen.err button{border-color:#dc2626}
+  </style><div class="pb-wrap"><div class="pb-box" id="pb-box"><div class="pb-ok"><p style="color:#666">Cargando…</p></div></div></div>`;
+  const box=document.getElementById("pb-box");
+  const show=h=>{box.innerHTML=h;window.scrollTo(0,0);};
+  let ev=null,prod=null,cfg=null,nIns=0;
+  try{
+    ev=(await sbGet("eventos",`id=eq.${encodeURIComponent(evId)}`))[0]||null;
+    if(ev){
+      const [pArr,cArr]=await Promise.all([
+        ev.productora_id?sbGet("productoras",`id=eq.${ev.productora_id}&select=id,nombre,logo_url`):[],
+        sbGet("amigos_config",`evento_id=eq.${ev.id}`).catch(()=>[]),
+      ]);
+      prod=pArr[0]||null;cfg=cArr[0]||null;
+      if(cfg?.cupo)nIns=(await sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&select=id`).catch(()=>[])).length;
+    }
+  }catch(e){}
+  const fin=(ic,t,p)=>show(`<div class="pb-ok"><div class="ic">${ic}</div><h2>${t}</h2><p>${p}</p></div>`);
+  if(!ev||["archived","cancelled"].includes(ev.status))return fin("😕","Link no válido","Este link de inscripción no existe o el evento ya no está disponible.");
+  const hoy=new Date().toLocaleDateString("en-CA");
+  if(ev.date&&ev.date<hoy)return fin("🕐","Evento finalizado",`La Lista de Amigos de <strong style="color:#fff">${escH(ev.name)}</strong> ya cerró.`);
+  if(!cfg||cfg.activo===false)return fin("🔒","Inscripciones cerradas",`La Lista de Amigos de <strong style="color:#fff">${escH(ev.name)}</strong> no está abierta.`);
+  if(cfg.cupo&&nIns>=cfg.cupo)return fin("🙌","Lista llena",`Se completaron los cupos de la Lista de Amigos de <strong style="color:#fff">${escH(ev.name)}</strong>.`);
+  const bH=amigosBen(cfg,"m"),bM=amigosBen(cfg,"f");
+  const fechaEvTxt=ev.date?(d=>`${["domingo","lunes","martes","miércoles","jueves","viernes","sábado"][d.getDay()]} ${d.getDate()} de ${["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"][d.getMonth()]}`)(new Date(ev.date+"T12:00:00")):"";
+  const benHtml=(bH.ok||bM.ok)?`<div class="am-ben">${bH.ok?`<div><span>Hombre</span><b>${bH.txt}</b></div>`:""}${bM.ok?`<div><span>Mujer</span><b>${bM.txt}</b></div>`:""}${cfg.nota?`<div style="display:block;color:#9ca3af;font-size:12px;padding-top:6px">${escH(cfg.nota)}</div>`:""}</div>`:"";
+  let gen="";
+  window._amGen=g=>{gen=g;document.querySelectorAll(".am-gen button").forEach(b=>b.classList.toggle("on",b.dataset.g===g));document.querySelector(".am-gen").classList.remove("err");};
+  show(`
+    <div style="text-align:center;margin-bottom:6px">${prod?.logo_url?`<img src="${prod.logo_url}" alt="" style="width:84px;height:84px;object-fit:cover;border-radius:18px;display:block;margin:0 auto 12px">`:""}
+      <h1 style="font-size:21px;margin:0 0 4px">Lista de Amigos</h1>
+      <p style="margin:0;color:#2BE07B;font-size:13px;font-weight:700;letter-spacing:1px;text-transform:uppercase">${escH(ev.name)}</p>
+      ${fechaEvTxt?`<p style="margin:4px 0 0;color:#888;font-size:12px">${fechaEvTxt[0].toUpperCase()+fechaEvTxt.slice(1)}${ev.venue?" · "+escH(ev.venue):""}</p>`:""}
+    </div>
+    ${benHtml}
+    <p style="color:#aaa;font-size:13px;text-align:center;line-height:1.5;margin:10px 0 4px">Inscríbete y entra con el beneficio de la Lista de Amigos de ${prod?.nombre?`<strong style="color:#fff">${escH(prod.nombre)}</strong>`:"la productora"}. En la puerta solo muestra tu carnet.</p>
+    <div class="pb-row">
+      <div><label class="pb-lbl">Nombre <span>*</span></label><input class="pb-in" id="am-nom" placeholder="Tu nombre"></div>
+      <div><label class="pb-lbl">Apellido <span>*</span></label><input class="pb-in" id="am-ape" placeholder="Tu apellido"></div>
+    </div>
+    <label class="pb-lbl">Género <span>*</span></label>
+    <div class="am-gen"><button type="button" data-g="m" onclick="_amGen('m')">Hombre</button><button type="button" data-g="f" onclick="_amGen('f')">Mujer</button></div>
+    <div id="am-gen-err" class="pb-err"></div>
+    <label class="pb-lbl">Fecha de nacimiento <span>*</span></label>
+    <div class="pb-row">
+      <select class="pb-in" id="am-fd"><option value="">Día</option>${Array.from({length:31},(_,i)=>`<option value="${String(i+1).padStart(2,"0")}">${i+1}</option>`).join("")}</select>
+      <select class="pb-in" id="am-fm" style="flex:1.6"><option value="">Mes</option>${["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m,i)=>`<option value="${String(i+1).padStart(2,"0")}">${m}</option>`).join("")}</select>
+      <select class="pb-in" id="am-fy"><option value="">Año</option>${Array.from({length:60},(_,i)=>{const y=new Date().getFullYear()-18-i;return `<option value="${y}">${y}</option>`;}).join("")}</select>
+    </div>
+    <div><label class="pb-lbl">RUT <span>*</span></label><input class="pb-in" id="am-rut" placeholder="12.345.678-9" maxlength="12"></div>
+    <div><label class="pb-lbl">WhatsApp <span>*</span></label>
+    <div style="display:flex"><span style="background:#222;border:1px solid #333;border-right:none;border-radius:10px 0 0 10px;padding:12px 12px;font-size:14px;color:#aaa;font-weight:600">+569</span><input class="pb-in" id="am-wtsp" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 10px 10px 0"></div></div>
+    <div><label class="pb-lbl">Correo <span>*</span></label><input class="pb-in" id="am-email" type="email" placeholder="tu@correo.cl" autocapitalize="off"></div>
+    <label class="pb-lbl">Instagram <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pb-in" id="am-ig" placeholder="@tuinstagram" autocapitalize="off">
+    <label class="pb-chk"><input type="checkbox" id="am-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para la Lista de Amigos de ${escH(prod?.nombre||"la productora")}.</span></label>
+    <button class="pb-btn" id="am-btn" onclick="window._amEnviar()">Inscribirme</button>
+    <div id="am-msg" class="pb-err" style="text-align:center;margin-top:10px"></div>
+    <div class="pb-foot" style="display:flex;align-items:center;justify-content:center;gap:8px">POWERED BY ${glLogo("neg",14,"display:inline-block;vertical-align:middle")}</div>`);
+  const mark=(id,msg)=>{const el=document.getElementById(id);if(!el)return;el.classList.add("err");if(msg){const e=document.createElement("div");e.className="pb-err auto";e.textContent=msg;(id==="am-wtsp"?el.parentElement.parentElement:el.parentElement).appendChild(e);}};
+  window._amEnviar=async()=>{
+    document.querySelectorAll(".pb-err.auto").forEach(e=>e.remove());document.querySelectorAll(".pb-in.err").forEach(e=>e.classList.remove("err"));
+    const g=id=>(document.getElementById(id)?.value||"").trim();
+    const nombre=g("am-nom"),apellido=g("am-ape"),rut=g("am-rut"),wtsp=g("am-wtsp").replace(/\D/g,""),email=g("am-email").toLowerCase(),ig=normIG(g("am-ig"));
+    const fd=g("am-fd"),fm=g("am-fm"),fy=g("am-fy");const fnac=fd&&fm&&fy?`${fy}-${fm}-${fd}`:"";
+    const msg=t=>{document.getElementById("am-msg").textContent=t;};msg("");document.getElementById("am-gen-err").textContent="";
+    let errs=0;
+    if(!nombre){mark("am-nom","Falta tu nombre");errs++;}
+    if(!apellido){mark("am-ape","Falta tu apellido");errs++;}
+    if(!gen){document.querySelector(".am-gen").classList.add("err");document.getElementById("am-gen-err").textContent="Elige tu género";errs++;}
+    if(!fnac){mark("am-fy","Completa tu fecha de nacimiento");errs++;}
+    else if(isNaN(new Date(fnac+"T12:00:00"))||new Date(fnac+"T12:00:00").getDate()!==Number(fd)){mark("am-fy","Esa fecha no existe");errs++;}
+    else if(edadDesde(fnac)<18){mark("am-fy","Debes ser mayor de 18 años");errs++;}
+    if(!rut){mark("am-rut","Falta tu RUT");errs++;}else if(!rutValido(rut)){mark("am-rut","RUT inválido, revísalo");errs++;}
+    if(wtsp.length!==8){mark("am-wtsp","Deben ser 8 dígitos");errs++;}
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("am-email","Correo inválido");errs++;}
+    if(!document.getElementById("am-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
+    if(errs){const first=document.querySelector(".pb-in.err, .am-gen.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
+    const btn=document.getElementById("am-btn");btn.disabled=true;btn.textContent="Enviando…";
+    const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
+    const listo=(titulo,yaEstaba)=>{const b=amigosBen(cfg,gen);show(`<div class="pb-ok"><div class="ic">${yaEstaba?"🙌":"🎉"}</div><h2>${titulo}</h2>
+      <p>${escH(nombre)}, estás en la Lista de Amigos de <strong style="color:#fff">${escH(ev.name)}</strong>.</p>
+      ${b.ok?`<div class="am-ben" style="text-align:left"><div><span>Tu beneficio</span><b>${b.txt}</b></div></div>`:""}
+      <p style="margin-top:10px">En la puerta di que vienes en la Lista de Amigos y muestra tu carnet.</p></div>`);};
+    try{
+      const prev=(await sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&rut=eq.${encodeURIComponent(rutN)}&select=id`))[0];
+      if(prev)return listo("¡Ya estabas inscrito!",true);
+      const row={id:uid(),evento_id:ev.id,productora_id:ev.productora_id||null,nombre,apellido,rut:rutN,email,whatsapp:"+569"+wtsp,instagram:ig||null,fecha_nacimiento:fnac,genero:gen,created_at:new Date().toISOString()};
+      try{await sbPost("amigos_inscritos",[row]);}
+      catch(e){if(/duplicate|unique/i.test(e.message||""))return listo("¡Ya estabas inscrito!",true);throw e;}
+      listo("¡Listo, estás en la lista!",false);
+      const b=amigosBen(cfg,gen);
+      sendEmail(email,`Estás en la Lista de Amigos · ${ev.name}`,`<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:520px">
+        <p style="font-size:18px;font-weight:bold;margin:0 0 10px">¡Hola ${escH(nombre)}!</p>
+        <p>Quedaste inscrito en la <b>Lista de Amigos</b> de <b>${escH(ev.name)}</b>${fechaEvTxt?` (${fechaEvTxt}${ev.venue?" · "+escH(ev.venue):""})`:""}.</p>
+        ${b.ok?`<p style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px"><b>Tu beneficio:</b> ${b.txt}</p>`:""}
+        ${cfg.nota?`<p style="color:#555">${escH(cfg.nota)}</p>`:""}
+        <p>En la puerta di que vienes en la Lista de Amigos y muestra tu carnet.</p>
+        <p style="color:#888;font-size:12px">${escH(prod?.nombre||"")} · Guestly</p></div>`).catch(()=>{});
+    }catch(e){
+      btn.disabled=false;btn.textContent="Inscribirme";
+      msg("No se pudo inscribir: "+(e.message||"intenta de nuevo"));
+    }
+  };
+}
+
+// ── Panel de la productora (dentro del evento): beneficio + inscritos ──
+let _amQ="",_amGenF="todos";
+VIEWS["amigos"]=async()=>{
+  const mc=$("main-content");
+  const ev=(D.eventos||[]).find(e=>e.id===currentEvId);
+  if(!ev){mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="card" style="color:#999">Elige un evento.</div>`;return;}
+  mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="card" style="color:#999;padding:30px;text-align:center">Cargando…</div>`;
+  try{
+    const [c,ins]=await Promise.all([sbGet("amigos_config",`evento_id=eq.${ev.id}`),sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&order=created_at.desc`)]);
+    D.amigos_cfg=D.amigos_cfg||{};D.amigos_cfg[ev.id]=c[0]||null;D.amigos_inscritos=(D.amigos_inscritos||[]).filter(i=>i.evento_id!==ev.id).concat(ins);
+  }catch(e){
+    mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="alert alert-warn">No se pudo cargar: ${escH(e.message)}<br><br>Si dice que la tabla <strong>amigos_config</strong> o <strong>amigos_inscritos</strong> no existe, falta correr <strong>supabase/sql-lista-amigos.sql</strong> en Supabase.</div>`;return;
+  }
+  amigosRender();
+};
+function amigosRender(){
+  const mc=$("main-content");const ev=(D.eventos||[]).find(e=>e.id===currentEvId);if(!ev||!mc)return;
+  const cfg=D.amigos_cfg?.[ev.id]||null;
+  const ins=(D.amigos_inscritos||[]).filter(i=>i.evento_id===ev.id);
+  const link=amigosLink(ev.id);
+  const h=ins.filter(i=>i.genero==="m"),m=ins.filter(i=>i.genero==="f"),dentro=ins.filter(i=>i.llego);
+  const nq=acrNorm(_amQ);
+  const vis=ins.filter(i=>_amGenF==="todos"||i.genero===_amGenF).filter(i=>!nq||[`${i.nombre} ${i.apellido}`,i.rut,i.email,i.instagram,i.whatsapp].some(v=>acrNorm(v||"").includes(nq)));
+  const v=(k,d="")=>cfg&&cfg[k]!==null&&cfg[k]!==undefined?cfg[k]:d;
+  const fila=(g,lbl)=>{const k=g==="f"?"mujer":"hombre";return `<div style="display:grid;grid-template-columns:90px 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:10px">
+      <div style="font-weight:700;padding-bottom:9px">${lbl}</div>
+      <div><label class="form-label">Precio (0 = gratis)</label><input class="form-input" id="am-p-${g}" type="number" min="0" step="500" placeholder="Sin beneficio" value="${v("precio_"+k)}"></div>
+      <div><label class="form-label">Válido hasta las</label><input class="form-input" id="am-h-${g}" type="time" value="${v("hora_"+k)}"></div>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;padding-bottom:9px;white-space:nowrap"><input type="checkbox" id="am-c-${g}" ${v("cover_"+k,false)?"checked":""}> Con cover</label>
+    </div>`;};
+  mc.innerHTML=`
+    <div class="page-title">Lista de Amigos <span style="font-size:14px;color:var(--ink-4);font-weight:500">· ${escH(ev.name)}</span></div>
+    <div class="card" style="margin-bottom:14px">
+      <div class="sec-header"><div class="sec-title">Beneficio de este evento</div>
+        <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="am-activo" ${!cfg||cfg.activo!==false?"checked":""}> Inscripciones abiertas</label></div>
+      <div style="font-size:12px;color:var(--ink-4);margin:-4px 0 12px">Lo que paga cada inscrito en la puerta según su género, hasta la hora tope. Después de esa hora paga el precio normal. Deja el precio vacío si ese género no tiene beneficio.</div>
+      ${fila("m","Hombre")}${fila("f","Mujer")}
+      <div style="display:grid;grid-template-columns:160px 1fr;gap:10px">
+        <div><label class="form-label">Cupo (opcional)</label><input class="form-input" id="am-cupo" type="number" min="1" placeholder="Sin límite" value="${v("cupo")}"></div>
+        <div><label class="form-label">Texto extra (opcional, lo ve la gente)</label><input class="form-input" id="am-nota" maxlength="200" placeholder="Ej.: Shot de bienvenida para los primeros 50" value="${escH(v("nota"))}"></div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn btn-primary" onclick="amigosGuardar()">Guardar beneficio</button></div>
+    </div>
+    <div class="card" style="margin-bottom:14px;${cfg?"":"opacity:.55"}">
+      <div class="sec-title" style="margin-bottom:8px">Link de inscripción</div>
+      ${cfg?`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><code style="flex:1;min-width:220px;background:var(--line-2);padding:9px 12px;border-radius:8px;font-size:13px;word-break:break-all">${link}</code>
+        <button class="btn" onclick="navigator.clipboard.writeText('${link}').then(()=>toast('Link copiado','ok'))">Copiar</button><a class="btn" href="${link}" target="_blank" rel="noopener">Abrir</a></div>
+        <div style="font-size:12px;color:var(--ink-4);margin-top:6px">Compártelo en Instagram o WhatsApp. Cada persona se inscribe una vez por evento (no se repite el RUT).</div>`
+      :`<div style="font-size:13px;color:var(--ink-4)">Guarda el beneficio para activar el link.</div>`}
+    </div>
+    <div class="card">
+      <div class="sec-header"><div class="sec-title">Inscritos — ${ins.length}</div>
+        <div style="font-size:12px;color:var(--ink-4)">♂ ${h.length} · ♀ ${m.length} · <span style="color:#166534;font-weight:600">${dentro.length} ingresaron</span></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <input class="form-input" id="am-q" style="flex:1;min-width:200px;margin:0" placeholder="🔍 Nombre, RUT, correo, Instagram…" value="${escH(_amQ)}" oninput="_amQ=this.value;amigosRender();const i=$('am-q');i.focus();i.setSelectionRange(i.value.length,i.value.length)">
+        ${[["todos","Todos"],["m","♂ Hombres"],["f","♀ Mujeres"]].map(([k,l])=>`<button class="btn${_amGenF===k?" btn-primary":""}" style="font-size:12px" onclick="_amGenF='${k}';amigosRender()">${l}</button>`).join("")}
+        <button class="btn" style="font-size:12px" onclick="amigosExportar()">⬇ Exportar CSV</button>
+      </div>
+      <div class="table-wrap"><table class="data-table">
+        <thead><tr><th>Nombre</th><th>RUT</th><th>Género</th><th>WhatsApp</th><th>Instagram</th><th>Inscrito</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${vis.map(i=>{const wa=String(i.whatsapp||"").replace(/\D/g,"");return `<tr>
+          <td><strong>${escH(i.nombre)} ${escH(i.apellido||"")}</strong><br><span style="font-size:11px;color:var(--ink-4)">${escH(i.email||"")}</span></td>
+          <td style="font-size:12px">${escH(fmtRut(i.rut||""))}</td>
+          <td>${i.genero==="m"?"♂ Hombre":i.genero==="f"?"♀ Mujer":"—"}</td>
+          <td>${wa?`<a href="https://wa.me/${wa}" target="_blank" rel="noopener" style="color:#128C4B;font-weight:600">${escH(i.whatsapp)}</a>`:"—"}</td>
+          <td>${i.instagram?`<a href="https://instagram.com/${encodeURIComponent(i.instagram)}" target="_blank" rel="noopener">@${escH(i.instagram)}</a>`:"—"}</td>
+          <td style="font-size:12px;color:var(--ink-4)">${i.created_at?new Date(i.created_at).toLocaleString("es-CL",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):""}</td>
+          <td>${i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green")+(i.cobro?`<div style="font-size:11px;color:var(--ink-4);margin-top:2px">${escH(i.cobro)}</div>`:""):badge("Inscrito","gray")}</td>
+          <td style="text-align:right">${!i.llego?`<button class="btn" style="font-size:11px;padding:4px 9px;color:#b91c1c;border-color:#fca5a5" onclick="amigosQuitar('${i.id}')">Quitar</button>`:""}</td>
+        </tr>`;}).join("")||`<tr><td colspan="8" style="text-align:center;color:#aaa;padding:20px">${ins.length?"Sin resultados.":"Todavía no hay inscritos."}</td></tr>`}</tbody>
+      </table></div>
+    </div>`;
+}
+window.amigosGuardar=async()=>{
+  const ev=(D.eventos||[]).find(e=>e.id===currentEvId);if(!ev)return;
+  const num=id=>{const s=($(id)?.value||"").trim();return s===""?null:Math.max(0,parseInt(s)||0);};
+  const row={evento_id:ev.id,productora_id:ev.productora_id||null,activo:!!$("am-activo")?.checked,
+    precio_hombre:num("am-p-m"),hora_hombre:$("am-h-m")?.value||null,cover_hombre:!!$("am-c-m")?.checked,
+    precio_mujer:num("am-p-f"),hora_mujer:$("am-h-f")?.value||null,cover_mujer:!!$("am-c-f")?.checked,
+    cupo:num("am-cupo")||null,nota:($("am-nota")?.value||"").trim()||null,updated_at:new Date().toISOString()};
+  if(row.precio_hombre===null&&row.precio_mujer===null)return toast("Define el beneficio al menos para hombre o para mujer","warn");
+  if((row.precio_hombre!==null&&!row.hora_hombre)||(row.precio_mujer!==null&&!row.hora_mujer))return toast("Falta la hora tope del beneficio","warn");
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/amigos_config`,{method:"POST",headers:{...HDR,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify([row])});
+    if(!r.ok)throw new Error(await r.text());
+    D.amigos_cfg=D.amigos_cfg||{};D.amigos_cfg[ev.id]=(await r.json())[0]||row;
+    try{await log("amigos_beneficio","amigos_config",ev.id,`Lista de Amigos: H ${amigosBen(row,"m").txt} · M ${amigosBen(row,"f").txt}`);}catch(e){}
+    toast("Beneficio guardado","ok");amigosRender();
+  }catch(e){toast("No se pudo guardar: "+e.message,"error");}
+};
+window.amigosQuitar=i=>{
+  const x=(D.amigos_inscritos||[]).find(a=>a.id===i);if(!x)return;
+  openModal("Quitar de la Lista de Amigos",`<p style="font-size:14px;margin:0 0 8px">¿Quitar a <b>${escH(x.nombre)} ${escH(x.apellido||"")}</b> de la Lista de Amigos de este evento?</p>
+    <p style="font-size:12px;color:var(--ink-4);margin:0">Puede volver a inscribirse con el link.</p>
+    <div class="modal-footer"><button class="btn" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="amigosQuitarOk('${i}')">Quitar</button></div>`);
+};
+window.amigosQuitarOk=async i=>{
+  closeModal();
+  try{await sbDelete("amigos_inscritos",`id=eq.${i}`);D.amigos_inscritos=(D.amigos_inscritos||[]).filter(a=>a.id!==i);toast("Quitado de la lista","ok");amigosRender();}
+  catch(e){toast("No se pudo quitar: "+e.message,"error");}
+};
+window.amigosExportar=()=>{
+  const ev=(D.eventos||[]).find(e=>e.id===currentEvId);
+  const ins=(D.amigos_inscritos||[]).filter(i=>i.evento_id===currentEvId);
+  const q=s=>`"${String(s??"").replace(/"/g,'""')}"`;
+  const rows=[["Nombre","Apellido","RUT","Género","Fecha nacimiento","WhatsApp","Correo","Instagram","Inscrito","Ingresó","Cobro"]].concat(ins.map(i=>[i.nombre,i.apellido,fmtRut(i.rut||""),AMIGOS_GEN[i.genero]||"",i.fecha_nacimiento||"",i.whatsapp,i.email,i.instagram?"@"+i.instagram:"",i.created_at?new Date(i.created_at).toLocaleString("es-CL"):"",i.llego?new Date(i.llego_at).toLocaleString("es-CL"):"",i.cobro||""]));
+  const blob=new Blob(["﻿"+rows.map(r=>r.map(q).join(";")).join("\n")],{type:"text/csv;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`lista-amigos-${(ev?.name||"evento").replace(/[^\w]+/g,"-").toLowerCase()}.csv`;a.click();
+};
+
+// ── Puerta: cargar inscritos del evento y registrar ingresos con su beneficio ──
+async function amigosCargarEvento(evId){
+  if(!evId)return;
+  try{
+    const [c,ins]=await Promise.all([sbGet("amigos_config",`evento_id=eq.${evId}`),sbGet("amigos_inscritos",`evento_id=eq.${evId}`)]);
+    D.amigos_cfg=D.amigos_cfg||{};D.amigos_cfg[evId]=c[0]||null;
+    D.amigos_inscritos=(D.amigos_inscritos||[]).filter(i=>i.evento_id!==evId).concat(ins);
+  }catch(e){D.amigos_cfg=D.amigos_cfg||{};} // si las tablas aún no existen, la puerta sigue funcionando igual
+}
+async function amigosCheckin(id){
+  const x=(D.amigos_inscritos||[]).find(a=>a.id===id);if(!x)return;
+  if(x.llego)return toast("Ya ingresó","warn");
+  const ev=(D.eventos||[]).find(e=>e.id===x.evento_id);
+  const r=amigosEvaluar(ev,D.amigos_cfg?.[x.evento_id],x.genero);
+  const at=now();
+  try{await sbPatch("amigos_inscritos",`id=eq.${id}`,{llego:true,llego_at:at,cobro:r.cobro});}catch(e){return toast("No se pudo registrar: "+e.message,"error");}
+  x.llego=true;x.llego_at=at;x.cobro=r.cobro;
+  try{const aforo=getAforo(),max=getMax();if(aforo<max){const cap={id:uid(),event_id:currentEvId,zone_id:null,action:"entry",count:1,recorded_by:CU?.id,recorded_at:at};D.capacity_log.push(cap);await sbPost("capacity_log",[cap]);}}catch(e){}
+  try{await log("checkin_amigos","amigos_inscritos",id,`Ingreso Lista de Amigos: ${x.nombre} ${x.apellido||""} · ${r.cobro}`);}catch(e){}
+  toast(`✓ ${x.nombre} ingresó · ${r.cobro}`,r.aplica?"success":"warn");
+}
+async function amigosAnular(id){
+  const x=(D.amigos_inscritos||[]).find(a=>a.id===id);if(!x||!x.llego)return;
+  try{await sbPatch("amigos_inscritos",`id=eq.${id}`,{llego:false,llego_at:null,cobro:null});}catch(e){return toast("No se pudo anular: "+e.message,"error");}
+  x.llego=false;x.llego_at=null;x.cobro=null;
+  try{await log("anular_checkin_amigos","amigos_inscritos",id,`Anulado ingreso Lista de Amigos: ${x.nombre} ${x.apellido||""}`);}catch(e){}
+  toast("Ingreso anulado","warn");
+}
+// Filas para la Acreditación total
+function amigosItemsPuerta(R){
+  const ev=(D.eventos||[]).find(e=>e.id===currentEvId);const cfg=D.amigos_cfg?.[currentEvId];
+  return (D.amigos_inscritos||[]).filter(i=>i.evento_id===currentEvId).map(i=>{
+    const r=amigosEvaluar(ev,cfg,i.genero);
+    return {seg:"amigos",nombre:`${i.nombre||""} ${i.apellido||""}`.trim(),rut:fmtRut(i.rut||""),sub:`🤝 Lista de Amigos · ${AMIGOS_GEN[i.genero]||"—"}`,subColor:"#0f766e",origen:"Lista de Amigos",origenColor:"#0f766e",
+      pulsera:"",entradas:1,usadas:i.llego?1:0,
+      estado:i.llego?badge("✓ Ingresó "+fmtT(i.llego_at),"green"):r.chip,extra:i.llego&&i.cobro?`<div style="font-size:11px;color:#666;margin-top:2px">${escH(i.cobro)}</div>`:"",
+      acciones:!i.llego?`<button class="btn btn-success" style="padding:4px 10px;font-size:11px" onclick="amigosCheckin('${i.id}').then(()=>${R})">✓ Ingresar</button>`
+        :(puedeInvalidar()?`<button class="btn" style="padding:4px 8px;font-size:11px;background:#fff7ed;color:#9a3412;border-color:#fed7aa" onclick="amigosAnular('${i.id}').then(()=>${R})">Anular</button>`:"")};
+  });
+}
+// Pestaña "Lista de Amigos" de Acreditación
+let _acrAmigosQ="";
+function renderAcrAmigos(q){
+  const el=$("acr-amigos");if(!el)return;
+  if(q!==undefined)_acrAmigosQ=q;
+  const ev=(D.eventos||[]).find(e=>e.id===currentEvId);const cfg=D.amigos_cfg?.[currentEvId];
+  const items=amigosItemsPuerta("renderAcrAmigos()");
+  const nq=acrNorm(_acrAmigosQ||"");
+  const vis=items.filter(it=>!nq||acrNorm(it.nombre).includes(nq)||acrNorm(it.rut).includes(nq));
+  const bH=amigosEvaluar(ev,cfg,"m"),bM=amigosEvaluar(ev,cfg,"f");
+  el.innerHTML=`
+    <div class="card" style="margin-bottom:14px;background:#f0fdfa;padding:12px 16px;border-left:4px solid #0f766e">
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;align-items:center">
+        <span>🤝 <strong>${items.length}</strong> inscritos · <strong style="color:#166534">${items.filter(i=>i.usadas).length}</strong> ingresaron</span>
+        ${cfg?`<span>♂ ${bH.ok?bH.chip:badge("Sin beneficio","gray")}</span><span>♀ ${bM.ok?bM.chip:badge("Sin beneficio","gray")}</span>`:`<span style="color:#888">Este evento no tiene Lista de Amigos (se configura en Lista de Amigos).</span>`}
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:14px"><input class="form-input" id="acr-amigos-q" placeholder="🔍 Buscar por nombre o RUT..." style="width:100%;font-size:15px;padding:11px" value="${escH(_acrAmigosQ)}" oninput="renderAcrAmigos(this.value)"></div>
+    <div class="card"><div class="table-wrap"><table class="data-table">
+      <thead><tr><th>Nombre completo</th><th>RUT</th><th>Beneficio / estado</th><th></th></tr></thead>
+      <tbody>${vis.map(it=>`<tr style="background:${it.usadas?"#f0fdf4":"#fff"}"><td><strong>${escH(it.nombre)}</strong><br><span style="font-size:11px;color:${it.subColor};font-weight:600">${it.sub}</span></td><td style="font-size:12px">${escH(it.rut)}</td><td>${it.estado}${it.extra}</td><td style="text-align:right">${it.acciones}</td></tr>`).join("")
+        ||`<tr><td colspan="4" style="text-align:center;color:#aaa;padding:20px">${items.length?"Sin resultados para la búsqueda.":"Nadie inscrito en la Lista de Amigos de este evento."}</td></tr>`}</tbody>
+    </table></div></div>`;
+  const inp=$("acr-amigos-q");if(inp&&q!==undefined){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
 }
 
 // ── Panel: Embajadores → Postulaciones ──
@@ -16507,6 +16856,7 @@ else if(_cfUrl.has("registro")){ mostrarRegistroProductora(); }
 else if(_cfUrl.has("q")){ mostrarEntradaQR(_cfUrl.get("q")); }
 else if(_cfUrl.has("emb")){ mostrarPostulacionEmb(_cfUrl.get("emb")); }
 else if(_cfUrl.has("cumple")){ mostrarPostulacionBday(_cfUrl.get("cumple")); }
+else if(_cfUrl.has("amigos")){ mostrarAmigos(_cfUrl.get("amigos")); }
 else if(_cfUrl.has("cf")){ mostrarRegistroCF(_cfUrl.get("cf")); }
 else if(_cfUrl.has("cf_buy")){ mostrarCompraCF(_cfUrl.get("cf_buy")); }
 else if(_cfUrl.has("cf_upload")){ mostrarUploadCF(_cfUrl.get("cf_upload")); }
@@ -16532,7 +16882,7 @@ else if(_esPortadaPublica||(_cfUrl.has("inicio")&&/^\/(index\.html)?$/.test(loca
   }catch(e){console.error("Init check failed",e);}
   // Intentar restaurar sesión guardada (auto-login) — salvo que se entre por un link público
   const _pub=new URLSearchParams(window.location.search);
-  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora","buscar","inicio"].some(k=>_pub.has(k));
+  const _esLinkPublico=["bday_panel","bday_inv","cf","cf_buy","cf_upload","emb","q","pago","wp_test","evento","productora","buscar","inicio","amigos"].some(k=>_pub.has(k));
   if(!_esLinkPublico&&!_esValidador&&!_esPortadaPublica) await restaurarSesion();
 })();
 
