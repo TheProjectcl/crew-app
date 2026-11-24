@@ -14133,6 +14133,11 @@ async function mostrarAmigos(evId){
     <div style="display:flex"><span style="background:#222;border:1px solid #333;border-right:none;border-radius:10px 0 0 10px;padding:12px 12px;font-size:14px;color:#aaa;font-weight:600">+569</span><input class="pb-in" id="am-wtsp" inputmode="numeric" maxlength="8" placeholder="12345678" style="border-radius:0 10px 10px 0"></div></div>
     <div><label class="pb-lbl">Correo <span>*</span></label><input class="pb-in" id="am-email" type="email" placeholder="tu@correo.cl" autocapitalize="off"></div>
     <label class="pb-lbl">Instagram <span style="color:#666;font-weight:400">(opcional)</span></label><input class="pb-in" id="am-ig" placeholder="@tuinstagram" autocapitalize="off">
+    ${cfg.instagram?`<div class="am-ben" style="margin-top:16px">
+      <div style="display:block;font-size:13px;color:#ddd;padding:0 0 8px">Para estar en la Lista de Amigos tienes que seguir a <b style="color:#2BE07B">@${escH(cfg.instagram)}</b> en Instagram.</div>
+      <a href="https://instagram.com/${encodeURIComponent(cfg.instagram)}" target="_blank" rel="noopener" style="display:block;text-align:center;background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:10px;color:#fff;font-weight:700;font-size:14px;text-decoration:none">Abrir @${escH(cfg.instagram)} en Instagram</a>
+      <label class="pb-chk" style="margin-top:10px"><input type="checkbox" id="am-sigue"><span>Ya sigo a <strong>@${escH(cfg.instagram)}</strong> en Instagram.</span></label>
+    </div>`:""}
     <label class="pb-chk"><input type="checkbox" id="am-mayor"><span>Declaro que soy <strong>mayor de 18 años</strong> y acepto que mis datos se usen para la Lista de Amigos de ${escH(prod?.nombre||"la productora")}.</span></label>
     <button class="pb-btn" id="am-btn" onclick="window._amEnviar()">Inscribirme</button>
     <div id="am-msg" class="pb-err" style="text-align:center;margin-top:10px"></div>
@@ -14154,7 +14159,8 @@ async function mostrarAmigos(evId){
     if(!rut){mark("am-rut","Falta tu RUT");errs++;}else if(!rutValido(rut)){mark("am-rut","RUT inválido, revísalo");errs++;}
     if(wtsp.length!==8){mark("am-wtsp","Deben ser 8 dígitos");errs++;}
     if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){mark("am-email","Correo inválido");errs++;}
-    if(!document.getElementById("am-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
+    if(cfg.instagram&&!document.getElementById("am-sigue")?.checked){msg(`Para inscribirte tienes que seguir a @${cfg.instagram} en Instagram y marcar la casilla`);errs++;}
+    else if(!document.getElementById("am-mayor").checked){msg("Debes confirmar que eres mayor de 18 y aceptar el uso de tus datos");errs++;}
     if(errs){const first=document.querySelector(".pb-in.err");if(first)first.scrollIntoView({behavior:"smooth",block:"center"});return;}
     const btn=document.getElementById("am-btn");btn.disabled=true;btn.textContent="Enviando…";
     const rutN=rut.replace(/[.\-\s]/g,"").toUpperCase();
@@ -14165,9 +14171,13 @@ async function mostrarAmigos(evId){
     try{
       const prev=(await sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&rut=eq.${encodeURIComponent(rutN)}&select=id`))[0];
       if(prev)return listo("¡Ya estabas inscrito!",true);
-      const row={id:uid(),evento_id:ev.id,productora_id:ev.productora_id||null,nombre,apellido,rut:rutN,email,whatsapp:"+569"+wtsp,instagram:ig||null,fecha_nacimiento:fnac,genero:gen||null,created_at:new Date().toISOString()};
+      const row={id:uid(),evento_id:ev.id,productora_id:ev.productora_id||null,nombre,apellido,rut:rutN,email,whatsapp:"+569"+wtsp,instagram:ig||null,fecha_nacimiento:fnac,genero:gen||null,created_at:new Date().toISOString(),...(cfg.instagram?{sigue_instagram:true}:{})};
       try{await sbPost("amigos_inscritos",[row]);}
-      catch(e){if(/duplicate|unique/i.test(e.message||""))return listo("¡Ya estabas inscrito!",true);throw e;}
+      catch(e){
+        if(/duplicate|unique/i.test(e.message||""))return listo("¡Ya estabas inscrito!",true);
+        if(/sigue_instagram/.test(e.message||"")){delete row.sigue_instagram;await sbPost("amigos_inscritos",[row]);} // si aún no se agregó la columna
+        else throw e;
+      }
       listo("¡Listo, estás en la lista!",false);
       const b=gen?amigosBen(cfg,gen):{ok:false};
       sendEmail(email,`Estás en la Lista de Amigos · ${ev.name}`,`<div style="font-family:Arial,sans-serif;font-size:14px;color:#111;line-height:1.6;max-width:520px">
@@ -14192,8 +14202,8 @@ VIEWS["amigos"]=async()=>{
   if(!ev){mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="card" style="color:#999">Elige un evento.</div>`;return;}
   mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="card" style="color:#999;padding:30px;text-align:center">Cargando…</div>`;
   try{
-    const [c,ins]=await Promise.all([sbGet("amigos_config",`evento_id=eq.${ev.id}`),sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&order=created_at.desc`)]);
-    D.amigos_cfg=D.amigos_cfg||{};D.amigos_cfg[ev.id]=c[0]||null;D.amigos_inscritos=(D.amigos_inscritos||[]).filter(i=>i.evento_id!==ev.id).concat(ins);
+    const [c,ins,otras]=await Promise.all([sbGet("amigos_config",`evento_id=eq.${ev.id}`),sbGet("amigos_inscritos",`evento_id=eq.${ev.id}&order=created_at.desc`),ev.productora_id?sbGet("amigos_config",`productora_id=eq.${ev.productora_id}&order=updated_at.asc`).catch(()=>[]):[]]);
+    D.amigos_cfg=D.amigos_cfg||{};otras.forEach(o=>{if(!(o.evento_id in D.amigos_cfg))D.amigos_cfg[o.evento_id]=o;});D.amigos_cfg[ev.id]=c[0]||null;D.amigos_inscritos=(D.amigos_inscritos||[]).filter(i=>i.evento_id!==ev.id).concat(ins);
   }catch(e){
     mc.innerHTML=`<div class="page-title">Lista de Amigos</div><div class="alert alert-warn">No se pudo cargar: ${escH(e.message)}<br><br>Si dice que la tabla <strong>amigos_config</strong> o <strong>amigos_inscritos</strong> no existe, falta correr <strong>supabase/sql-lista-amigos.sql</strong> en Supabase.</div>`;return;
   }
@@ -14210,6 +14220,11 @@ function amigosSelHora(id,val){
     <span style="font-size:12px;color:var(--ink-4)">hrs</span></div>`;
 }
 function amigosLeerHora(id){const h=$(id+"-hh")?.value||"",m=$(id+"-mm")?.value||"00";return h?`${h}:${m}`:null;}
+// Sugerir la última cuenta de Instagram usada por la productora en otro evento
+function _amIgSugerido(ev){
+  const otros=Object.values(D.amigos_cfg||{}).filter(c=>c&&c.instagram&&c.productora_id===ev?.productora_id);
+  return otros.length?otros[otros.length-1].instagram:"";
+}
 function amigosRender(){
   const mc=$("main-content");const ev=(D.eventos||[]).find(e=>e.id===currentEvId);if(!ev||!mc)return;
   const cfg=D.amigos_cfg?.[ev.id]||null;
@@ -14232,6 +14247,8 @@ function amigosRender(){
         <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" id="am-activo" ${!cfg||cfg.activo!==false?"checked":""}> Inscripciones abiertas</label></div>
       <div style="font-size:12px;color:var(--ink-4);margin:-4px 0 12px">Lo que paga cada inscrito en la puerta según su género, hasta la hora tope. Después de esa hora paga el precio normal. Escribe el precio solo con números (ej. 10000). Déjalo vacío si ese género no tiene beneficio.</div>
       ${fila("m","Hombre")}${fila("f","Mujer")}
+      <div style="margin-bottom:10px;max-width:420px"><label class="form-label">Instagram que deben seguir para inscribirse <span style="color:#dc2626">*</span></label>
+        <div style="display:flex;align-items:stretch"><span style="display:flex;align-items:center;padding:0 10px;border:1px solid var(--line);border-right:none;border-radius:8px 0 0 8px;background:var(--line-2);font-weight:700;color:var(--ink-2)">@</span><input class="form-input" id="am-ig" placeholder="cuentadelaproductora" value="${escH(v("instagram",_amIgSugerido(ev)))}" style="border-radius:0 8px 8px 0;margin:0"></div></div>
       <div style="display:grid;grid-template-columns:160px 1fr;gap:10px">
         <div><label class="form-label">Cupo (opcional)</label><input class="form-input" id="am-cupo" type="number" min="1" placeholder="Sin límite" value="${v("cupo")}"></div>
         <div><label class="form-label">Texto extra (opcional, lo ve la gente)</label><input class="form-input" id="am-nota" maxlength="200" placeholder="Ej.: Shot de bienvenida para los primeros 50" value="${escH(v("nota"))}"></div>
@@ -14274,12 +14291,13 @@ window.amigosGuardar=async()=>{
   const row={evento_id:ev.id,productora_id:ev.productora_id||null,activo:!!$("am-activo")?.checked,
     precio_hombre:num("am-p-m"),hora_hombre:amigosLeerHora("am-h-m"),cover_hombre:!!$("am-c-m")?.checked,
     precio_mujer:num("am-p-f"),hora_mujer:amigosLeerHora("am-h-f"),cover_mujer:!!$("am-c-f")?.checked,
-    cupo:num("am-cupo")||null,nota:($("am-nota")?.value||"").trim()||null,updated_at:new Date().toISOString()};
+    cupo:num("am-cupo")||null,nota:($("am-nota")?.value||"").trim()||null,instagram:normIG($("am-ig")?.value||"")||null,updated_at:new Date().toISOString()};
+  if(!row.instagram)return toast("Falta el Instagram que deben seguir para inscribirse","warn");
   if(row.precio_hombre===null&&row.precio_mujer===null)return toast("Define el beneficio al menos para hombre o para mujer","warn");
   if((row.precio_hombre!==null&&!row.hora_hombre)||(row.precio_mujer!==null&&!row.hora_mujer))return toast("Falta la hora tope del beneficio","warn");
   try{
     const r=await fetch(`${SB_URL}/rest/v1/amigos_config`,{method:"POST",headers:{...HDR,"Content-Type":"application/json",Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify([row])});
-    if(!r.ok)throw new Error(await r.text());
+    if(!r.ok){const t=await r.text();if(/instagram/.test(t))throw new Error("falta correr supabase/sql-amigos-instagram.sql en Supabase");throw new Error(t);}
     D.amigos_cfg=D.amigos_cfg||{};D.amigos_cfg[ev.id]=(await r.json())[0]||row;
     try{await log("amigos_beneficio","amigos_config",ev.id,`Lista de Amigos: H ${amigosBen(row,"m").txt} · M ${amigosBen(row,"f").txt}`);}catch(e){}
     toast("Beneficio guardado","ok");amigosRender();
